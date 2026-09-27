@@ -1,67 +1,100 @@
-# RogueRust Rando Spawns
+# RogueRustRandoSpawns
+
+> RogueRust-powered random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.
 
 **Version:** `2.1.0`  
 **Author:** RogueAssassin  
-**Game:** Rust  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
-Random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.
+[Plugin source](../plugins/RogueRustRandoSpawns.cs) · [Back to plugin catalogue](../README.md)
 
 ## Features
 
-- Biome-aware random respawns
-- Cached spawn generation
-- Slope and building-distance validation
-- Topology blocking
-- Optional ZoneManager zone blocking
-- Minimum online-player requirements by biome
-- Admin spawn visualization/regeneration commands
+- Random cached respawn points generated across the playable map radius.
+- Biome-specific enable state and minimum-online-player thresholds.
+- Terrain slope, topology, building/deployable distance and zone validation.
+- Persistent spawn cache tied to world seed and world size.
+- Automatic regeneration when cache/biome coverage becomes too small.
+- Optional ZoneManager blocked-zone integration.
+- Admin spawn visualization and regeneration commands.
+- Compatibility API hooks for other plugins.
 
-## Compatibility
+## Optional integration
 
-Designed for supported Rust servers running **Oxide** or **Carbon** with the RogueRust extension installed.
-
-## Dependencies
-
-### Required
-
-- **[Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**
+`ZoneManager` — used only when blocked zone IDs are configured.
 
 ## Permissions
 
-- `roguerustrandospawns.admin` — administrative spawn commands.
+- `roguerustrandospawns.admin` — administrative visualization/regeneration commands.
 
 ## Commands
 
-- `showspawns` — visualizes cached spawn points.
-- `randospawns.regenerate` — regenerates the spawn cache.
+- `/showspawns` — aliases `roguerust.showspawns`, `randospawns.show`; draws generated points for 30 seconds. Player-only, 2-second cooldown.
+- `/randospawns.regenerate` — alias `roguerust.randospawns.regenerate`; regenerates the cache. Console allowed, 10-second cooldown.
 
 ## Configuration
 
-The current revision groups its configuration into:
+Configuration file: `config/RogueRustRandoSpawns.json`
 
-- `Generation Options`
-- `Spawn Options`
+### Generation Options
 
-Optional integration: `ZoneManager` for blocked zone IDs.
+| Setting | Default | Validation |
+| --- | ---: | --- |
+| Generation attempts | `4000` | minimum `100` |
+| Maximum slope (degrees) | `45` | `0-89` |
+| Distance from buildings (metres) | `18` | `>= 0` |
+| Map radius used for spawn generation | `0.95` | `0.1-1.0` |
+| Vertical spawn offset | `0.15` | — |
+| Ground probe height | `8` | minimum `1` |
+| Persist generated spawn cache | `true` | — |
+| Minimum cached points before regeneration | `250` | minimum `1` |
+| Regenerate when a biome falls below this many points | `10` | minimum `0` |
+| Maximum nearby entities checked per candidate | `64` | minimum `8` |
 
-The source file remains the authority for exact defaults, migrations and framework-specific behaviour.
+### Spawn Options
 
-## Installation
+Default biome thresholds:
 
-1. Install a supported Rust server with Oxide or Carbon.
-2. Download and install the latest **[Oxide.Ext.RogueRust DLL](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**.
-3. Download the plugin from [RogueRustRandoSpawns.cs](../plugins/RogueRustRandoSpawns.cs).
-4. Place it in your framework's plugins directory.
-5. Review the generated configuration and grant only the permissions you need.
+| Biome | Enabled | Minimum online players |
+| --- | --- | ---: |
+| Arctic | `true` | `30` |
+| Tundra | `true` | `20` |
+| Arid | `true` | `10` |
+| Temperate | `true` | `1` |
+| Jungle | `true` | `1` |
 
-## Updating
+Other defaults:
 
-Replace the plugin `.cs` with the newer revision. Existing configuration is retained unless the plugin's migration logic or release notes state otherwise.
+- Blocked zone IDs: empty.
+- Blocked topologies: `Cliff`, `Cliffside`, `Lake`, `Ocean`, `Monument`, `Offshore`, `River`, `Swamp`, `Rail`.
+- Maximum biome selection attempts per respawn: `8`.
+- Candidate checks per biome: `12`.
 
-## Source
+## Data
 
-[View the plugin source](../plugins/RogueRustRandoSpawns.cs)
+Spawn cache key:
 
-[Back to documentation index](README.md) · [Back to plugin catalogue](../README.md)
+`RogueRustRandoSpawns/spawn-cache`
+
+The cache stores world seed, world size, plugin version and per-biome vectors. A cache is rejected when it belongs to a different map seed/size. Legacy `RogueRust/RogueRustRandoSpawns/spawn-cache` is migrated.
+
+## Localization
+
+`lang/<language>/RogueRust/RogueRustRandoSpawns/messages.json`
+
+## Developer API
+
+- `GetSpawnPointAtBiome(string biomeType)` — returns a `Vector3` or `null`.
+- `DisableSpawnSystem()` — temporarily lets Rust's normal respawn system handle players.
+- `EnableSpawnSystem()` — re-enables RogueRust random spawns.
+- `GetSpawnPoint()` — returns an unrestricted cached spawn or `null`.
+- `RegenerateSpawnPoints()` — regenerates and returns total point count.
+
+## Performance notes
+
+Spawn generation occurs at initialization/regeneration rather than every respawn. Respawns select from cached biome lists and revalidate a limited number of candidates. Nearby entity checks are capped, depleted biomes trigger coalesced regeneration, and persistent caches avoid expensive regeneration on every restart.
+
+## Installation and updating
+
+Install the latest [RogueRust DLL](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases), place `RogueRustRandoSpawns.cs` in the plugin directory, optionally install ZoneManager, then review biome/topology rules. Existing cache is automatically invalidated when the map seed/size changes.
