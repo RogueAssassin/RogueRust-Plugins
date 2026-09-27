@@ -1,66 +1,90 @@
-# RogueRust Heli Leash Control
+# RogueRustHeliLeashControl
+
+> Keeps a heavily damaged Patrol Helicopter near its last valid attacker.
 
 **Version:** `2.1.0`  
 **Author:** RogueAssassin  
-**Game:** Rust  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
-Keeps a heavily damaged Patrol Helicopter near its last valid attacker.
+[Plugin source](../plugins/RogueRustHeliLeashControl.cs) · [Back to plugin catalogue](../README.md)
 
 ## Features
 
-- Health-threshold based leash activation
-- Maximum attacker distance
-- Configurable leash check interval
-- Optional global redirect messages
-- Per-helicopter message cooldown
-- Debug logging
+- Activates leash behaviour below a configurable projected helicopter-health threshold.
+- Tracks the last valid player attacker.
+- Redirects a Patrol Helicopter when it exceeds the configured distance.
+- Configurable check interval.
+- Optional global redirect message with player and map-grid placeholders.
+- Per-helicopter message cooldown.
+- Optional debug logging.
+- Runtime tracking is removed when the helicopter dies or the tracked attacker is no longer valid.
 
-## Compatibility
+## Permissions and commands
 
-Designed for supported Rust servers running **Oxide** or **Carbon** with the RogueRust extension installed.
-
-## Dependencies
-
-### Required
-
-- **[Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**
-
-## Permissions
-
-- No player permission is required in the current revision.
-
-## Commands
-
-- No public RogueCommand handlers are defined in the current revision.
+No player permissions or public commands are required in the current revision. Operation is automatic and event-driven.
 
 ## Configuration
 
-The current revision groups its configuration into:
+Configuration file: `config/RogueRustHeliLeashControl.json`
 
-- `Leash Settings`
-- `Message Settings`
-- `Developer Settings`
+### Leash Settings
 
-The global message format supports `{0}` for player and `{1}` for map grid.
+| Setting | Default | Validation |
+| --- | ---: | --- |
+| Enable Leash Behavior | `true` | — |
+| Health Threshold to Enable Leash | `400` | `1-10000` |
+| Maximum Allowed Distance From Last Attacker | `150` | `25-2000` |
+| Leash Check Interval in Seconds | `1` | `0.25-10` |
 
-The source file remains the authority for exact defaults, migrations and framework-specific behaviour.
+### Message Settings
 
-## Installation
+| Setting | Default | Validation |
+| --- | --- | --- |
+| Send Global Message When Helicopter Is Redirected | `true` | — |
+| Minimum Seconds Between Global Messages Per Helicopter | `30` | `5-600` |
+| Global Message Format (`{0}=player`, `{1}=grid`) | helicopter/player/grid message | non-empty fallback applied |
 
-1. Install a supported Rust server with Oxide or Carbon.
-2. Download and install the latest **[Oxide.Ext.RogueRust DLL](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**.
-3. Download the plugin from [RogueRustHeliLeashControl.cs](../plugins/RogueRustHeliLeashControl.cs).
-4. Place it in your framework's plugins directory.
-5. Review the generated configuration and grant only the permissions you need.
+### Developer Settings
 
-## Updating
+`Enable Debug Messages in Console`: `false`
 
-Replace the plugin `.cs` with the newer revision. Existing configuration is retained unless the plugin's migration logic or release notes state otherwise.
+### Default configuration
 
-## Source
+```json
+{
+  "Leash Settings": {
+    "Enable Leash Behavior": true,
+    "Health Threshold to Enable Leash": 400.0,
+    "Maximum Allowed Distance From Last Attacker": 150.0,
+    "Leash Check Interval in Seconds": 1.0
+  },
+  "Message Settings": {
+    "Send Global Message When Helicopter Is Redirected": true,
+    "Minimum Seconds Between Global Messages Per Helicopter": 30.0,
+    "Global Message Format ({0}=player, {1}=grid)": "🚁 <color=#ff4d4d>Helicopter is staying close to {0} at [<color=#ffd700>{1}</color>]</color>"
+  },
+  "Developer Settings": {
+    "Enable Debug Messages in Console": false
+  },
+  "Version (DO NOT CHANGE)": "2.1.0"
+}
+```
 
-[View the plugin source](../plugins/RogueRustHeliLeashControl.cs)
+## Data and localization
 
-[Back to documentation index](README.md) · [Back to plugin catalogue](../README.md)
+Persistent custom data: **none**.  
+Custom language files: **none**.  
+All tracked helicopter/attacker state is runtime-only.
+
+## Migration
+
+Older flat HeliLeashControl keys are migrated into the grouped Leash, Message and Developer sections, then validated/clamped.
+
+## Performance notes
+
+Damage hooks only begin tracking a Patrol Helicopter after projected health crosses the configured threshold. The periodic leash check runs at the configured interval and only iterates currently tracked helicopters.
+
+## Installation and updating
+
+Install the latest [RogueRust DLL](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases), place `RogueRustHeliLeashControl.cs` in the plugin directory and review the generated thresholds/messages. Replace the `.cs` file for updates; legacy config is migrated automatically.
