@@ -1,0 +1,36 @@
+name: RogueRust Release Gate
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'plugins/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'scripts/release_gate.py'
+      - '.github/workflows/release-gate.yml'
+  pull_request:
+    paths:
+      - 'plugins/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'scripts/release_gate.py'
+      - '.github/workflows/release-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-release-gate:
+    name: Source / docs release gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate plugin catalogue and documentation
+        run: python scripts/release_gate.py
