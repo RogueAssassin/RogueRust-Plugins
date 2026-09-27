@@ -2,7 +2,7 @@
 
 Individual reference documentation for the RogueRust Rust plugin collection.
 
-Documentation follows a consistent Oxide/Carbon-neutral layout inspired by uMod plugin pages: purpose, features, compatibility, dependencies, permissions, commands, configuration, installation and updating.
+Documentation is Oxide/Carbon-neutral and follows the full RogueRust release standard: purpose, features, compatibility, dependencies, permissions, command usage, configuration defaults/examples, data and localization, integrations/API where applicable, performance notes, installation and updating.
 
 ## RogueRust Extension
 
@@ -10,7 +10,11 @@ The plugins in this repository use RogueRust shared services. Install the latest
 
 **[Download Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**
 
-## Published pages
+## Release readiness
+
+The collection has a source-verification and documentation release gate. See [RELEASE_READINESS.md](RELEASE_READINESS.md) for the checklist and current deep-documentation progress.
+
+## Plugin pages
 
 - [RogueRustAdminMenu](RogueRustAdminMenu.md)
 - [RogueRustBlueprintManager](RogueRustBlueprintManager.md)
