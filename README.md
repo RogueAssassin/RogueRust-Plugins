@@ -28,7 +28,9 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 
 ## Documentation
 
-Each plugin is being given an individual reference page inspired by the clear uMod plugin-page structure: overview, features, compatibility, dependencies, permissions, commands, configuration, installation and updating. Pages are derived from the current source revision and expanded as each plugin evolves.
+Every plugin has an individual documentation page. The release documentation standard includes source-verified features, permissions, commands, configuration defaults/examples, persistent data/localization, integrations/API where applicable, performance notes, installation and updating.
+
+**[Release-readiness checklist](docs/RELEASE_READINESS.md)**
 
 ## RogueRust Extension
 
@@ -47,7 +49,7 @@ These plugins are built around the RogueRust extension and shared services. Down
 ## Repository Layout
 
 - `plugins/` — current plugin source files.
-- `docs/` — individual plugin documentation pages.
+- `docs/` — individual plugin documentation and release-readiness guidance.
 - `README.md` — plugin catalogue and project overview.
 
 ## Support
