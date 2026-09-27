@@ -1,67 +1,107 @@
-# RogueRust Hackable Crate Tracker
+# RogueRustHackableCrateTracker
+
+> Tracks hackable crates, hackers, looters, map grids, world metadata and Discord notifications.
 
 **Version:** `2.1.0`  
 **Author:** RogueAssassin  
-**Game:** Rust  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
-Tracks hackable crates, hackers, looters, map grids, world metadata and Discord notifications.
+[Plugin source](../plugins/RogueRustHackableCrateTracker.cs) · [Back to plugin catalogue](../README.md)
 
 ## Features
 
-- Hack attempt tracking
-- Hack completion tracking
-- First actual looter tracking
-- In-game and console reporting
-- Discord webhook embeds
-- Grid, coordinate and world metadata support
-
-## Compatibility
-
-Designed for supported Rust servers running **Oxide** or **Carbon** with the RogueRust extension installed.
-
-## Dependencies
-
-### Required
-
-- **[Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**
+- Reports crate hack attempts, accepted hack starts and completion.
+- Tracks the original/known hacker and first actual looter.
+- Includes Rust map grid, optional exact XYZ and optional world seed/size metadata.
+- In-game reporting with optional permission restriction.
+- Console reporting.
+- Built-in Discord webhook embeds/reporting without requiring a Discord plugin.
+- Optional map URL template using `{grid}`, `{x}`, `{z}`, `{worldsize}` and `{seed}`.
+- Compatibility alias for older/custom crate-hack hook providers.
 
 ## Permissions
 
-- `roguerusthackablecratetracker.use` — receives permitted in-game reports when restriction is enabled.
-- `roguerusthackablecratetracker.admin` — administrative permission.
+- `roguerusthackablecratetracker.use` — receives restricted in-game reports when restriction is enabled.
+- `roguerusthackablecratetracker.admin` — reserved administrative permission for plugin administration/current command surface.
 
 ## Commands
 
-- No public RogueCommand handlers are defined in the current revision.
+No public RogueCommand handlers are defined in the current revision. Tracking is event-driven.
 
 ## Configuration
 
-The current revision groups its configuration into:
+Configuration file: `config/RogueRustHackableCrateTracker.json`
 
-- `Reporting Settings`
-- `Discord Settings`
-- `Location Settings`
+### Reporting Settings
 
-Discord output uses a webhook URL directly; no separate Discord plugin is required.
+| Setting | Default |
+| --- | --- |
+| Enable In-Game Reporting | `true` |
+| Only Send In-Game Reports to Permitted Players | `false` |
+| Report Hack Attempts | `true` |
+| Enable Console Reporting | `true` |
+| Report Hack Completion | `true` |
+| Report First Actual Looter | `true` |
 
-The source file remains the authority for exact defaults, migrations and framework-specific behaviour.
+### Discord Settings
 
-## Installation
+| Setting | Default |
+| --- | --- |
+| Enabled | `false` |
+| Webhook URL | empty |
+| Map URL Template (`{grid}`, `{x}`, `{z}`, `{worldsize}`, `{seed}`) | empty |
 
-1. Install a supported Rust server with Oxide or Carbon.
-2. Download and install the latest **[Oxide.Ext.RogueRust DLL](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**.
-3. Download the plugin from [RogueRustHackableCrateTracker.cs](../plugins/RogueRustHackableCrateTracker.cs).
-4. Place it in your framework's plugins directory.
-5. Review the generated configuration and grant only the permissions you need.
+When Discord is enabled with an invalid/empty webhook URL, the plugin logs a warning rather than treating Discord as a hard dependency.
 
-## Updating
+### Location Settings
 
-Replace the plugin `.cs` with the newer revision. Existing configuration is retained unless the plugin's migration logic or release notes state otherwise.
+- `Include Exact XYZ Coordinates`: `true`
+- `Include World Metadata`: `true`
 
-## Source
+### Default configuration
 
-[View the plugin source](../plugins/RogueRustHackableCrateTracker.cs)
+```json
+{
+  "Reporting Settings": {
+    "Enable In-Game Reporting": true,
+    "Only Send In-Game Reports to Permitted Players": false,
+    "Report Hack Attempts": true,
+    "Enable Console Reporting": true,
+    "Report Hack Completion": true,
+    "Report First Actual Looter": true
+  },
+  "Discord Settings": {
+    "Enabled": false,
+    "Webhook URL": "",
+    "Map URL Template ({grid}, {x}, {z}, {worldsize}, {seed})": ""
+  },
+  "Location Settings": {
+    "Include Exact XYZ Coordinates": true,
+    "Include World Metadata": true
+  },
+  "Version (DO NOT CHANGE)": "2.1.0"
+}
+```
 
-[Back to documentation index](README.md) · [Back to plugin catalogue](../README.md)
+## Data and localization
+
+Persistent custom data: **none**.  
+Custom language files: **none** in the current revision.
+
+Crate state is runtime-only and cleared on unload.
+
+## Migration
+
+Legacy flat settings such as `Discord webhook URL`, `Enable in-game reporting`, `Configuration version` and related keys are migrated into the grouped Reporting/Discord/Location layout.
+
+## Performance notes
+
+- Crates are keyed by `NetworkableId` for direct lookup.
+- Hack-attempt spam is debounced per player for two seconds and periodically cleaned.
+- Hack completion uses the authoritative current hook with a delayed fallback for older framework builds.
+- No polling loop is required for normal tracking.
+
+## Installation and updating
+
+Install the latest [RogueRust DLL](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases), place `RogueRustHackableCrateTracker.cs` in the plugin directory, then configure reporting/Discord options. Replace the `.cs` file for updates; legacy flat configuration is migrated automatically.
