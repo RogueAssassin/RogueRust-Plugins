@@ -1,73 +1,97 @@
-# RogueRust Death Notes
+# RogueRustDeathNotes
+
+> RogueRust death notification engine based on the Death Notes concept, with native GUI output, per-player controls and optional notification integrations.
 
 **Version:** `2.2.0`  
 **Author:** RogueAssassin  
-**Game:** Rust  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
-Death notification engine with native GUI output, optional Notify/UINotify integration and per-player controls.
+[Plugin source](../plugins/RogueRustDeathNotes.cs) · [Back to plugin catalogue](../README.md)
 
 ## Features
 
-- Native GUI death notifications
-- Chat and console output
-- Optional Notify and UINotify output
-- Per-player `/dn` controls
-- Patrol Helicopter and Bradley tag messages
-- Configurable formatting, colors and message radius
+- Rich death messages for players, NPCs, traps, turrets, animals, fire, Bradley and Patrol Helicopter events.
+- Native RogueRust GUI notifications with embedded notification icon.
+- Chat and console output.
+- Optional `Notify` and `UINotify` output modules.
+- Per-player `/dn` enable/disable and team-only controls.
+- Message-radius filtering and metric/imperial distance support.
+- Configurable message matching by killer type, victim type and damage type with wildcard support.
+- Patrol Helicopter and Bradley tag messages.
+- Persistent player preferences and translation/weapon catalogue data.
 
-## Compatibility
+## Optional integrations
 
-Designed for supported Rust servers running **Oxide** or **Carbon** with the RogueRust extension installed.
+- `Notify`
+- `UINotify`
 
-## Dependencies
-
-### Required
-
-- **[Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**
+Neither is required when using native GUI/chat/console output.
 
 ## Permissions
 
-- `roguerustdeathnotes.cansee` — permits viewing when permission-gated output is enabled.
-- `roguerustdeathnotes.cantsee` — suppresses death-note output for the player.
+- `roguerustdeathnotes.cansee` — viewing permission when permission-gated output is enabled.
+- `roguerustdeathnotes.cantsee` — prevents the player from receiving notices.
 - `roguerustdeathnotes.suppress` — suppresses messages involving the player.
-- `roguerustdeathnotes.seeteamonly` — restricts viewing to team-related events.
+- `roguerustdeathnotes.seeteamonly` — restricts notices to team-related events.
+- Additional display permissions configured for Patrol Helicopter, Bradley or individual death messages are registered dynamically when they use the `roguerustdeathnotes.*` namespace.
 
 ## Commands
 
-- `dn` — player death-note controls.
+### `/dn`
+
+Player-facing death-notification controls. Availability is controlled by `Can Player Use /dn Command` in configuration. The command manages the player's enabled/team-only preference state.
 
 ## Configuration
 
-The current revision groups its configuration into:
+Configuration file: `config/RogueRustDeathNotes.json`
 
-- `Formatting Settings`
-- `Output Settings`
-- `Player Control Settings`
-- `Patrol Helicopter Settings`
-- `Bradley APC Settings`
-- `General Settings`
-- `Developer Settings`
+The current grouped configuration contains:
 
-Optional integrations: `Notify` and `UINotify`. Native GUI output works without either integration.
+- `Formatting Settings` — variable formats, variable colours and chat message format.
+- `Output Settings` — integrated output modules plus Notify/UINotify message types.
+- `Player Controls` — `/dn` availability and player preference behaviour.
+- `Patrol Helicopter` — display permissions, console/chat/Notify/UINotify toggles and tag message.
+- `Bradley APC` — equivalent Bradley tag/output controls.
+- `General` — broadcast radius, distance units, permission requirements and general behaviour.
+- `Developer` — diagnostic/developer behaviour.
+- Translation/death-message definitions used by the matching engine.
 
-The source file remains the authority for exact defaults, migrations and framework-specific behaviour.
+Older numbered/flat configuration keys are migrated into the grouped layout. Existing values are read from either the numbered legacy key or its original name.
+
+### Message matching
+
+Death message definitions can match killer type, victim type and damage type. `*` acts as a wildcard. Matching progressively falls back from exact combinations to wildcard combinations, allowing specific messages to override general ones.
+
+## Data
+
+RogueRust data keys:
+
+- `RogueRustDeathNotes/player-settings` — per-player enabled/team-only preferences.
+- `RogueRustDeathNotes/killer-data` — persistent translation/weapon catalogue data.
+
+Legacy `RogueRust/RogueRustDeathNotes/...` data keys are recognized for migration.
+
+## Localization
+
+Language files use:
+
+`lang/<language>/RogueRust/RogueRustDeathNotes/messages.json`
+
+## Runtime and performance notes
+
+- Attack/tag state is stored in dictionaries/sets and cleaned as events complete.
+- The notification icon is supplied from the RogueRust extension resource rather than requiring a remote image service.
+- Message matching uses compiled regular expressions for rich-text cleanup and staged matching delegates.
+- Per-player settings prevent unwanted output without requiring global configuration changes.
 
 ## Installation
 
-1. Install a supported Rust server with Oxide or Carbon.
-2. Download and install the latest **[Oxide.Ext.RogueRust DLL](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**.
-3. Download the plugin from [RogueRustDeathNotes.cs](../plugins/RogueRustDeathNotes.cs).
-4. Place it in your framework's plugins directory.
-5. Review the generated configuration and grant only the permissions you need.
+1. Install the latest [Oxide.Ext.RogueRust release](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases).
+2. Place `RogueRustDeathNotes.cs` in the plugin directory.
+3. Optionally install Notify or UINotify.
+4. Review output modules, permissions, radius and message definitions.
 
 ## Updating
 
-Replace the plugin `.cs` with the newer revision. Existing configuration is retained unless the plugin's migration logic or release notes state otherwise.
-
-## Source
-
-[View the plugin source](../plugins/RogueRustDeathNotes.cs)
-
-[Back to documentation index](README.md) · [Back to plugin catalogue](../README.md)
+Replace the `.cs` file while retaining configuration and RogueRust data. The plugin includes migration handling for older configuration keys and legacy data locations.
