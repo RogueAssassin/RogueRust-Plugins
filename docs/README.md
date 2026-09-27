@@ -1,9 +1,20 @@
 # RogueRust Plugin Documentation
 
-This directory contains the individual documentation pages for the RogueRust plugin collection.
+Individual reference documentation for the RogueRust Rust plugin collection.
 
-The documentation structure is intentionally inspired by the clear reference style used on uMod plugin pages: each plugin page covers its purpose, features, requirements, permissions, commands, configuration, installation, updating and support.
+Documentation follows a consistent Oxide/Carbon-neutral layout inspired by uMod plugin pages: purpose, features, compatibility, dependencies, permissions, commands, configuration, installation and updating.
 
-All plugins in this repository target Rust and are documented in an Oxide/Carbon-neutral manner. Framework-specific differences will be called out on the individual plugin page when required.
+## Published pages
 
-Return to the [Plugin Catalogue](../README.md).
+- [RogueRustAdminMenu](RogueRustAdminMenu.md)
+- [RogueRustBlueprintManager](RogueRustBlueprintManager.md)
+- [RogueRustCraftingController](RogueRustCraftingController.md)
+- [RogueRustGridPower](RogueRustGridPower.md)
+- [RogueRustRemovalTool](RogueRustRemovalTool.md)
+- [RogueRustServerRestarter](RogueRustServerRestarter.md)
+- [RogueRustSkins](RogueRustSkins.md)
+- [RogueRustTurretLimitOverride](RogueRustTurretLimitOverride.md)
+
+The remaining plugin pages will be added from their current source revisions in subsequent documentation passes.
+
+[Return to the Plugin Catalogue](../README.md)
