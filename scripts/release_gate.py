@@ -32,8 +32,12 @@ for source in plugin_files:
     if not info:
         continue
     plugin_name, version = info.groups()
-    expected_doc = DOCS / f"{plugin_name}.md"
-    check(expected_doc.exists(), f"{source.name}: missing docs/{plugin_name}.md")
+
+    # Repository documentation is canonically paired to the source filename. Some
+    # compatibility builds intentionally retain a legacy [Info] title while the public
+    # RogueRust source/doc filename carries the family prefix.
+    expected_doc = DOCS / f"{source.stem}.md"
+    check(expected_doc.exists(), f"{source.name}: missing docs/{source.stem}.md")
     check(f"plugins/{source.name}" in readme, f"{source.name}: missing source link in root README")
     check(version in readme, f"{source.name}: version {version} not present in root README catalogue")
     if expected_doc.exists():
@@ -44,7 +48,6 @@ for source in plugin_files:
         for heading in ("## Features", "## Compatibility", "## Permissions", "## Commands", "## Configuration", "## Installation", "## Updating"):
             check(heading in doc, f"{expected_doc.name}: missing required section {heading}")
 
-# Detect orphan RogueRust plugin docs.
 source_stems = {p.stem for p in plugin_files}
 for stem, path in doc_files.items():
     check(stem in source_stems, f"{path.name}: documentation has no matching plugin source")
