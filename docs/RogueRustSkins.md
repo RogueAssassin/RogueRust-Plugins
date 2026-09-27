@@ -2,27 +2,134 @@
 
 > Performance-first Skinner-style native Rust skin browser powered by RogueRust services.
 
-**Version:** `2.1.1`
+**Version:** `2.1.1`  
+**Author:** RogueRust  
+**Frameworks:** Oxide / Carbon  
+**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
 [Plugin source](../plugins/RogueRustSkins.cs) · [Back to plugin catalogue](../README.md)
 
 ## Features
-- Native Rust skin browsing UI powered by RogueRust services.
-- Performance-first skin discovery and application workflow.
-- Permission-scoped inventory, container, crafting, collection, team, import and request features.
-- Persistent plugin data where required.
 
-## Compatibility
-Rust · Oxide · Carbon · RogueRust extension/framework
+- Native inventory-style skin browser with 48 skins per page.
+- Live Rust/Steam skin catalogue plus persistent SQLite cache.
+- Item, deployable/container, crafting, inventory, team, base and bulk skin workflows.
+- Automatic inventory and crafted-item skinning.
+- Spray-can browser override.
+- Multiple named player skin sets.
+- Recent skins and favourites.
+- Workshop skin requests, direct imports and collection imports.
+- Paid/DLC/owned/redirected skin access controls.
+- Per-feature cooldowns and batched bulk processing.
+- RogueRust skin catalogue/session/player-skin service integration.
 
 ## Permissions
-`roguerustskins.admin`, `roguerustskins.all`, `roguerustskins.auto`, `roguerustskins.base`, `roguerustskins.bypassauth`, `roguerustskins.collection`, `roguerustskins.container`, `roguerustskins.craft`, `roguerustskins.import`, `roguerustskins.inventory`, `roguerustskins.items`, `roguerustskins.request`, `roguerustskins.team`, `roguerustskins.use`.
+
+- `roguerustskins.use` — base `/skin` access.
+- `roguerustskins.items` — deployable/item targeting.
+- `roguerustskins.craft` — craft-skin controls.
+- `roguerustskins.inventory` — inventory skinning.
+- `roguerustskins.container` — container skinning.
+- `roguerustskins.base` — base-wide operations.
+- `roguerustskins.all` — broad/bulk skin operations.
+- `roguerustskins.auto` — automatic skinning.
+- `roguerustskins.team` — team skin features.
+- `roguerustskins.request` — workshop requests.
+- `roguerustskins.import` — direct Workshop import.
+- `roguerustskins.admin` — administrative operations.
+- `roguerustskins.bypassauth` — bypass building-authorization requirement.
+- `roguerustskins.collection` — Workshop collection import.
 
 ## Commands
-- `rrs.page`
+
+### Main chat commands
+
+- `/skin`, `/s` — skin the held item/open browser.
+- `/skinitem`, `/si` — skin the deployable being looked at.
+- `/skincraft`, `/sc` — crafted-item skin preference.
+- `/skininv`, `/sinv` — inventory skin operation.
+- `/skincon`, `/scon` — container skin operation.
+- `/skinset`, `/ss` — skin-set controls.
+- `/skinauto` — automatic skinning.
+- `/skinteam` — team workflow.
+- `/skinbase` — base workflow.
+- `/skinall` — bulk/all workflow.
+- `/skinsearch`, `/skinrecent`, `/skinfav` — browser filters/history/favourites.
+- `/skinsetname`, `/skinsets` — manage named skin sets.
+- `/skinrequest`, `/skinrequests` — Workshop request workflow.
+- `/skinimport`, `/skinremove` — imported Workshop skin administration.
+- `/skincollection` — Workshop collection import.
+
+### UI console commands
+
+`rrs.page`, `rrs.search`, `rrs.view`, `rrs.set`, `rrs.option` are internal CUI/browser controls.
 
 ## Configuration
-Configuration is generated in the standard framework config directory. Retain existing configuration/data between updates unless a release specifically changes storage requirements.
 
-## Installation
-Install RogueRust, place `RogueRustSkins.cs` in the plugin directory, allow it to compile, then grant the skin features appropriate to each group.
+Configuration file: `config/RogueRustSkins.json`
+
+### General Settings
+
+- Apply workshop skin names to items: `false`
+- Require building authorization for deployable/container skinning: `true`
+- Blacklisted skin IDs: empty
+- Blacklisted item IDs: empty
+
+### Skin Access Settings
+
+Allow unowned approved paid/DLC skins: `true`; allow owned skins: `true`; include redirected/DLC item variants: `true`.
+
+### Automation Settings
+
+Craft skinning `true`, automatic inventory skinning `true`, spray-can override `true`, range `5m` (clamped `1-8`), input cooldown `0.5s` (clamped `0.1-5`).
+
+### Skin Set Settings
+
+Player set count defaults to `3` and is clamped to `3-10`.
+
+### Cooldown Settings
+
+Enabled by default. Defaults: Skin `1s`, Skin Item `2s`, Inventory `15s`, Container `15s`, Team `30s`, Base `45s`, All `60s`.
+
+### Player History Settings
+
+Recent skins per item `6` (clamped `0-24`), favourites enabled, inactive player data removed after `30` days (`0` disables cleanup).
+
+### Workshop Request Settings
+
+Requests enabled; maximum pending per player `10`; direct imports and collection imports enabled; timeout `15s` (`5-120`); batch size `50` (`1-100`); configured collection IDs empty.
+
+### Performance Settings
+
+Maximum bulk entities/items per command `2000` (`100-10000`); bulk operations per server tick `32` (`4-128`).
+
+### UI Settings
+
+Contains page/header/options anchors and offsets used to position the native inventory browser controls. Defaults are generated by the plugin and may be adjusted for server UI preferences.
+
+## Data and database
+
+RogueRust family data path: `RogueRust/RogueRustSkins/`.
+
+The catalogue cache is stored in:
+
+`data/RogueRust/RogueRustSkins/SkinCache.db`
+
+The plugin registers a RogueRust SQLite connection named `roguerustskins-cache` and migrates tables `skin_cache` and `skin_cache_meta`. Player preferences, Workshop requests and imported Workshop data are also persisted by the plugin's RogueRust data routines.
+
+## Runtime and performance notes
+
+- Cached skins are usable while Steam inventory definitions are still loading.
+- Live catalogue refresh publishes a signature-checked catalogue to RogueRust only when changed.
+- Database persistence writes changed fingerprints and removes stale cache rows in batches.
+- RogueRust player-skin/session caches are pruned every 10 minutes.
+- Bulk work is capped and processed in per-tick batches.
+- Browser page changes are debounced to avoid duplicate CUI submissions.
+
+## Migration
+
+Older numbered config section names (`01 - General`, etc.) are renamed to the current descriptive sections while preserving values.
+
+## Installation and updating
+
+Install the latest [RogueRust DLL](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases), place `RogueRustSkins.cs` in the plugin directory, grant only desired feature permissions, and allow the first catalogue/cache initialization to complete. Retain `SkinCache.db` and player data when updating unless release notes explicitly require regeneration.
