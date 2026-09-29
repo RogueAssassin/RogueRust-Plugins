@@ -2,12 +2,16 @@
 
 > RogueRust death notification engine based on the Death Notes concept, with native GUI output, per-player controls and optional notification integrations.
 
-**Version:** `2.2.0`  
+**Version:** `2.2.1`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
 [Plugin source](../plugins/RogueRustDeathNotes.cs) · [Back to plugin catalogue](../README.md)
+
+## Recent Changes
+
+- Configuration section ordering standardized to the RogueRust family convention.
 
 ## Features
 
