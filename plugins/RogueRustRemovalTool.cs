@@ -12,11 +12,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.0")]
+    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.1")]
     [Description("RogueRust-native building and deployable removal tool.")]
     public sealed class RogueRustRemovalTool : RogueRustPlugin
     {
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 0);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 1);
         private const string UiName = "RogueRustRemovalTool.Hud";
         private const string UiRoot = "RogueRustRemovalTool.UI.Root";
         private const string UiSession = "RogueRustRemovalTool.UI.Session";
