@@ -2,7 +2,7 @@
 
 > RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics and player-facing grid events.
 
-**Version:** `1.8.0`  
+**Version:** `1.9.2`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -16,6 +16,7 @@
 - Optional player grid-power infrastructure and power-pole discovery.
 - Configurable pole power output and transformer output limit.
 - Cooperative/batched infrastructure spawning.
+- Wooden ladder placement support on RogueRust-managed power poles, with cached pole targeting and native Rust ladder entities.
 - GameTip notifications for night/dawn transitions.
 - Streetlight/infrastructure cache refresh controls.
 - Administrative status, refresh, scan, inspect, debug and power diagnostics.
@@ -67,6 +68,11 @@ Configuration file: `config/RogueRustGridPower.json`
 | Transformer Maximum Output | `100` | `>= 0` |
 | Spawn Batch Size | `2` | `1-2` |
 | Batch Interval Seconds | `0.25` | `>= 0.25` |
+| Allow Wooden Ladders On Grid Power Poles | `true` | — |
+| Ladder Pole Detection Radius | `4` | clamped `1-8` metres |
+| Show Ladder Placement GameTip | `true` | — |
+| Ladder Placement GameTip Duration Seconds | `2.5` | clamped `1-10` |
+| Ladder Placement Success Message | `Ladder attached to RogueRust GridPower pole.` | configurable text |
 
 ### Player Notifications
 
@@ -111,7 +117,12 @@ Configuration file: `config/RogueRustGridPower.json`
       "Limit Transformer Output": true,
       "Transformer Maximum Output": 100,
       "Spawn Batch Size": 2,
-      "Batch Interval Seconds": 0.25
+      "Batch Interval Seconds": 0.25,
+      "Allow Wooden Ladders On Grid Power Poles": true,
+      "Ladder Pole Detection Radius": 4.0,
+      "Show Ladder Placement GameTip": true,
+      "Ladder Placement GameTip Duration Seconds": 2.5,
+      "Ladder Placement Success Message": "Ladder attached to RogueRust GridPower pole."
     },
     "Require Vanilla Power Grid": false
   },
@@ -120,9 +131,15 @@ Configuration file: `config/RogueRustGridPower.json`
     "Refresh Street Light Cache Minutes": 10.0
   },
   "Developer Settings": { "Log Diagnostics": false },
-  "Version (DO NOT CHANGE)": "1.8.0"
+  "Version (DO NOT CHANGE)": "1.9.2"
 }
 ```
+
+## Ladder placement notes
+
+When player-grid power is enabled and managed power poles are active, players holding a wooden wall ladder can place it directly against recognized RogueRust GridPower poles. The plugin caches eligible pole positions for short periods, verifies the player is actually targeting a power-pole collider, spawns the native ladder entity with ownership/skin preserved, and fires the normal `OnEntityBuilt` hook for compatibility.
+
+This feature can be disabled independently without affecting streetlights or player-grid power.
 
 ## Runtime and performance notes
 
