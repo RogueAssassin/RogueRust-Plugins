@@ -2150,13 +2150,13 @@ namespace Oxide.Plugins
 		{
 			[JsonIgnore] public Translation Translations = new Translation();
 
-            [JsonProperty("Formatting Settings", Order = 100)] public FormattingSettings Formatting = new FormattingSettings();
-            [JsonProperty("Output Settings", Order = 200)] public OutputSettings Output = new OutputSettings();
-            [JsonProperty("Player Control Settings", Order = 300)] public PlayerControlSettings PlayerControls = new PlayerControlSettings();
-            [JsonProperty("Patrol Helicopter Settings", Order = 400)] public PatrolHelicopterSettings PatrolHelicopter = new PatrolHelicopterSettings();
-            [JsonProperty("Bradley APC Settings", Order = 500)] public BradleyApcSettings BradleyApc = new BradleyApcSettings();
-            [JsonProperty("General Settings", Order = 600)] public GeneralSettings General = new GeneralSettings();
-            [JsonProperty("Developer Settings", Order = 700)] public DeveloperSettings Developer = new DeveloperSettings();
+            [JsonProperty("Formatting Settings", Order = 10)] public FormattingSettings Formatting = new FormattingSettings();
+            [JsonProperty("Output Settings", Order = 20)] public OutputSettings Output = new OutputSettings();
+            [JsonProperty("Player Control Settings", Order = 30)] public PlayerControlSettings PlayerControls = new PlayerControlSettings();
+            [JsonProperty("Patrol Helicopter Settings", Order = 40)] public PatrolHelicopterSettings PatrolHelicopter = new PatrolHelicopterSettings();
+            [JsonProperty("Bradley APC Settings", Order = 50)] public BradleyApcSettings BradleyApc = new BradleyApcSettings();
+            [JsonProperty("General Settings", Order = 60)] public GeneralSettings General = new GeneralSettings();
+            [JsonProperty("Developer Settings", Order = 70)] public DeveloperSettings Developer = new DeveloperSettings();
 
             [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]
             public VersionNumber Version = CurrentVersion;

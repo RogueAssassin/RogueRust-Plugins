@@ -84,31 +84,31 @@ namespace Oxide.Plugins
 
         private sealed class PluginConfig
         {
-            [JsonProperty("General Settings")]
+            [JsonProperty("General Settings", Order = 10)]
             public GeneralSettings General = new GeneralSettings();
 
-            [JsonProperty("Skin Access Settings")]
+            [JsonProperty("Skin Access Settings", Order = 20)]
             public SkinAccessSettings SkinAccess = new SkinAccessSettings();
 
-            [JsonProperty("Automation Settings")]
+            [JsonProperty("Automation Settings", Order = 30)]
             public AutomationSettings Automation = new AutomationSettings();
 
-            [JsonProperty("Skin Set Settings")]
+            [JsonProperty("Skin Set Settings", Order = 40)]
             public SkinSetSettings SkinSets = new SkinSetSettings();
 
-            [JsonProperty("UI Settings")]
+            [JsonProperty("UI Settings", Order = 50)]
             public UiSettings UI = new UiSettings();
 
-            [JsonProperty("Cooldown Settings")]
+            [JsonProperty("Cooldown Settings", Order = 60)]
             public CooldownSettings Cooldowns = new CooldownSettings();
 
-            [JsonProperty("Player History Settings")]
+            [JsonProperty("Player History Settings", Order = 70)]
             public HistorySettings History = new HistorySettings();
 
-            [JsonProperty("Workshop Request Settings")]
+            [JsonProperty("Workshop Request Settings", Order = 80)]
             public RequestSettings Requests = new RequestSettings();
 
-            [JsonProperty("Performance Settings")]
+            [JsonProperty("Performance Settings", Order = 90)]
             public PerformanceSettings Performance = new PerformanceSettings();
 
             [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]

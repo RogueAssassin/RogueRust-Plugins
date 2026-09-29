@@ -529,10 +529,10 @@ namespace Oxide.Plugins
 
         private sealed class Configuration
         {
-            [JsonProperty("Generation Options")]
+            [JsonProperty("Generation Options", Order = 10)]
             public GenerationOptions Generation = new GenerationOptions();
 
-            [JsonProperty("Spawn Options")]
+            [JsonProperty("Spawn Options", Order = 20)]
             public SpawnOptions Spawn = new SpawnOptions();
 
             [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]

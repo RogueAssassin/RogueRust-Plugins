@@ -49,7 +49,7 @@ namespace Oxide.Plugins
             [JsonProperty("Time Control Settings", Order = 30)]
             public TimeControlSettings TimeControl = new TimeControlSettings();
 
-            [JsonProperty("Developer Settings", Order = 80)]
+            [JsonProperty("Developer Settings", Order = 40)]
             public DeveloperSettings Developer = new DeveloperSettings();
 
             [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]
