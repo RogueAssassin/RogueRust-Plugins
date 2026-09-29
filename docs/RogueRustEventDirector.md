@@ -1,6 +1,6 @@
 # RogueRust Event Director
 
-**Version:** `1.1.0`  
+**Version:** `1.2.1`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -11,12 +11,15 @@ Performance-focused world-event scheduling and CH47 crate direction powered by R
 ## Features
 
 - Managed scheduling for Cargo Plane, Patrol Helicopter, Bradley APC, CH47 Chinook and Cargo Ship
+- Shorter randomized startup windows with configurable per-event staggering so events begin naturally after boot without clustering
 - Independent enable/disable and vanilla-spawn suppression per event
 - Randomized minimum/maximum intervals and spawn counts
-- Per-event concurrency limits with retry delay
+- Per-event concurrency limits, global spacing between managed events, and dedicated retry handling for spawn failures
 - Persistent next-run schedule state
-- CH47 crate drop director with retry timing, crate spacing, water checks and optional monument avoidance
+- CH47 crate drop director with retry timing, crate spacing, water checks, optional monument avoidance, maximum-attempt handling and configurable fallback drops
 - Admin status, spawn and reschedule commands
+- Randomized player GameTip announcements for Cargo Plane, Patrol Helicopter, CH47 and Cargo Ship spawns
+- Persistent last-spawn timestamps alongside next-run schedules
 - RogueRust world-event tracking integration
 
 ## Compatibility
@@ -50,6 +53,11 @@ Generates fresh next-run times for all managed event schedules and saves them im
 
 - **Tick Seconds** — scheduler check interval. Default `1`; minimum `1`.
 - **Concurrency Retry Seconds** — delay before retrying an event blocked by its concurrency limit. Default `120`; minimum `30`.
+- **Spawn Failure Retry Seconds** — retry delay after a managed spawn attempt fails. Default `120`; minimum `30`.
+- **Minimum Seconds Between Managed Events** — global spacing between successful managed spawns. Default `600`.
+- **Initial Minimum Spawn Delay Seconds** — lower bound for the first/overdue schedule after startup. Default `600`.
+- **Initial Maximum Spawn Delay Seconds** — upper bound for the first/overdue schedule after startup. Default `1800`.
+- **Initial Event Stagger Seconds** — additional per-event startup staggering so event schedules do not all land together.
 
 ### Event Settings
 
@@ -62,6 +70,8 @@ Cargo Plane, Patrol Helicopter, Bradley APC and Cargo Ship use the same base set
 - **Minimum Spawn Count** — default `1`; minimum `1`.
 - **Maximum Spawn Count** — default `1`; normalized to at least the minimum spawn count.
 - **Maximum Concurrent** — default `1`; minimum `1`.
+- **Initial Minimum Delay Seconds (0 = Scheduler Default)** — optional per-event override for the startup minimum.
+- **Initial Maximum Delay Seconds (0 = Scheduler Default)** — optional per-event override for the startup maximum.
 
 ### CH47 Drop Director
 
@@ -70,12 +80,23 @@ Cargo Plane, Patrol Helicopter, Bradley APC and Cargo Ship use the same base set
 - **Initial Delay Seconds** — default `200`.
 - **Minimum Retry Seconds** — default `40`.
 - **Maximum Retry Seconds** — default `60`.
+- **Maximum Attempts** — maximum number of directed drop placement attempts before fallback/abort handling. Default `30`.
+- **Fallback Drop After Maximum Attempts** — when enabled, forces a drop after exhausting placement attempts rather than abandoning the drop.
 - **Minimum Crate Spacing** — default `300` metres.
 - **Avoid Water** — default `true`.
 - **Water Clearance** — default `0.25`.
 - **Avoid Monuments** — default `false`.
 - **Monument Radius** — default `140` metres.
 - **Monuments** — optional per-monument enable/disable map.
+
+### GameTip Announcements
+
+- **Enabled** — master switch for managed-event GameTips.
+- **Display Seconds** — how long the announcement remains visible.
+- **Prefix** — optional text prepended to each selected message.
+- Cargo Plane, Patrol Helicopter, CH47 Chinook and Cargo Ship each have independent **Enabled** switches and randomized **Messages** lists.
+- The director avoids immediately repeating the same message for the same event when multiple messages are available.
+- Bradley intentionally does not receive randomized GameTips; its Launch Site behavior remains controlled separately.
 
 ## Default Configuration
 
@@ -143,7 +164,7 @@ Cargo Plane, Patrol Helicopter, Bradley APC and Cargo Ship use the same base set
     "Maximum Spawn Count": 1,
     "Maximum Concurrent": 1
   },
-  "Version (DO NOT CHANGE)": "1.1.0"
+  "Version (DO NOT CHANGE)": "1.2.1"
 }
 ```
 
