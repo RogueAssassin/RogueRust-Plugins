@@ -2,12 +2,16 @@
 
 > RogueRust-powered random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.
 
-**Version:** `2.1.0`  
+**Version:** `2.1.1`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
 [Plugin source](../plugins/RogueRustRandoSpawns.cs) · [Back to plugin catalogue](../README.md)
+
+## Recent Changes
+
+- Generation and spawn configuration sections now use deterministic RogueRust family ordering.
 
 ## Features
 
