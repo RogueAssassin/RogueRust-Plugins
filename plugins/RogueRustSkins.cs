@@ -17,12 +17,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustSkins", "RogueRust", "2.1.1")]
+    [Info("RogueRustSkins", "RogueRust", "2.1.2")]
     [Description("Performance-first Skinner-style native Rust skin browser powered by RogueRust services.")]
     public sealed class RogueRustSkins : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.1";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 1);
+        private const string PluginVersion = "2.1.2";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 2);
         [RoguePermission]
         private const string PermissionUse = "roguerustskins.use";
         [RoguePermission]
