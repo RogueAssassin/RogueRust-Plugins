@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("RogueRustDeathNotes", "RogueAssassin", "2.2.0")]
+	[Info("RogueRustDeathNotes", "RogueAssassin", "2.2.1")]
 	[Description("RogueRustDeathNotes - RogueRust death notification engine, based on the original Death Notes concept, with integrated native GUI output and per-player controls.")]
 	public sealed class RogueRustDeathNotes : RogueRustPlugin
 	{
@@ -41,9 +41,9 @@ namespace Oxide.Plugins
         [RoguePermission]
         private const string TeamOnlyPermission = "roguerustdeathnotes.seeteamonly";
 
-		private const string PluginVersion = "2.2.0";
+		private const string PluginVersion = "2.2.1";
 
-		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 0);
+		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 1);
 
 		private static RogueRustDeathNotes _instance;
 
@@ -291,7 +291,7 @@ namespace Oxide.Plugins
                 c.Developer.DebugMode = Read("07 - Developer - Debug Mode Enabled","Debug Mode Enabled",c.Developer.DebugMode);
                 c.Version = CurrentVersion;
                 Config.WriteObject(c, true);
-                LogInformation("Configuration", "Migrated RogueRustDeathNotes configuration to the grouped v2.2.0 family layout.");
+                LogInformation("Configuration", "Migrated RogueRustDeathNotes configuration to the grouped v2.2.1 family layout.");
             }
             catch (Exception exception)
             {
