@@ -2,12 +2,16 @@
 
 > Configures Rust's turret interference ConVars through a small RogueRust administration plugin.
 
-**Version:** `2.1.1`  
+**Version:** `2.1.2`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
 [Plugin source](../plugins/RogueRustTurretLimitOverride.cs) · [Back to plugin catalogue](../README.md)
+
+## Recent Changes
+
+- Turret configuration section now uses explicit RogueRust family ordering.
 
 ## Features
 
