@@ -8,7 +8,7 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 
 | Plugin | Version | Description | Source |
 |---|---:|---|---|
-| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.1.1` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
+| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.0` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
 | **[RogueRustBlueprintManager](docs/RogueRustBlueprintManager.md)** | `2.1.0` | Blueprint management with legacy permission/config compatibility. | [Source](plugins/RogueRustBlueprintManager.cs) |
 | **[RogueRustCraftingController](docs/RogueRustCraftingController.md)** | `2.1.0` | Crafting control with RogueRust integration. | [Source](plugins/RogueRustCraftingController.cs) |
 | **[CustomPlayerMessages](docs/RogueRustCustomPlayerMessages.md)** | `3.1.0` | Custom connect/disconnect messages and player-list commands. | [Source](plugins/RogueRustCustomPlayerMessages.cs) |
