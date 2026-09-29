@@ -2,12 +2,16 @@
 
 > Performance-first Skinner-style native Rust skin browser powered by RogueRust services.
 
-**Version:** `2.1.1`  
+**Version:** `2.1.2`  
 **Author:** RogueRust  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
 [Plugin source](../plugins/RogueRustSkins.cs) · [Back to plugin catalogue](../README.md)
+
+## Recent Changes
+
+- Configuration sections now use explicit RogueRust family ordering for stable config layout.
 
 ## Features
 
