@@ -1,12 +1,16 @@
 # RogueRust Day/Night Scheduler
 
-**Version:** `3.1.0`  
+**Version:** `3.1.1`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
 RogueRust-powered day/night duration scheduling, cycle skipping, manual time control and protected freeze controls.
+
+## Recent Changes
+
+- Configuration section ordering standardized for consistent RogueRust family config output.
 
 ## Features
 
