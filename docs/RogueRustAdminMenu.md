@@ -2,7 +2,7 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
 
-**Version:** `2.1.1`  
+**Version:** `2.5.0`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,7 +12,7 @@
 
 ## Features
 
-- F1-style full administration workspace with Dashboard, Players, Give, Vehicles, Teleport, Permissions, Groups, ConVars and Plugins sections.
+- RRAM administration workspace with Dashboard, Players, Give, Vehicles, Teleport, Permissions, Groups, ConVars, Plugins, Commands and Diagnostics sections, plus Player Detail and Appearance/Window workflows.
 - Online/offline recent-player tracking and searchable player administration.
 - Give browser with categories, search, recent/favourites, native Rust icons and ImageLibrary fallback.
 - Shared RogueRust teleport and vehicle services.
@@ -143,7 +143,7 @@ The `UI Theme` object contains the full F1-style colour palette and can be custo
   },
   "Integrations": { "Log Menu Actions To Discord Webhook (webhook URL)": "" },
   "Data Settings": { "Recent Players Purge Time (days)": 7 },
-  "Version (DO NOT CHANGE)": "2.1.1"
+  "Version (DO NOT CHANGE)": "2.5.0"
 }
 ```
 
@@ -172,6 +172,9 @@ The menu resolves RogueRust teleport, vanish and vehicle services. Custom player
 - Item search keys and artwork lookups are cached.
 - Vanish targeting hooks are enabled only while needed.
 - UI notifications replace their named popup instead of stacking.
+- Immediate actions such as rapid Give remain non-blocking and avoid rebuilding the full workspace.
+- Dashboard/diagnostics are demand-driven; the plugin does not add a continuous UI polling loop.
+- Shared RogueRust services are reused for expensive infrastructure rather than duplicating world scans, timers or network work in the plugin.
 - Vehicle and give artwork prefers native Rust data and caches fallback lookups.
 
 ## Installation
