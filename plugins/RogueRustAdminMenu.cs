@@ -1,6 +1,6 @@
-// RogueRustAdminMenu v2.4.9 RRAM CUIHelper parity testing build: RRADMIN-249
+// RogueRustAdminMenu v2.5.0 RRAM release build: RRADMIN-250
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
-// Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted testing build
+// Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted release build
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -22,12 +22,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.4.9")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.0")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.4.9";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 4, 9);
+    private const string PluginVersion = "2.5.0";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 0);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
