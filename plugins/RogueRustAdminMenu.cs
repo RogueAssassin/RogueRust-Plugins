@@ -1,4 +1,4 @@
-// RogueRustAdminMenu v2.4.1 RRAM CUIHelper parity testing build: RRADMIN-241
+// RogueRustAdminMenu v2.4.2 RRAM CUIHelper parity testing build: RRADMIN-242
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
 // Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted testing build
 using System;
@@ -22,12 +22,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.4.1")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.4.2")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.4.1";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 4, 1);
+    private const string PluginVersion = "2.4.2";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 4, 2);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -1140,7 +1140,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         RogueUiDocument ui = CreateUi(Root);
         ApplyTheme(ui);
 
-        // RRAM 2.4.1 shell mirrors the approved RustCUIHelper reference pages.
+        // RRAM 2.4.2 shell mirrors the approved RustCUIHelper reference pages.
         // Header/navigation/content/footer geometry is intentionally shared by every page.
         ui.Panel(Root, "Overlay", RogueUiRect.Full, $"0 0 0 {s.WorldDimming.ToString("0.##", CultureInfo.InvariantCulture)}", cursorEnabled: false);
         RogueUiRect windowRect = s.Window == WindowMode.Compact ? Rect(0.10f, 0.11f, 0.90f, 0.89f) : s.Window == WindowMode.Full ? Rect(0.02f, 0.025f, 0.98f, 0.975f) : Rect(0.055f, 0.065f, 0.945f, 0.935f);
@@ -1153,7 +1153,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         ui.Panel("rram.logo", "rram.header", Rect(0.014f, 0.14f, 0.060f, 0.86f), "0.045 0.13 0.16 0.94");
         ui.Label("rram.logo.text", "rram.logo", RogueUiRect.Full, "RR", 16, "0.95 0.52 0.20 1", "MiddleCenter");
         ui.Label("rram.brand", "rram.header", Rect(0.071f, 0.39f, 0.38f, 0.91f), "ROGUERUST", 18, _config.UI.Theme.Text, "MiddleLeft");
-        ui.Label("rram.product", "rram.header", Rect(0.071f, 0.08f, 0.55f, 0.43f), "ADMINISTRATION  •  AdminMenu 2.4.1  •  RogueRust 4.2.2", 8, "0.50 0.78 0.83 1", "MiddleLeft");
+        ui.Label("rram.product", "rram.header", Rect(0.071f, 0.08f, 0.55f, 0.43f), "ADMINISTRATION  •  AdminMenu 2.4.2  •  RogueRust 4.2.2", 8, "0.50 0.78 0.83 1", "MiddleLeft");
         ui.Label("rram.health", "rram.header", Rect(0.70f, 0f, 0.91f, 1f), "● SYSTEM HEALTHY", 9, _config.UI.Theme.Success, "MiddleRight");
         string appearance = UiActionCallback(s.Player, "ui.appearance", () => { s.AppearanceOpen = !s.AppearanceOpen; Draw(s); });
         ui.Button("rram.appearance", "rram.header", Rect(0.920f, 0.20f, 0.950f, 0.80f), "⚙", appearance, "0.025 0.060 0.072 0.98", 13);
@@ -1314,6 +1314,10 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         {
             string searchCb = UiCallback(s.Player, "search", arg => { s.Search = UiCallbackArgument(arg, 0).Trim(); s.Page = 0; Draw(s); });
             ui.Input("rram.search", "rram.body", Rect(0.58f, 0.91f, 0.86f, 0.965f), s.Search, searchCb, 10, _config.UI.Theme.Text, 64);
+            // Keep the transparent search field discoverable without adding a heavy panel.
+            // The hint is visual only, so the input remains the interactive control underneath.
+            if (string.IsNullOrWhiteSpace(s.Search))
+                ui.Label("rram.search.hint", "rram.body", Rect(0.595f, 0.91f, 0.845f, 0.965f), "SEARCH", 8, _config.UI.Theme.MutedText, "MiddleCenter");
             string clear = UiActionCallback(s.Player, "search.clear", () => { s.Search = string.Empty; s.Character = "~"; s.Page = 0; Draw(s); });
             ui.Button("rram.search.clear", "rram.body", Rect(0.87f, 0.91f, 0.95f, 0.965f), "CLEAR", clear, _config.UI.Theme.SurfaceAlt, 9);
         }
