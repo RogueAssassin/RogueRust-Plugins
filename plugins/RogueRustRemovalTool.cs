@@ -70,19 +70,19 @@ namespace Oxide.Plugins
             [JsonProperty("Admin Removal", Order = 40)]
             public AdminSettings Admin = new AdminSettings();
 
-            [JsonProperty("Bulk Removal", Order = 45)]
+            [JsonProperty("Bulk Removal", Order = 50)]
             public BulkSettings Bulk = new BulkSettings();
 
-            [JsonProperty("Removal Costs", Order = 50)]
+            [JsonProperty("Removal Costs", Order = 60)]
             public CostSettings Costs = new CostSettings();
 
-            [JsonProperty("Refunds", Order = 60)]
+            [JsonProperty("Refunds", Order = 70)]
             public RefundSettings Refunds = new RefundSettings();
 
-            [JsonProperty("Integrations", Order = 70)]
+            [JsonProperty("Integrations", Order = 80)]
             public IntegrationSettings Integrations = new IntegrationSettings();
 
-            [JsonProperty("User Interface", Order = 80)]
+            [JsonProperty("User Interface", Order = 90)]
             public UiSettings Ui = new UiSettings();
 
             [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]

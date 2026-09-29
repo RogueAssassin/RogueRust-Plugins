@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustEventDirector", "RogueAssassin", "1.1.0")]
+[Info("RogueRustEventDirector", "RogueAssassin", "1.2.1")]
 [Description("Performance-focused world event scheduling and CH47 crate direction powered by RogueRust.")]
 public sealed class RogueRustEventDirector : RogueRustPlugin
 {
@@ -18,9 +18,9 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     [RoguePermission]
     private const string AdminPermission = "roguerusteventdirector.admin";
 
-    private const string PluginVersion = "1.1.0";
+    private const string PluginVersion = "1.2.1";
 
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 0);
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 2, 1);
 
     private const string CargoPlanePrefab = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
     private const string PatrolHelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
@@ -28,7 +28,10 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     private const string CargoShipPrefab = "assets/content/vehicles/boats/cargoship/cargoshiptest.prefab";
 
     private readonly HashSet<ulong> _scheduledChinooks = new();
+    private readonly Dictionary<ulong, int> _chinookDropAttempts = new();
     private readonly System.Random _random = new();
+    private DateTime _lastManagedSpawnUtc = DateTime.MinValue;
+    private readonly Dictionary<RogueWorldEventType, int> _lastGameTipIndexes = new();
 
     private PluginConfig _config = new();
     private ScheduleState _state = new();
@@ -77,6 +80,7 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     {
         SaveState();
         _scheduledChinooks.Clear();
+        _chinookDropAttempts.Clear();
     }
 
     private void OnEntitySpawned(BaseNetworkable entity)
@@ -88,7 +92,11 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     private void OnEntityKill(BaseNetworkable entity)
     {
         if (entity?.net != null)
-            _scheduledChinooks.Remove(entity.net.ID.Value);
+        {
+            ulong id = entity.net.ID.Value;
+            _scheduledChinooks.Remove(id);
+            _chinookDropAttempts.Remove(id);
+        }
     }
 
     private object? OnEventTrigger(TriggeredEventPrefab info)
@@ -170,11 +178,18 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         RogueWorldEventType type,
         EventSettings settings,
         ref DateTime nextUtc,
-        Action spawn,
+        Func<bool> spawn,
         DateTime now)
     {
         if (!settings.Enabled)
+        {
+            if (nextUtc != default)
+            {
+                nextUtc = default;
+                SaveStateDebounced();
+            }
             return;
+        }
 
         if (nextUtc == default)
         {
@@ -186,6 +201,15 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         if (now < nextUtc)
             return;
 
+        int globalSpacing = Math.Max(0, _config.Scheduler.MinimumSecondsBetweenManagedEvents);
+        if (_lastManagedSpawnUtc != DateTime.MinValue &&
+            now < _lastManagedSpawnUtc.AddSeconds(globalSpacing))
+        {
+            nextUtc = _lastManagedSpawnUtc.AddSeconds(globalSpacing);
+            SaveStateDebounced();
+            return;
+        }
+
         if (WorldEvents.IsAtOrAboveLimit(type, settings.MaximumConcurrent))
         {
             nextUtc = now.AddSeconds(Math.Max(30, _config.Scheduler.ConcurrencyRetrySeconds));
@@ -196,50 +220,81 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         int availableSlots = Math.Max(0, settings.MaximumConcurrent - WorldEvents.CountActive(type));
         int requested = NextInt(settings.MinimumSpawnCount, settings.MaximumSpawnCount);
         int amount = Math.Min(requested, availableSlots);
+        int spawned = 0;
 
         if (amount > 0)
         {
             using (Measure("events", "spawn-" + type))
             {
                 for (int i = 0; i < amount; i++)
-                    spawn();
+                {
+                    if (spawn())
+                        spawned++;
+                }
             }
         }
 
-        nextUtc = NextRun(settings, now);
+        if (spawned > 0)
+        {
+            _lastManagedSpawnUtc = now;
+            _state.SetLastSpawn(type, now);
+            nextUtc = NextRun(settings, now);
+        }
+        else
+        {
+            nextUtc = now.AddSeconds(Math.Max(30, _config.Scheduler.SpawnFailureRetrySeconds));
+            LogInformation("Events", $"Managed event {type} failed to spawn; retry scheduled.");
+        }
+
         SaveStateDebounced();
     }
 
-    private void SpawnCargoPlane()
+    private bool SpawnCargoPlane()
     {
         BaseEntity? entity = GameManager.server.CreateEntity(CargoPlanePrefab, GetAirSpawnPosition());
-        entity?.Spawn();
+        if (entity == null)
+            return false;
+
+        entity.Spawn();
+        ShowRandomGameTip(RogueWorldEventType.CargoPlane, _config.GameTips.CargoPlane);
+        return true;
     }
 
-    private void SpawnPatrolHelicopter()
+    private bool SpawnPatrolHelicopter()
     {
         BaseEntity? entity = GameManager.server.CreateEntity(PatrolHelicopterPrefab, GetAirSpawnPosition());
-        entity?.Spawn();
+        if (entity == null)
+            return false;
+
+        entity.Spawn();
+        ShowRandomGameTip(RogueWorldEventType.PatrolHelicopter, _config.GameTips.PatrolHelicopter);
+        return true;
     }
 
-    private void SpawnBradley()
+    private bool SpawnBradley()
     {
-        BradleySpawner.singleton?.SpawnBradley();
+        if (BradleySpawner.singleton == null)
+            return false;
+
+        BradleySpawner.singleton.SpawnBradley();
+        return true;
     }
 
-    private void SpawnChinook()
+    private bool SpawnChinook()
     {
         CH47HelicopterAIController? chinook =
             GameManager.server.CreateEntity(ChinookPrefab, GetAirSpawnPosition()) as CH47HelicopterAIController;
 
         if (chinook == null)
-            return;
+            return false;
 
         chinook.TriggeredEventSpawn();
         chinook.Spawn();
+        ShowRandomGameTip(RogueWorldEventType.Chinook, _config.GameTips.Chinook);
+        return true;
     }
 
-    private void SpawnCargoShip()
+    private bool SpawnCargoShip()
     {
         float edge = Math.Max(500f, World.WorldSize);
         double angle;
@@ -256,7 +311,59 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
             position.y = waterHeight;
 
         BaseEntity? entity = GameManager.server.CreateEntity(CargoShipPrefab, position);
-        entity?.Spawn();
+        if (entity == null)
+            return false;
+
+        entity.Spawn();
+        ShowRandomGameTip(RogueWorldEventType.CargoShip, _config.GameTips.CargoShip);
+        return true;
+    }
+
+    private void ShowRandomGameTip(RogueWorldEventType type, GameTipSettings settings)
+    {
+        if (!_config.GameTips.Enabled || settings == null || !settings.Enabled ||
+            settings.Messages == null || settings.Messages.Count == 0)
+            return;
+
+        int index;
+        lock (_random)
+        {
+            if (settings.Messages.Count == 1)
+            {
+                index = 0;
+            }
+            else
+            {
+                int previous = _lastGameTipIndexes.TryGetValue(type, out int last) ? last : -1;
+                do
+                {
+                    index = _random.Next(settings.Messages.Count);
+                }
+                while (index == previous);
+            }
+        }
+
+        _lastGameTipIndexes[type] = index;
+        string message = settings.Messages[index];
+
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        if (!string.IsNullOrWhiteSpace(_config.GameTips.Prefix))
+            message = $"{_config.GameTips.Prefix} {message}";
+
+        foreach (BasePlayer player in BasePlayer.activePlayerList)
+            player.SendConsoleCommand("gametip.showgametip", message);
+
+        double duration = Math.Max(1d, _config.GameTips.DisplaySeconds);
+        Delay(
+            TimeSpan.FromSeconds(duration),
+            () =>
+            {
+                foreach (BasePlayer player in BasePlayer.activePlayerList)
+                    player.SendConsoleCommand("gametip.hidegametip");
+            },
+            "event-gametip-hide");
     }
 
     private Vector3 GetAirSpawnPosition()
@@ -297,6 +404,8 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         if (!_scheduledChinooks.Add(id))
             return;
 
+        _chinookDropAttempts[id] = 0;
+
         Delay(
             TimeSpan.FromSeconds(Math.Max(0d, drop.InitialDelaySeconds)),
             () => TryDirectedDrop(chinook, id),
@@ -307,33 +416,49 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     {
         if (chinook == null || chinook.IsDestroyed || chinook.net == null || chinook.numCrates <= 0)
         {
-            _scheduledChinooks.Remove(id);
+            ClearChinookDropTracking(id);
             return;
         }
 
         DropDirectorSettings drop = _config.Chinook.DropDirector;
-        Vector3 position = chinook.transform.position;
+        int attempts = _chinookDropAttempts.TryGetValue(id, out int current) ? current + 1 : 1;
+        _chinookDropAttempts[id] = attempts;
 
+        Vector3 position = chinook.transform.position;
         bool valid =
             (!drop.AvoidWater || Rogue.Terrain.IsAboveWater(position, drop.WaterClearance)) &&
             (!drop.AvoidMonuments || IsAllowedMonumentPosition(position, drop)) &&
             !IsNearHackableCrate(position, drop.MinimumCrateSpacing);
 
-        if (valid)
+        bool maxAttemptsReached = attempts >= Math.Max(1, drop.MaximumAttempts);
+        if (valid || (maxAttemptsReached && drop.FallbackDropAfterMaximumAttempts))
         {
             chinook.DropCrate();
 
             if (chinook.numCrates <= 0)
             {
-                _scheduledChinooks.Remove(id);
+                ClearChinookDropTracking(id);
                 return;
             }
+
+            _chinookDropAttempts[id] = 0;
+        }
+        else if (maxAttemptsReached)
+        {
+            ClearChinookDropTracking(id);
+            return;
         }
 
         Delay(
             TimeSpan.FromSeconds(NextDouble(drop.MinimumRetrySeconds, drop.MaximumRetrySeconds)),
             () => TryDirectedDrop(chinook, id),
             "ch47-drop-" + id);
+    }
+
+    private void ClearChinookDropTracking(ulong id)
+    {
+        _scheduledChinooks.Remove(id);
+        _chinookDropAttempts.Remove(id);
     }
 
     private bool IsAllowedMonumentPosition(Vector3 position, DropDirectorSettings drop)
@@ -349,8 +474,6 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         if (drop.Monuments.TryGetValue(name, out bool enabled))
             return enabled;
 
-        drop.Monuments[name] = false;
-        SaveConfigurationDebounced(ConfigKey, _config);
         return false;
     }
 
@@ -373,23 +496,44 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     private void EnsureSchedules()
     {
         DateTime now = DateTime.UtcNow;
+        int staggerSeconds = Math.Max(0, _config.Scheduler.InitialEventStaggerSeconds);
+        int slot = 0;
 
-        EnsureSchedule(_config.CargoPlane, ref _state.CargoPlaneUtc, now);
-        EnsureSchedule(_config.PatrolHelicopter, ref _state.PatrolHelicopterUtc, now);
-        EnsureSchedule(_config.Bradley, ref _state.BradleyUtc, now);
-        EnsureSchedule(_config.Chinook, ref _state.ChinookUtc, now);
-        EnsureSchedule(_config.CargoShip, ref _state.CargoShipUtc, now);
+        EnsureSchedule(_config.CargoPlane, ref _state.CargoPlaneUtc, now, slot++ * staggerSeconds);
+        EnsureSchedule(_config.PatrolHelicopter, ref _state.PatrolHelicopterUtc, now, slot++ * staggerSeconds);
+        EnsureSchedule(_config.Bradley, ref _state.BradleyUtc, now, slot++ * staggerSeconds);
+        EnsureSchedule(_config.Chinook, ref _state.ChinookUtc, now, slot++ * staggerSeconds);
+        EnsureSchedule(_config.CargoShip, ref _state.CargoShipUtc, now, slot++ * staggerSeconds);
 
         SaveState();
     }
 
-    private void EnsureSchedule(EventSettings settings, ref DateTime nextUtc, DateTime now)
+    private void EnsureSchedule(EventSettings settings, ref DateTime nextUtc, DateTime now, int staggerSeconds)
     {
         if (!settings.Enabled)
+        {
+            nextUtc = default;
             return;
+        }
 
-        if (nextUtc == default || nextUtc < now.AddDays(-1))
-            nextUtc = NextRun(settings, now);
+        // Fresh installs and overdue schedules use the shorter startup window.
+        if (nextUtc == default || nextUtc <= now)
+            nextUtc = InitialRun(settings, now.AddSeconds(staggerSeconds));
+    }
+
+    private DateTime InitialRun(EventSettings settings, DateTime fromUtc)
+    {
+        int minimum = settings.InitialMinimumDelaySeconds > 0
+            ? settings.InitialMinimumDelaySeconds
+            : _config.Scheduler.InitialMinimumSpawnDelaySeconds;
+        int maximum = settings.InitialMaximumDelaySeconds > 0
+            ? settings.InitialMaximumDelaySeconds
+            : _config.Scheduler.InitialMaximumSpawnDelaySeconds;
+
+        minimum = Math.Max(30, minimum);
+        maximum = Math.Max(minimum, maximum);
+
+        return fromUtc.AddSeconds(NextDouble(minimum, maximum));
     }
 
     private DateTime NextRun(EventSettings settings, DateTime fromUtc)
@@ -421,11 +565,12 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         _config ??= new PluginConfig();
         _config.Version = CurrentVersion;
         _config.Scheduler ??= new SchedulerSettings();
-        _config.CargoPlane ??= EventSettings.Default();
-        _config.PatrolHelicopter ??= EventSettings.Default();
-        _config.Bradley ??= EventSettings.Default();
+        _config.CargoPlane ??= EventSettings.CargoPlaneDefault();
+        _config.PatrolHelicopter ??= EventSettings.PatrolDefault();
+        _config.Bradley ??= EventSettings.BradleyDefault();
         _config.Chinook ??= new ChinookSettings();
-        _config.CargoShip ??= EventSettings.Default();
+        _config.CargoShip ??= EventSettings.CargoShipDefault();
+        _config.GameTips ??= new GameTipConfiguration();
 
         NormalizeEvent(_config.CargoPlane);
         NormalizeEvent(_config.PatrolHelicopter);
@@ -435,6 +580,14 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
 
         _config.Scheduler.TickSeconds = Math.Max(1, _config.Scheduler.TickSeconds);
         _config.Scheduler.ConcurrencyRetrySeconds = Math.Max(30, _config.Scheduler.ConcurrencyRetrySeconds);
+        _config.Scheduler.SpawnFailureRetrySeconds = Math.Max(30, _config.Scheduler.SpawnFailureRetrySeconds);
+        _config.Scheduler.MinimumSecondsBetweenManagedEvents = Math.Max(0, _config.Scheduler.MinimumSecondsBetweenManagedEvents);
+        _config.Scheduler.InitialMinimumSpawnDelaySeconds = Math.Max(30, _config.Scheduler.InitialMinimumSpawnDelaySeconds);
+        _config.Scheduler.InitialMaximumSpawnDelaySeconds = Math.Max(
+            _config.Scheduler.InitialMinimumSpawnDelaySeconds,
+            _config.Scheduler.InitialMaximumSpawnDelaySeconds);
+        _config.Scheduler.InitialEventStaggerSeconds = Math.Max(0, _config.Scheduler.InitialEventStaggerSeconds);
+        _config.GameTips.DisplaySeconds = Math.Max(1d, _config.GameTips.DisplaySeconds);
 
         _config.Chinook.DropDirector ??= new DropDirectorSettings();
         DropDirectorSettings drop = _config.Chinook.DropDirector;
@@ -444,6 +597,7 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         drop.MinimumCrateSpacing = Math.Max(0f, drop.MinimumCrateSpacing);
         drop.WaterClearance = Math.Max(0f, drop.WaterClearance);
         drop.MonumentRadius = Math.Max(0f, drop.MonumentRadius);
+        drop.MaximumAttempts = Math.Max(1, drop.MaximumAttempts);
         drop.Monuments ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -455,6 +609,10 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         settings.MinimumSpawnCount = Math.Max(1, settings.MinimumSpawnCount);
         settings.MaximumSpawnCount = Math.Max(settings.MinimumSpawnCount, settings.MaximumSpawnCount);
         settings.MaximumConcurrent = Math.Max(1, settings.MaximumConcurrent);
+        settings.InitialMinimumDelaySeconds = Math.Max(0, settings.InitialMinimumDelaySeconds);
+        settings.InitialMaximumDelaySeconds = Math.Max(0, settings.InitialMaximumDelaySeconds);
+        if (settings.InitialMaximumDelaySeconds > 0)
+            settings.InitialMaximumDelaySeconds = Math.Max(settings.InitialMinimumDelaySeconds, settings.InitialMaximumDelaySeconds);
     }
 
     private void SaveState()
@@ -478,17 +636,56 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         if (!CanUseAdminCommand(context))
             return RogueCommandResult.Fail("You do not have permission to use this command.");
 
-        RogueWorldEventSnapshot snapshot = WorldEvents.GetSnapshot();
-
         return RogueCommandResult.Ok(
-            $"RogueRustEventDirector v1.1.0 | " +
-            $"Tracked={snapshot.TrackedEntities} | " +
-            $"Plane={WorldEvents.CountActive(RogueWorldEventType.CargoPlane)} | " +
-            $"Patrol={WorldEvents.CountActive(RogueWorldEventType.PatrolHelicopter)} | " +
-            $"Bradley={WorldEvents.CountActive(RogueWorldEventType.Bradley)} | " +
-            $"CH47={WorldEvents.CountActive(RogueWorldEventType.Chinook)} | " +
-            $"Ship={WorldEvents.CountActive(RogueWorldEventType.CargoShip)} | " +
+            $"RogueRustEventDirector v{PluginVersion} | " +
+            $"Plane={EventStatus(RogueWorldEventType.CargoPlane, _config.CargoPlane, _state.CargoPlaneUtc)} | " +
+            $"Patrol={EventStatus(RogueWorldEventType.PatrolHelicopter, _config.PatrolHelicopter, _state.PatrolHelicopterUtc)} | " +
+            $"Bradley={EventStatus(RogueWorldEventType.Bradley, _config.Bradley, _state.BradleyUtc)} | " +
+            $"CH47={EventStatus(RogueWorldEventType.Chinook, _config.Chinook, _state.ChinookUtc)} | " +
+            $"Ship={EventStatus(RogueWorldEventType.CargoShip, _config.CargoShip, _state.CargoShipUtc)} | " +
             $"Crates={WorldEvents.CountActive(RogueWorldEventType.HackableCrate)}");
+    }
+
+    private string EventStatus(RogueWorldEventType type, EventSettings settings, DateTime nextUtc)
+    {
+        if (!settings.Enabled)
+            return "Disabled";
+
+        int active = WorldEvents.CountActive(type);
+        return $"{active}/{settings.MaximumConcurrent}, Next={FormatRemaining(nextUtc)}, Last={FormatAgo(_state.GetLastSpawn(type))}";
+    }
+
+    private static string FormatRemaining(DateTime nextUtc)
+    {
+        if (nextUtc == default)
+            return "Pending";
+
+        TimeSpan remaining = nextUtc - DateTime.UtcNow;
+        if (remaining <= TimeSpan.Zero)
+            return "Due";
+
+        if (remaining.TotalHours >= 1d)
+            return $"{(int)remaining.TotalHours}h {remaining.Minutes}m";
+
+        if (remaining.TotalMinutes >= 1d)
+            return $"{remaining.Minutes}m {remaining.Seconds}s";
+
+        return $"{Math.Max(0, remaining.Seconds)}s";
+    }
+
+    private static string FormatAgo(DateTime utc)
+    {
+        if (utc == default)
+            return "Never";
+
+        TimeSpan elapsed = DateTime.UtcNow - utc;
+        if (elapsed <= TimeSpan.Zero)
+            return "Now";
+        if (elapsed.TotalHours >= 1d)
+            return $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m ago";
+        if (elapsed.TotalMinutes >= 1d)
+            return $"{elapsed.Minutes}m {elapsed.Seconds}s ago";
+        return $"{Math.Max(0, elapsed.Seconds)}s ago";
     }
 
     [RogueCommand(
@@ -503,55 +700,264 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         if (!CanUseAdminCommand(context))
             return RogueCommandResult.Fail("You do not have permission to use this command.");
 
+        bool spawned;
         switch ((eventName ?? string.Empty).Trim().ToLowerInvariant())
         {
             case "plane":
-                SpawnCargoPlane();
+                spawned = SpawnCargoPlane();
                 break;
             case "patrol":
             case "heli":
-                SpawnPatrolHelicopter();
+                spawned = SpawnPatrolHelicopter();
                 break;
             case "bradley":
             case "tank":
-                SpawnBradley();
+                spawned = SpawnBradley();
                 break;
             case "chinook":
             case "ch47":
-                SpawnChinook();
+                spawned = SpawnChinook();
                 break;
             case "ship":
             case "cargo":
-                SpawnCargoShip();
+                spawned = SpawnCargoShip();
                 break;
             default:
-                return RogueCommandResult.Fail(
-                    "Usage: rred.spawn <plane|patrol|bradley|chinook|ship>");
+                return RogueCommandResult.Fail("Usage: rred.spawn <plane|patrol|bradley|chinook|ship>");
         }
 
-        return RogueCommandResult.Ok("Event spawn requested.");
+        if (!spawned)
+            return RogueCommandResult.Fail("Event spawn failed. Check the server log for details.");
+
+        _lastManagedSpawnUtc = DateTime.UtcNow;
+        return RogueCommandResult.Ok("Event spawned successfully.");
     }
 
     [RogueCommand(
         "rred.reschedule",
-        Description = "Generates fresh timers for all enabled managed events.",
+        Description = "Generates a fresh timer for one managed event or all enabled managed events.",
+        Usage = "rred.reschedule [plane|patrol|bradley|chinook|ship|all]",
         Permission = AdminPermission,
         AllowConsole = true,
         AllowChat = true)]
-    private RogueCommandResult RescheduleCommand(RogueCommandContext context)
+    private RogueCommandResult RescheduleCommand(RogueCommandContext context, string eventName = "all")
     {
         if (!CanUseAdminCommand(context))
             return RogueCommandResult.Fail("You do not have permission to use this command.");
 
         DateTime now = DateTime.UtcNow;
-        _state.CargoPlaneUtc = NextRun(_config.CargoPlane, now);
-        _state.PatrolHelicopterUtc = NextRun(_config.PatrolHelicopter, now);
-        _state.BradleyUtc = NextRun(_config.Bradley, now);
-        _state.ChinookUtc = NextRun(_config.Chinook, now);
-        _state.CargoShipUtc = NextRun(_config.CargoShip, now);
+        string target = (eventName ?? "all").Trim().ToLowerInvariant();
+
+        if (target == "all")
+        {
+            RescheduleIfEnabled(_config.CargoPlane, ref _state.CargoPlaneUtc, now);
+            RescheduleIfEnabled(_config.PatrolHelicopter, ref _state.PatrolHelicopterUtc, now);
+            RescheduleIfEnabled(_config.Bradley, ref _state.BradleyUtc, now);
+            RescheduleIfEnabled(_config.Chinook, ref _state.ChinookUtc, now);
+            RescheduleIfEnabled(_config.CargoShip, ref _state.CargoShipUtc, now);
+        }
+        else
+        {
+            switch (target)
+            {
+                case "plane":
+                    RescheduleIfEnabled(_config.CargoPlane, ref _state.CargoPlaneUtc, now);
+                    break;
+                case "patrol":
+                case "heli":
+                    RescheduleIfEnabled(_config.PatrolHelicopter, ref _state.PatrolHelicopterUtc, now);
+                    break;
+                case "bradley":
+                case "tank":
+                    RescheduleIfEnabled(_config.Bradley, ref _state.BradleyUtc, now);
+                    break;
+                case "chinook":
+                case "ch47":
+                    RescheduleIfEnabled(_config.Chinook, ref _state.ChinookUtc, now);
+                    break;
+                case "ship":
+                case "cargo":
+                    RescheduleIfEnabled(_config.CargoShip, ref _state.CargoShipUtc, now);
+                    break;
+                default:
+                    return RogueCommandResult.Fail("Usage: rred.reschedule [plane|patrol|bradley|chinook|ship|all]");
+            }
+        }
+
+        SaveState();
+        return RogueCommandResult.Ok(target == "all"
+            ? "All enabled EventDirector schedules were regenerated."
+            : $"EventDirector schedule regenerated for {target}.");
+    }
+
+    private void RescheduleIfEnabled(EventSettings settings, ref DateTime nextUtc, DateTime now)
+    {
+        nextUtc = settings.Enabled ? NextRun(settings, now) : default;
+    }
+
+    [RogueCommand(
+        "rred.next",
+        Description = "Shows when a managed event is next scheduled.",
+        Usage = "rred.next <plane|patrol|bradley|chinook|ship>",
+        Permission = AdminPermission,
+        AllowConsole = true,
+        AllowChat = true)]
+    private RogueCommandResult NextCommand(RogueCommandContext context, string eventName = "")
+    {
+        if (!CanUseAdminCommand(context))
+            return RogueCommandResult.Fail("You do not have permission to use this command.");
+
+        if (!TryGetEventSchedule(eventName, out EventSettings settings, out DateTime nextUtc, out _, out string display))
+            return RogueCommandResult.Fail("Usage: rred.next <plane|patrol|bradley|chinook|ship>");
+
+        return RogueCommandResult.Ok(settings.Enabled
+            ? $"{display}: next event in {FormatRemaining(nextUtc)}."
+            : $"{display}: disabled.");
+    }
+
+    [RogueCommand(
+        "rred.delay",
+        Description = "Delays the next managed event by a number of minutes.",
+        Usage = "rred.delay <plane|patrol|bradley|chinook|ship> <minutes>",
+        Permission = AdminPermission,
+        AllowConsole = true,
+        AllowChat = true)]
+    private RogueCommandResult DelayCommand(RogueCommandContext context, string eventName = "", double minutes = 0d)
+    {
+        if (!CanUseAdminCommand(context))
+            return RogueCommandResult.Fail("You do not have permission to use this command.");
+
+        if (minutes <= 0d)
+            return RogueCommandResult.Fail("Minutes must be greater than zero.");
+
+        if (!TryDelayEvent(eventName, TimeSpan.FromMinutes(minutes), out string display))
+            return RogueCommandResult.Fail("Usage: rred.delay <plane|patrol|bradley|chinook|ship> <minutes>");
+
+        SaveState();
+        return RogueCommandResult.Ok($"{display} delayed by {minutes:0.##} minute(s).");
+    }
+
+    [RogueCommand(
+        "rred.trigger",
+        Description = "Immediately triggers a managed world event.",
+        Usage = "rred.trigger <plane|patrol|bradley|chinook|ship>",
+        Permission = AdminPermission,
+        AllowConsole = true,
+        AllowChat = true)]
+    private RogueCommandResult TriggerCommand(RogueCommandContext context, string eventName = "")
+    {
+        if (!CanUseAdminCommand(context))
+            return RogueCommandResult.Fail("You do not have permission to use this command.");
+
+        RogueWorldEventType type;
+        EventSettings settings;
+        Func<bool> spawn;
+        string display;
+
+        if (!TryGetEvent(eventName, out type, out settings, out spawn, out display))
+            return RogueCommandResult.Fail("Usage: rred.trigger <plane|patrol|bradley|chinook|ship>");
+
+        if (!spawn())
+            return RogueCommandResult.Fail($"{display} failed to spawn.");
+
+        DateTime now = DateTime.UtcNow;
+        _lastManagedSpawnUtc = now;
+        _state.SetLastSpawn(type, now);
+        RescheduleEvent(type, settings, now);
         SaveState();
 
-        return RogueCommandResult.Ok("All EventDirector schedules were regenerated.");
+        return RogueCommandResult.Ok($"{display} triggered successfully.");
+    }
+
+    private bool TryGetEvent(
+        string eventName,
+        out RogueWorldEventType type,
+        out EventSettings settings,
+        out Func<bool> spawn,
+        out string display)
+    {
+        switch ((eventName ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            case "plane":
+                type = RogueWorldEventType.CargoPlane; settings = _config.CargoPlane; spawn = SpawnCargoPlane; display = "Cargo Plane"; return true;
+            case "patrol":
+            case "heli":
+                type = RogueWorldEventType.PatrolHelicopter; settings = _config.PatrolHelicopter; spawn = SpawnPatrolHelicopter; display = "Patrol Helicopter"; return true;
+            case "bradley":
+            case "tank":
+                type = RogueWorldEventType.Bradley; settings = _config.Bradley; spawn = SpawnBradley; display = "Bradley APC"; return true;
+            case "chinook":
+            case "ch47":
+                type = RogueWorldEventType.Chinook; settings = _config.Chinook; spawn = SpawnChinook; display = "CH47 Chinook"; return true;
+            case "ship":
+            case "cargo":
+                type = RogueWorldEventType.CargoShip; settings = _config.CargoShip; spawn = SpawnCargoShip; display = "Cargo Ship"; return true;
+            default:
+                type = default; settings = null!; spawn = null!; display = string.Empty; return false;
+        }
+    }
+
+    private bool TryGetEventSchedule(
+        string eventName,
+        out EventSettings settings,
+        out DateTime nextUtc,
+        out RogueWorldEventType type,
+        out string display)
+    {
+        if (!TryGetEvent(eventName, out type, out settings, out _, out display))
+        {
+            nextUtc = default;
+            return false;
+        }
+
+        nextUtc = GetNextSchedule(type);
+        return true;
+    }
+
+    private DateTime GetNextSchedule(RogueWorldEventType type)
+    {
+        if (type == RogueWorldEventType.CargoPlane) return _state.CargoPlaneUtc;
+        if (type == RogueWorldEventType.PatrolHelicopter) return _state.PatrolHelicopterUtc;
+        if (type == RogueWorldEventType.Bradley) return _state.BradleyUtc;
+        if (type == RogueWorldEventType.Chinook) return _state.ChinookUtc;
+        if (type == RogueWorldEventType.CargoShip) return _state.CargoShipUtc;
+        return default;
+    }
+
+    private bool TryDelayEvent(string eventName, TimeSpan delay, out string display)
+    {
+        display = string.Empty;
+        string key = (eventName ?? string.Empty).Trim().ToLowerInvariant();
+        DateTime now = DateTime.UtcNow;
+
+        switch (key)
+        {
+            case "plane": display = "Cargo Plane"; _state.CargoPlaneUtc = DelaySchedule(_state.CargoPlaneUtc, now, delay); return true;
+            case "patrol":
+            case "heli": display = "Patrol Helicopter"; _state.PatrolHelicopterUtc = DelaySchedule(_state.PatrolHelicopterUtc, now, delay); return true;
+            case "bradley":
+            case "tank": display = "Bradley APC"; _state.BradleyUtc = DelaySchedule(_state.BradleyUtc, now, delay); return true;
+            case "chinook":
+            case "ch47": display = "CH47 Chinook"; _state.ChinookUtc = DelaySchedule(_state.ChinookUtc, now, delay); return true;
+            case "ship":
+            case "cargo": display = "Cargo Ship"; _state.CargoShipUtc = DelaySchedule(_state.CargoShipUtc, now, delay); return true;
+            default: return false;
+        }
+    }
+
+    private static DateTime DelaySchedule(DateTime current, DateTime now, TimeSpan delay)
+    {
+        return (current > now ? current : now).Add(delay);
+    }
+
+    private void RescheduleEvent(RogueWorldEventType type, EventSettings settings, DateTime now)
+    {
+        DateTime next = NextRun(settings, now);
+        if (type == RogueWorldEventType.CargoPlane) _state.CargoPlaneUtc = next;
+        else if (type == RogueWorldEventType.PatrolHelicopter) _state.PatrolHelicopterUtc = next;
+        else if (type == RogueWorldEventType.Bradley) _state.BradleyUtc = next;
+        else if (type == RogueWorldEventType.Chinook) _state.ChinookUtc = next;
+        else if (type == RogueWorldEventType.CargoShip) _state.CargoShipUtc = next;
     }
 
     private bool CanUseAdminCommand(RogueCommandContext context)
@@ -569,19 +975,22 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         public SchedulerSettings Scheduler = new();
 
         [JsonProperty("Cargo Plane", Order = 20)]
-        public EventSettings CargoPlane = EventSettings.Default();
+        public EventSettings CargoPlane = EventSettings.CargoPlaneDefault();
 
         [JsonProperty("Patrol Helicopter", Order = 30)]
-        public EventSettings PatrolHelicopter = EventSettings.Default();
+        public EventSettings PatrolHelicopter = EventSettings.PatrolDefault();
 
         [JsonProperty("Bradley APC", Order = 40)]
-        public EventSettings Bradley = EventSettings.Default();
+        public EventSettings Bradley = EventSettings.BradleyDefault();
 
         [JsonProperty("CH47 Chinook", Order = 50)]
         public ChinookSettings Chinook = new();
 
         [JsonProperty("Cargo Ship", Order = 60)]
-        public EventSettings CargoShip = EventSettings.Default();
+        public EventSettings CargoShip = EventSettings.CargoShipDefault();
+
+        [JsonProperty("GameTip Announcements", Order = 70)]
+        public GameTipConfiguration GameTips = new();
 
         [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]
         public VersionNumber Version = CurrentVersion;
@@ -594,6 +1003,21 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
 
         [JsonProperty("Concurrency Retry Seconds")]
         public int ConcurrencyRetrySeconds = 120;
+
+        [JsonProperty("Spawn Failure Retry Seconds")]
+        public int SpawnFailureRetrySeconds = 120;
+
+        [JsonProperty("Minimum Seconds Between Managed Events")]
+        public int MinimumSecondsBetweenManagedEvents = 600;
+
+        [JsonProperty("Initial Minimum Spawn Delay Seconds")]
+        public int InitialMinimumSpawnDelaySeconds = 600;
+
+        [JsonProperty("Initial Maximum Spawn Delay Seconds")]
+        public int InitialMaximumSpawnDelaySeconds = 1800;
+
+        [JsonProperty("Initial Event Stagger Seconds")]
+        public int InitialEventStaggerSeconds = 120;
     }
 
     public class EventSettings
@@ -605,10 +1029,10 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         public bool DisableVanillaSpawns;
 
         [JsonProperty("Minimum Interval Seconds")]
-        public int MinimumIntervalSeconds = 3600;
+        public int MinimumIntervalSeconds = 1800;
 
         [JsonProperty("Maximum Interval Seconds")]
-        public int MaximumIntervalSeconds = 7200;
+        public int MaximumIntervalSeconds = 3600;
 
         [JsonProperty("Minimum Spawn Count")]
         public int MinimumSpawnCount = 1;
@@ -619,14 +1043,62 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         [JsonProperty("Maximum Concurrent")]
         public int MaximumConcurrent = 1;
 
+        [JsonProperty("Initial Minimum Delay Seconds (0 = Scheduler Default)")]
+        public int InitialMinimumDelaySeconds;
+
+        [JsonProperty("Initial Maximum Delay Seconds (0 = Scheduler Default)")]
+        public int InitialMaximumDelaySeconds;
+
         public static EventSettings Default()
         {
             return new EventSettings();
+        }
+
+        public static EventSettings CargoPlaneDefault()
+        {
+            return new EventSettings
+            {
+                MinimumIntervalSeconds = 1800,
+                MaximumIntervalSeconds = 3600
+            };
+        }
+
+        public static EventSettings PatrolDefault()
+        {
+            return new EventSettings
+            {
+                MinimumIntervalSeconds = 2700,
+                MaximumIntervalSeconds = 5400
+            };
+        }
+
+        public static EventSettings BradleyDefault()
+        {
+            return new EventSettings
+            {
+                MinimumIntervalSeconds = 3600,
+                MaximumIntervalSeconds = 7200
+            };
+        }
+
+        public static EventSettings CargoShipDefault()
+        {
+            return new EventSettings
+            {
+                MinimumIntervalSeconds = 3600,
+                MaximumIntervalSeconds = 7200
+            };
         }
     }
 
     public sealed class ChinookSettings : EventSettings
     {
+        public ChinookSettings()
+        {
+            MinimumIntervalSeconds = 2700;
+            MaximumIntervalSeconds = 5400;
+        }
+
         [JsonProperty("Drop Director")]
         public DropDirectorSettings DropDirector = new();
     }
@@ -648,6 +1120,12 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         [JsonProperty("Maximum Retry Seconds")]
         public double MaximumRetrySeconds = 60d;
 
+        [JsonProperty("Maximum Attempts")]
+        public int MaximumAttempts = 30;
+
+        [JsonProperty("Fallback Drop After Maximum Attempts")]
+        public bool FallbackDropAfterMaximumAttempts = true;
+
         [JsonProperty("Minimum Crate Spacing")]
         public float MinimumCrateSpacing = 300f;
 
@@ -668,6 +1146,107 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
             new(StringComparer.OrdinalIgnoreCase);
     }
 
+    public sealed class GameTipConfiguration
+    {
+        [JsonProperty("Enabled")]
+        public bool Enabled = true;
+
+        [JsonProperty("Display Seconds")]
+        public double DisplaySeconds = 8d;
+
+        [JsonProperty("Prefix")]
+        public string Prefix = "<color=#f2a900>[EVENT]</color>";
+
+        [JsonProperty("Cargo Plane")]
+        public GameTipSettings CargoPlane = new()
+        {
+            Messages = new List<string>
+            {
+                "Keep your eyes on the sky — a cargo plane is inbound.",
+                "A cargo plane has entered the airspace. Suddenly everyone is an aviation expert.",
+                "Supplies are on the move — sharpen your rocks and your questionable decisions.",
+                "Cargo plane inbound! Somewhere, a naked with a spear just started sprinting.",
+                "Free loot is falling from the sky. The bullets are complimentary.",
+                "The sky has delivered a loot box. Terms and conditions include possible death.",
+                "Cargo plane overhead — time to abandon everything you were doing.",
+                "An airdrop is coming. Friendship has been temporarily disabled.",
+                "Incoming supplies! May the fastest grub win.",
+                "Cargo plane spotted. Prepare for twenty minutes of bushes pretending to be empty.",
+                "The loot gods have opened the cargo hatch.",
+                "Airdrop inbound — because your inventory wasn't stressful enough already."
+            }
+        };
+
+        [JsonProperty("Patrol Helicopter")]
+        public GameTipSettings PatrolHelicopter = new()
+        {
+            Messages = new List<string>
+            {
+                "Take cover — the patrol helicopter is hunting.",
+                "Patrol helicopter inbound. That AK suddenly feels a little too visible.",
+                "Rotor blades overhead — armed players may wish to reconsider their life choices.",
+                "The patrol helicopter has arrived to conduct an unscheduled roof inspection.",
+                "Patrol heli inbound! Please keep arms, legs and rocket launchers inside the compound.",
+                "Someone woke up the angry flying blender.",
+                "The patrol helicopter is looking for trouble. Conveniently, this island has plenty.",
+                "Heli inbound — roofs are about to become significantly less relaxing.",
+                "Patrol helicopter spotted. Naked players: enjoy your temporary diplomatic immunity.",
+                "The sky is angry, armed, and circling your base.",
+                "Patrol heli has entered the chat. Roof campers are typing nervously.",
+                "Incoming patrol helicopter — now is an excellent time to remember where you left the meds."
+            }
+        };
+
+        [JsonProperty("CH47 Chinook")]
+        public GameTipSettings Chinook = new()
+        {
+            Messages = new List<string>
+            {
+                "CH47 Chinook inbound — watch for a crate drop.",
+                "Heavy rotors overhead — the Chinook brought loot and absolutely no guarantees.",
+                "A Chinook has entered the area. Scientists have once again chosen violence.",
+                "CH47 inbound! Somewhere below, a monument is about to get considerably busier.",
+                "The big helicopter is here. Try not to stand where the crate lands.",
+                "Chinook spotted — valuable cargo, armed scientists, terrible decision-making ahead.",
+                "Heavy rotors approaching. The island's loot economy is about to receive a stimulus package.",
+                "CH47 inbound — follow the helicopter, then immediately distrust everyone else doing the same.",
+                "The Chinook is carrying a crate. Your neighbours are carrying grudges.",
+                "Incoming CH47! Nothing brings the server together like loot worth fighting over.",
+                "Chinook overhead — scientists are delivering today's community disagreement.",
+                "The flying loot bus has arrived. Please form an orderly firefight."
+            }
+        };
+
+        [JsonProperty("Cargo Ship")]
+        public GameTipSettings CargoShip = new()
+        {
+            Messages = new List<string>
+            {
+                "Cargo Ship spotted offshore — prepare for a fight.",
+                "A Cargo Ship has entered the waters around the island. Boats suddenly have somewhere important to be.",
+                "Movement offshore — the Cargo Ship has arrived.",
+                "Cargo Ship inbound! Time to discover who remembered low grade fuel.",
+                "The ocean has spawned loot with guns attached to it.",
+                "Cargo Ship spotted — seasickness is temporary, loot is... also temporary.",
+                "All aboard the floating PvP convention.",
+                "Cargo Ship has arrived. Bring a boat, bring ammo, and definitely bring poor judgement.",
+                "Something valuable is offshore. Naturally, half the server is already on the way.",
+                "Cargo Ship inbound — the scientists have reserved the upper deck for violence.",
+                "The floating loot fortress is back. Swimming there is technically an option.",
+                "Cargo Ship spotted! Your peaceful fishing trip has been cancelled."
+            }
+        };
+    }
+
+    public sealed class GameTipSettings
+    {
+        [JsonProperty("Enabled")]
+        public bool Enabled = true;
+
+        [JsonProperty("Messages")]
+        public List<string> Messages = new();
+    }
+
     public sealed class ScheduleState
     {
         public DateTime CargoPlaneUtc;
@@ -675,6 +1254,31 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         public DateTime BradleyUtc;
         public DateTime ChinookUtc;
         public DateTime CargoShipUtc;
+
+        public DateTime LastCargoPlaneUtc;
+        public DateTime LastPatrolHelicopterUtc;
+        public DateTime LastBradleyUtc;
+        public DateTime LastChinookUtc;
+        public DateTime LastCargoShipUtc;
+
+        public DateTime GetLastSpawn(RogueWorldEventType type)
+        {
+            if (type == RogueWorldEventType.CargoPlane) return LastCargoPlaneUtc;
+            if (type == RogueWorldEventType.PatrolHelicopter) return LastPatrolHelicopterUtc;
+            if (type == RogueWorldEventType.Bradley) return LastBradleyUtc;
+            if (type == RogueWorldEventType.Chinook) return LastChinookUtc;
+            if (type == RogueWorldEventType.CargoShip) return LastCargoShipUtc;
+            return default;
+        }
+
+        public void SetLastSpawn(RogueWorldEventType type, DateTime utc)
+        {
+            if (type == RogueWorldEventType.CargoPlane) LastCargoPlaneUtc = utc;
+            else if (type == RogueWorldEventType.PatrolHelicopter) LastPatrolHelicopterUtc = utc;
+            else if (type == RogueWorldEventType.Bradley) LastBradleyUtc = utc;
+            else if (type == RogueWorldEventType.Chinook) LastChinookUtc = utc;
+            else if (type == RogueWorldEventType.CargoShip) LastCargoShipUtc = utc;
+        }
 
         public bool IsEmpty()
         {

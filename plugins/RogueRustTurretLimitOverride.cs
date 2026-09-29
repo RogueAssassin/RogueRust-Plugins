@@ -25,7 +25,7 @@ namespace Oxide.Plugins
 
         private sealed class Configuration
         {
-            [JsonProperty("Turret Settings")]
+            [JsonProperty("Turret Settings", Order = 10)]
             public TurretSettings Turret = new TurretSettings();
 
             [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]

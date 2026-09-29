@@ -9,13 +9,13 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "1.8.0")]
+    [Info("RogueRustGridPower", "RogueAssassin", "1.9.2")]
     [Description("RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics, and player-facing grid events.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {
         #region Constants
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 8, 0);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 9, 2);
 
         [RoguePermission]
         private const string PermissionAdmin = "roguerustgridpower.admin";
@@ -115,6 +115,21 @@ namespace Oxide.Plugins
 
             [JsonProperty("Batch Interval Seconds")]
             public float BatchIntervalSeconds = 0.25f;
+
+            [JsonProperty("Allow Wooden Ladders On Grid Power Poles")]
+            public bool AllowLaddersOnPoles = true;
+
+            [JsonProperty("Ladder Pole Detection Radius")]
+            public float LadderPoleDetectionRadius = 4f;
+
+            [JsonProperty("Show Ladder Placement GameTip")]
+            public bool ShowLadderPlacementGameTip = true;
+
+            [JsonProperty("Ladder Placement GameTip Duration Seconds")]
+            public float LadderPlacementGameTipDurationSeconds = 2.5f;
+
+            [JsonProperty("Ladder Placement Success Message")]
+            public string LadderPlacementSuccessMessage = "Ladder attached to RogueRust GridPower pole.";
         }
 
 
@@ -228,6 +243,10 @@ namespace Oxide.Plugins
             if (transformerMaximumOutput != _config.PlayerGrid.PowerPoles.TransformerMaximumOutput) { _config.PlayerGrid.PowerPoles.TransformerMaximumOutput = transformerMaximumOutput; changed = true; }
             int batchSize = Math.Max(1, Math.Min(2, _config.PlayerGrid.PowerPoles.SpawnBatchSize));
             if (batchSize != _config.PlayerGrid.PowerPoles.SpawnBatchSize) { _config.PlayerGrid.PowerPoles.SpawnBatchSize = batchSize; changed = true; }
+            float ladderRadius = Math.Max(1f, Math.Min(8f, _config.PlayerGrid.PowerPoles.LadderPoleDetectionRadius));
+            if (Math.Abs(ladderRadius - _config.PlayerGrid.PowerPoles.LadderPoleDetectionRadius) > 0.001f) { _config.PlayerGrid.PowerPoles.LadderPoleDetectionRadius = ladderRadius; changed = true; }
+            float ladderTipDuration = Math.Max(1f, Math.Min(10f, _config.PlayerGrid.PowerPoles.LadderPlacementGameTipDurationSeconds));
+            if (Math.Abs(ladderTipDuration - _config.PlayerGrid.PowerPoles.LadderPlacementGameTipDurationSeconds) > 0.001f) { _config.PlayerGrid.PowerPoles.LadderPlacementGameTipDurationSeconds = ladderTipDuration; changed = true; }
             float batchInterval = Math.Max(0.25f, _config.PlayerGrid.PowerPoles.BatchIntervalSeconds);
             if (Math.Abs(batchInterval - _config.PlayerGrid.PowerPoles.BatchIntervalSeconds) > 0.001f) { _config.PlayerGrid.PowerPoles.BatchIntervalSeconds = batchInterval; changed = true; }
 
@@ -373,6 +392,8 @@ namespace Oxide.Plugins
         private bool? _lastDesiredState;
         private bool _serverReady;
         private bool _gameTipVisible;
+        private readonly List<UnityEngine.Vector3> _ladderPoleCache = new List<UnityEngine.Vector3>();
+        private DateTime _ladderPoleCacheUtc = DateTime.MinValue;
 
         #endregion
 
@@ -1356,7 +1377,7 @@ namespace Oxide.Plugins
         private RogueCommandResult CommandGridHelp(RogueCommandContext context)
         {
             string help =
-                "RogueRustGridPower v1.8.0 commands\n" +
+                "RogueRustGridPower v1.9.2 commands\n" +
                 "rrgrid.apply\nrrgrid.climb.inspect\nrrgrid.climb.remove\nrrgrid.climb.test\nrrgrid.climb.teststatus\nrrgrid.debug\nrrgrid.grid\nrrgrid.help\nrrgrid.infrastructure\nrrgrid.inspect\nrrgrid.playergrid\nrrgrid.power.inspect\nrrgrid.power.remove\nrrgrid.power.test\nrrgrid.powerprobe\nrrgrid.rebuild\nrrgrid.rebuild.status\nrrgrid.refresh\nrrgrid.scan\nrrgrid.status\n" +
                 "Chat: /rrgrid ... | F1/server/RCON: rrgrid....\n" +
                 "Nearest/inspect commands require an in-game player position.";
@@ -1644,6 +1665,152 @@ namespace Oxide.Plugins
 
         // Keep hooks thin. World discovery and cinematic light ownership remain in the DLL.
 
+        private void OnPlayerInput(BasePlayer player, InputState input)
+        {
+            if (!_serverReady || player == null || input == null ||
+                !input.WasJustPressed(BUTTON.FIRE_PRIMARY) || _config == null ||
+                !_config.General.Enabled || _config.PlayerGrid == null || !_config.PlayerGrid.Enabled ||
+                _config.PlayerGrid.PowerPoles == null || !_config.PlayerGrid.PowerPoles.Enabled ||
+                !_config.PlayerGrid.PowerPoles.AllowLaddersOnPoles)
+                return;
+
+            Item item = player.GetActiveItem();
+            if (item == null || item.info == null ||
+                !string.Equals(item.info.shortname, "ladder.wooden.wall", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            HeldEntity held = player.GetHeldEntity();
+            Planner planner = held as Planner;
+            if (planner == null)
+                return;
+
+            UnityEngine.RaycastHit hit;
+            UnityEngine.Ray ray = player.eyes.BodyRay();
+            int mask = UnityEngine.LayerMask.GetMask("World", "Deployed");
+            if (!UnityEngine.Physics.Raycast(ray, out hit, 5f, mask, UnityEngine.QueryTriggerInteraction.Ignore))
+                return;
+
+            float poleDistance;
+            if (!IsGridPoleLadderTarget(hit.point, out poleDistance))
+                return;
+
+            string colliderName = hit.collider != null ? (hit.collider.name ?? string.Empty) : string.Empty;
+            if (colliderName.IndexOf("powerline_pole", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                DiagnosticPuts("[RogueRust/GridPower Ladder] Near GRID pole but ray hit '" + colliderName + "'; native placement left unchanged.");
+                return;
+            }
+
+            BaseEntity ladder = SpawnGridPoleLadder(player, item, hit);
+            if (ladder == null)
+            {
+                ShowPlayerGameTip(player, "GridPower could not attach the ladder at this position.", 2.5f);
+                return;
+            }
+
+            item.UseItem(1);
+            if (_config.PlayerGrid.PowerPoles.ShowLadderPlacementGameTip)
+                ShowPlayerGameTip(player, _config.PlayerGrid.PowerPoles.LadderPlacementSuccessMessage, _config.PlayerGrid.PowerPoles.LadderPlacementGameTipDurationSeconds);
+
+            DiagnosticPuts("[RogueRust/GridPower Ladder] Placed wooden ladder | Player=" + player.UserIDString +
+                " | PoleDistance=" + poleDistance.ToString("0.00") + "m | Collider=" + colliderName +
+                " | Position=" + ladder.transform.position);
+        }
+
+        private bool IsGridPoleLadderTarget(UnityEngine.Vector3 position, out float distance)
+        {
+            distance = float.MaxValue;
+            RefreshLadderPoleCache(false);
+            if (_ladderPoleCache.Count == 0)
+                return false;
+
+            float radius = _config.PlayerGrid.PowerPoles.LadderPoleDetectionRadius;
+            float radiusSqr = radius * radius;
+            for (int i = 0; i < _ladderPoleCache.Count; i++)
+            {
+                UnityEngine.Vector3 delta = _ladderPoleCache[i] - position;
+                delta.y = 0f;
+                float sqr = delta.sqrMagnitude;
+                if (sqr > radiusSqr)
+                    continue;
+
+                distance = UnityEngine.Mathf.Sqrt(sqr);
+                return true;
+            }
+            return false;
+        }
+
+        private BaseEntity SpawnGridPoleLadder(BasePlayer player, Item item, UnityEngine.RaycastHit hit)
+        {
+            const string ladderPrefab = "assets/prefabs/building/ladder.wall.wood/ladder.wooden.wall.prefab";
+
+            UnityEngine.Vector3 normal = hit.normal;
+            normal.y = 0f;
+            if (normal.sqrMagnitude < 0.001f)
+                normal = (player.transform.position - hit.point);
+            normal.y = 0f;
+            if (normal.sqrMagnitude < 0.001f)
+                normal = player.eyes.BodyRay().direction;
+            normal.y = 0f;
+            normal.Normalize();
+
+            // Keep the ladder just off the pole surface so its collider does not begin embedded.
+            UnityEngine.Vector3 position = hit.point + normal * 0.08f;
+            UnityEngine.Quaternion rotation = UnityEngine.Quaternion.LookRotation(-normal, UnityEngine.Vector3.up);
+
+            BaseEntity entity = GameManager.server.CreateEntity(ladderPrefab, position, rotation, true);
+            if (entity == null)
+                return null;
+
+            entity.OwnerID = player.userID;
+            entity.skinID = item.skin;
+            entity.Spawn();
+            entity.SendMessage("SetDeployedBy", player, UnityEngine.SendMessageOptions.DontRequireReceiver);
+
+            Interface.CallHook("OnEntityBuilt", player.GetHeldEntity() as Planner, entity.gameObject);
+            return entity;
+        }
+
+        private void RefreshLadderPoleCache(bool force)
+        {
+            if (!force && _ladderPoleCache.Count > 0 &&
+                (DateTime.UtcNow - _ladderPoleCacheUtc).TotalSeconds < 30d)
+                return;
+
+            _ladderPoleCacheUtc = DateTime.UtcNow;
+            _ladderPoleCache.Clear();
+            if (_gridPower == null || string.IsNullOrEmpty(_gridPower.PlayerReferenceFilePath) ||
+                !File.Exists(_gridPower.PlayerReferenceFilePath))
+                return;
+
+            try
+            {
+                JObject doc = JObject.Parse(File.ReadAllText(_gridPower.PlayerReferenceFilePath));
+                JArray poles = doc["playerPoles"] as JArray;
+                if (poles == null)
+                    return;
+
+                foreach (JToken token in poles)
+                {
+                    JObject pole = token as JObject;
+                    if (pole == null)
+                        continue;
+                    string classification = pole.Value<string>("classification") ?? string.Empty;
+                    if (!string.Equals(classification, "candidate", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(classification, "vanillaPowergrid", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    _ladderPoleCache.Add(new UnityEngine.Vector3(
+                        pole.Value<float?>("x") ?? 0f,
+                        pole.Value<float?>("y") ?? 0f,
+                        pole.Value<float?>("z") ?? 0f));
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticPuts("[RogueRust/GridPower Ladder] Failed to refresh pole cache: " + ex.Message);
+            }
+        }
+
         private void OnGridStateChanged(bool online)
         {
             if (_config == null || _config.Developer == null || !DiagnosticsEnabled)
@@ -1781,6 +1948,19 @@ namespace Oxide.Plugins
         #endregion
 
         #region Player Notifications
+
+        private void ShowPlayerGameTip(BasePlayer player, string message, float durationSeconds)
+        {
+            if (player == null || !player.IsConnected || string.IsNullOrWhiteSpace(message))
+                return;
+
+            player.SendConsoleCommand("gametip.showgametip", message);
+            timer.Once(Math.Max(1f, durationSeconds), () =>
+            {
+                if (player != null && player.IsConnected)
+                    player.SendConsoleCommand("gametip.hidegametip");
+            });
+        }
 
         private void ShowStateGameTip(bool streetlightsOn)
         {
@@ -1930,6 +2110,8 @@ namespace Oxide.Plugins
             if (_gridPower != null)
                 _gridPower.GridStateChanged -= OnGridStateChanged;
 
+            _ladderPoleCache.Clear();
+            _ladderPoleCacheUtc = DateTime.MinValue;
             _lastDesiredState = null;
         }
 
