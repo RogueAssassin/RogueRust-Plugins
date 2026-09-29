@@ -1315,11 +1315,11 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         if (MenuSupportsSearch(s.Menu))
         {
             string searchCb = UiCallback(s.Player, "search", arg => { s.Search = UiCallbackArgument(arg, 0).Trim(); s.Page = 0; Draw(s); });
-            ui.Input("rram.search", "rram.body", Rect(0.58f, 0.91f, 0.86f, 0.965f), s.Search, searchCb, 10, _config.UI.Theme.Text, 64);
-            // Keep the transparent search field discoverable without adding a heavy panel.
-            // The hint is visual only, so the input remains the interactive control underneath.
-            if (string.IsNullOrWhiteSpace(s.Search))
-                ui.Label("rram.search.hint", "rram.body", Rect(0.595f, 0.91f, 0.845f, 0.965f), "SEARCH", 8, _config.UI.Theme.MutedText, "MiddleCenter");
+            // The input owns the full visible search region so every point in the field is clickable.
+            // Use the input's own text as the empty-state hint; a separate label can intercept Rust CUI pointer events.
+            ui.Input("rram.search", "rram.body", Rect(0.58f, 0.91f, 0.86f, 0.965f),
+                string.IsNullOrWhiteSpace(s.Search) ? "SEARCH" : s.Search, searchCb, 10,
+                string.IsNullOrWhiteSpace(s.Search) ? _config.UI.Theme.MutedText : _config.UI.Theme.Text, 64);
             string clear = UiActionCallback(s.Player, "search.clear", () => { s.Search = string.Empty; s.Character = "~"; s.Page = 0; Draw(s); });
             ui.Button("rram.search.clear", "rram.body", Rect(0.87f, 0.91f, 0.95f, 0.965f), "CLEAR", clear, _config.UI.Theme.SurfaceAlt, 9);
         }
