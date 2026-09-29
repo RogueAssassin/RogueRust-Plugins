@@ -1,6 +1,6 @@
-// RogueRustAdminMenu v2.1.0 RogueRust family-standard upgrade marker: RRADMIN-210
+// RogueRustAdminMenu v2.5.0 RRAM release build: RRADMIN-250
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
-// Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted testing build
+// Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted release build
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -15,18 +15,19 @@ using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using Oxide.Ext.RogueRust.Plugins;
+using Oxide.Ext.RogueRust.Diagnostics;
 using Oxide.Ext.RogueRust.SDK;
 using Oxide.Game.Rust.Cui;
 using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.1.1")]
-[Description("RogueRust 3.3.5 administration workspace with F1-style RogueUI, native vehicle/item artwork, shared teleport/vehicle services and lightweight AdminVanishUncharted.")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.0")]
+[Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.1.1";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 1);
+    private const string PluginVersion = "2.5.0";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 0);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -37,6 +38,8 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private const string DataRoot = "RogueRustAdminMenu";
     private const string RecentPlayersDataKey = DataRoot + "/recent_players";
     private const string SavedLocationsDataKey = DataRoot + "/saved_locations";
+    private const string ModerationNotesDataKey = DataRoot + "/moderation_notes";
+    private const string AuditHistoryDataKey = DataRoot + "/audit_history";
     private const string LanguageFolder = "RogueRustAdminMenu";
     private const string LanguageFile = "messages.json";
 
@@ -77,13 +80,27 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private const string VanishPermission = "roguerustadminmenu.vanish";
     [RoguePermission]
     private const string VehiclePermission = "roguerustadminmenu.vehicles";
+    [RoguePermission]
+    private const string CommandsPermission = "roguerustadminmenu.commands";
+    [RoguePermission]
+    private const string InventoryPermission = "roguerustadminmenu.players.inventory";
+    [RoguePermission]
+    private const string SpectatePermission = "roguerustadminmenu.players.spectate";
+    [RoguePermission]
+    private const string NotesPermission = "roguerustadminmenu.players.notes";
+    [RoguePermission]
+    private const string AuditPermission = "roguerustadminmenu.audit";
+    [RoguePermission]
+    private const string DiagnosticsPermission = "roguerustadminmenu.diagnostics";
+    [RoguePermission]
+    private const string BulkPermission = "roguerustadminmenu.players.bulk";
     private const string VanishHud = "RogueRustAdminMenu.VanishHud";
     private static readonly string[] CorePermissions =
     {
         UsePermission, PermissionPermission, GroupPermission, ConvarPermission, PluginPermission,
         GivePermission, GiveSelfPermission, PlayerPermission, KickBanPermission, MutePermission,
         BlueprintPermission, HurtPermission, HealPermission, KillPermission, StripPermission,
-        TeleportPermission, VanishPermission, VehiclePermission
+        TeleportPermission, VanishPermission, VehiclePermission, CommandsPermission, InventoryPermission, SpectatePermission, NotesPermission, AuditPermission, DiagnosticsPermission, BulkPermission
     };
 
     private static readonly string[] VanishHooks =
@@ -99,6 +116,10 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private readonly List<ItemDefinition> _allItems = new();
     private readonly List<KeyValuePair<string, bool>> _permissionTree = new();
     private readonly Dictionary<string, SavedLocation> _savedLocations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<ModerationNote>> _moderationNotes = new(StringComparer.Ordinal);
+    private readonly List<AuditEntry> _auditHistory = new();
+    private readonly Dictionary<ulong, Vector3> _spectateReturn = new();
+    private bool _auditSaveQueued;
     private readonly List<RogueMonumentInfo> _menuMonumentCache = new();
     private readonly Dictionary<ulong, float> _teleportProtectionUntil = new();
     private readonly HashSet<ulong> _vanishedAdmins = new();
@@ -290,6 +311,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         UpdateVanishHookSubscriptions();
         LoadRecentPlayers();
         LoadSavedLocations();
+        LoadWorkflowData();
         BuildItemCache();
         BuildConvarCache();
         UpdatePermissionList();
@@ -337,6 +359,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     {
         SaveRecentPlayers();
         SaveSavedLocations();
+        SaveWorkflowData();
         foreach (BasePlayer player in BasePlayer.activePlayerList)
         {
             DestroyUi(player, Root);
@@ -359,6 +382,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         _vehicleImageCache.Clear();
         _vehicleImageMissUntil.Clear();
         _vehicleIconItemCache.Clear();
+        _spectateReturn.Clear();
     }
 
     [RogueCommand(
@@ -626,6 +650,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         if (_config.Integrations == null) { _config.Integrations = new IntegrationSettings(); changed = true; }
         if (_config.Data == null) { _config.Data = new DataSettings(); changed = true; }
         if (_config.Commands.PlayerInfoCommands == null) { _config.Commands.PlayerInfoCommands = new List<CustomCommandGroup>(); changed = true; }
+        if (_config.Commands.AdminCommands == null) { _config.Commands.AdminCommands = CommandSettings.DefaultAdminCommands(); changed = true; }
         if (_config.UI.Theme == null) { _config.UI.Theme = UiTheme.CreateDefault(); changed = true; }
         return changed;
     }
@@ -663,6 +688,9 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private void NormalizeConfig()
     {
         _config.Commands.PlayerInfoCommands ??= new List<CustomCommandGroup>();
+        _config.Commands.AdminCommands ??= CommandSettings.DefaultAdminCommands();
+        _config.Data.MaxAuditEntries = Math.Max(50, Math.Min(2000, _config.Data.MaxAuditEntries));
+        _config.Data.MaxNotesPerPlayer = Math.Max(5, Math.Min(100, _config.Data.MaxNotesPerPlayer));
         _config.UI.PageSize = Math.Max(9, Math.Min(30, _config.UI.PageSize <= 0 ? DefaultPageSize : _config.UI.PageSize));
         _config.Data.RecentPlayerPurgeDays = Math.Max(1, _config.Data.RecentPlayerPurgeDays);
         _config.Teleport.ProtectionSeconds = Math.Max(0f, Math.Min(60f, _config.Teleport.ProtectionSeconds));
@@ -728,6 +756,17 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         [JsonProperty("Player Info Custom Commands")]
         public List<CustomCommandGroup> PlayerInfoCommands { get; set; } = new();
 
+        [JsonProperty("Admin Commands")]
+        public List<AdminCommandEntry> AdminCommands { get; set; } = DefaultAdminCommands();
+
+        public static List<AdminCommandEntry> DefaultAdminCommands() => new()
+        {
+            new() { Name = "RogueRust Status", Description = "Shared DLL status", Command = "roguerust.status", SubType = CommandSubType.Console },
+            new() { Name = "RogueRust Health", Description = "Runtime health snapshot", Command = "roguerust.health", SubType = CommandSubType.Console },
+            new() { Name = "RogueRust Performance", Description = "Performance diagnostics", Command = "roguerust.performance", SubType = CommandSubType.Console },
+            new() { Name = "RogueRust Services", Description = "Registered shared services", Command = "roguerust.services", SubType = CommandSubType.Console }
+        };
+
         public static CommandSettings CreateDefault() => new()
         {
             PlayerInfoCommands = new List<CustomCommandGroup>
@@ -785,6 +824,10 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     {
         [JsonProperty("Recent Players Purge Time (days)")]
         public int RecentPlayerPurgeDays { get; set; } = 7;
+        [JsonProperty("Maximum Stored Admin Audit Entries")]
+        public int MaxAuditEntries { get; set; } = 500;
+        [JsonProperty("Maximum Moderation Notes Per Player")]
+        public int MaxNotesPerPlayer { get; set; } = 25;
     }
 
     public class CommandEntry
@@ -802,6 +845,14 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         public List<PlayerInfoCommandEntry> Commands { get; set; } = new();
     }
 
+    public sealed class AdminCommandEntry : CommandEntry
+    {
+        [JsonProperty("Command Type ( Chat, Console )")]
+        [JsonConverter(typeof(StringEnumConverter))]
+        public CommandSubType SubType { get; set; } = CommandSubType.Console;
+        public bool RequireConfirmation { get; set; }
+    }
+
     public sealed class PlayerInfoCommandEntry : CommandEntry
     {
         public string RequiredPlugin { get; set; } = string.Empty;
@@ -813,18 +864,18 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     public sealed class UiTheme
     {
-        // Traditional Rust/F1 palette: charcoal surfaces, warm restrained selection, no neon rails.
-        public string Background { get; set; } = "0.055 0.058 0.060 0.97";
-        public string Sidebar { get; set; } = "0.105 0.110 0.114 0.99";
-        public string Surface { get; set; } = "0.078 0.082 0.086 0.99";
-        public string SurfaceAlt { get; set; } = "0.125 0.130 0.134 1";
-        public string Accent { get; set; } = "0.46 0.37 0.27 1";
-        public string AccentMuted { get; set; } = "0.30 0.255 0.205 0.92";
-        public string Success { get; set; } = "0.25 0.43 0.30 1";
-        public string Warning { get; set; } = "0.55 0.40 0.20 1";
-        public string Danger { get; set; } = "0.52 0.22 0.17 1";
-        public string Text { get; set; } = "0.91 0.90 0.87 1";
-        public string MutedText { get; set; } = "0.61 0.62 0.62 1";
+        // RRAM CUIHelper parity palette: deep blue/black glass, cyan information and restrained orange branding.
+        public string Background { get; set; } = "0.008 0.020 0.028 0.94";
+        public string Sidebar { get; set; } = "0.012 0.030 0.040 0.94";
+        public string Surface { get; set; } = "0.018 0.045 0.056 0.96";
+        public string SurfaceAlt { get; set; } = "0.025 0.060 0.072 0.98";
+        public string Accent { get; set; } = "0.10 0.68 0.82 1";
+        public string AccentMuted { get; set; } = "0.035 0.095 0.115 0.96";
+        public string Success { get; set; } = "0.20 0.72 0.40 1";
+        public string Warning { get; set; } = "0.94 0.58 0.16 1";
+        public string Danger { get; set; } = "0.70 0.15 0.13 1";
+        public string Text { get; set; } = "0.92 0.95 0.96 1";
+        public string MutedText { get; set; } = "0.58 0.68 0.72 1";
         public static UiTheme CreateDefault() => new();
         public bool IsLegacyDefault() =>
             (Accent == "0.76 0.31 0.10 1" && Background == "0.035 0.038 0.040 0.965") ||
@@ -835,7 +886,8 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     #region State and data
 
-    private enum MenuType { Dashboard, Players, Give, Vehicles, Teleport, Permissions, Groups, Convars, Plugins }
+    private enum MenuType { Dashboard, Players, Give, Vehicles, Teleport, Commands, Permissions, Groups, Convars, Plugins, Diagnostics }
+    private enum WindowMode { Compact, Standard, Full }
     public enum CommandSubType { Chat, Console, PlayerInfo }
     private enum PermissionSubType { Player, Group }
     private enum GroupSubType { List, Create, UserGroups, GroupUsers }
@@ -872,6 +924,13 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         public string VehicleCategory = "ALL";
         public string SelectedVehicleId = string.Empty;
         public string KickBanReason = string.Empty;
+        public string ModerationNoteDraft = string.Empty;
+        public bool BulkMode;
+        public readonly HashSet<string> BulkSelectedPlayers = new(StringComparer.Ordinal);
+        public readonly HashSet<string> FavouriteConvars = new(StringComparer.OrdinalIgnoreCase);
+        public WindowMode Window = WindowMode.Standard;
+        public bool AppearanceOpen;
+        public float WorldDimming = 0.16f;
 
         public void ResetListState()
         {
@@ -907,6 +966,39 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         [JsonIgnore] public Vector3 Position => new Vector3(X, Y, Z);
     }
 
+
+    private sealed class ModerationNote
+    {
+        public long Utc { get; set; }
+        public string AdminId { get; set; } = string.Empty;
+        public string AdminName { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
+    }
+
+    private sealed class AuditEntry
+    {
+        public long Utc { get; set; }
+        public string AdminId { get; set; } = string.Empty;
+        public string AdminName { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+    }
+
+    private void LoadWorkflowData()
+    {
+        _moderationNotes.Clear();
+        foreach (var pair in LoadData(ModerationNotesDataKey, () => new Dictionary<string, List<ModerationNote>>()))
+            _moderationNotes[pair.Key] = pair.Value ?? new List<ModerationNote>();
+        _auditHistory.Clear();
+        _auditHistory.AddRange(LoadData(AuditHistoryDataKey, () => new List<AuditEntry>()));
+        if (_auditHistory.Count > _config.Data.MaxAuditEntries)
+            _auditHistory.RemoveRange(0, _auditHistory.Count - _config.Data.MaxAuditEntries);
+    }
+
+    private void SaveWorkflowData()
+    {
+        SaveData(ModerationNotesDataKey, _moderationNotes);
+        SaveData(AuditHistoryDataKey, _auditHistory);
+    }
     private void LoadSavedLocations()
     {
         Dictionary<string, SavedLocation> loaded = LoadData(SavedLocationsDataKey, () => new Dictionary<string, SavedLocation>());
@@ -1048,67 +1140,89 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         RogueUiDocument ui = CreateUi(Root);
         ApplyTheme(ui);
 
-        // Rust F1-style administration workspace: nearly full-screen, compact rails and
-        // dense content. Scale moves the whole workspace proportionally rather than
-        // independently shrinking page controls.
-        ui.Panel(Root, "Overlay", RogueUiRect.Full, "0 0 0 0.46", cursorEnabled: false);
-        float uiScale = Math.Max(0.85f, Math.Min(1.15f, _config.UI.Scale));
-        float frameWidth = Math.Min(0.97f, 0.94f * uiScale);
-        float frameHeight = Math.Min(0.97f, 0.94f * uiScale);
-        float frameLeft = 0.5f - frameWidth * 0.5f;
-        float frameBottom = 0.5f - frameHeight * 0.5f;
-        ui.Panel("rram.frame", Root, Rect(frameLeft, frameBottom, frameLeft + frameWidth, frameBottom + frameHeight), _config.UI.Theme.Background);
+        // RRAM 2.4.9 shell mirrors the approved RustCUIHelper reference pages.
+        // Header/navigation/content/footer geometry is intentionally shared by every page.
+        ui.Panel(Root, "Overlay", RogueUiRect.Full, $"0 0 0 {s.WorldDimming.ToString("0.##", CultureInfo.InvariantCulture)}", cursorEnabled: false);
+        RogueUiRect windowRect = s.Window == WindowMode.Compact ? Rect(0.10f, 0.11f, 0.90f, 0.89f) : s.Window == WindowMode.Full ? Rect(0.02f, 0.025f, 0.98f, 0.975f) : Rect(0.055f, 0.065f, 0.945f, 0.935f);
+        ui.Panel("rram.frame", Root, windowRect, "0.008 0.020 0.028 0.94");
+        ui.Panel("rram.header", "rram.frame", Rect(0f, 0.918f, 1f, 1f), "0.012 0.035 0.045 0.97");
+        ui.Panel("rram.nav", "rram.frame", Rect(0f, 0.052f, 0.155f, 0.918f), "0.012 0.030 0.040 0.94");
+        ui.Panel("rram.body", "rram.frame", Rect(0.155f, 0.052f, 1f, 0.918f), "0.010 0.027 0.035 0.88");
+        ui.Panel("rram.footer", "rram.frame", Rect(0f, 0f, 1f, 0.052f), "0.012 0.027 0.034 0.95");
 
-        ui.Panel("rram.titlebar", "rram.frame", Rect(0.006f, 0.946f, 0.994f, 0.992f), _config.UI.Theme.SurfaceAlt);
-        ui.Label("rram.brand", "rram.titlebar", Rect(0.018f, 0.08f, 0.070f, 0.92f), "RR", 17, _config.UI.Theme.Text, "MiddleCenter");
-        ui.Label("rram.brand2", "rram.titlebar", Rect(0.078f, 0.15f, 0.50f, 0.85f), "ROGUERUST ADMIN  •  v2.1.1", 10, _config.UI.Theme.Text, "MiddleLeft");
-        string vanishState = _vanishedAdmins.Contains(s.Player.userID) ? "VANISH • ON" : string.Empty;
-        if (!string.IsNullOrEmpty(vanishState))
-            ui.Badge("rram.vanish.state", "rram.titlebar", Rect(0.63f, 0.20f, 0.74f, 0.80f), vanishState, _config.UI.Theme.Success);
-        string scaleDown = UiActionCallback(s.Player, "ui.scale.down", () => SetUiScale(s, _config.UI.Scale - 0.05f));
-        string scaleUp = UiActionCallback(s.Player, "ui.scale.up", () => SetUiScale(s, _config.UI.Scale + 0.05f));
-        ui.Button("rram.scale.down", "rram.titlebar", Rect(0.765f, 0.20f, 0.805f, 0.80f), "−", scaleDown, _config.UI.Theme.SurfaceAlt, 12);
-        ui.Label("rram.scale.value", "rram.titlebar", Rect(0.808f, 0.20f, 0.865f, 0.80f), $"{_config.UI.Scale * 100f:0}%", 8, _config.UI.Theme.MutedText, "MiddleCenter");
-        ui.Button("rram.scale.up", "rram.titlebar", Rect(0.868f, 0.20f, 0.908f, 0.80f), "+", scaleUp, _config.UI.Theme.SurfaceAlt, 12);
+        ui.Panel("rram.logo", "rram.header", Rect(0.014f, 0.14f, 0.060f, 0.86f), "0.045 0.13 0.16 0.94");
+        ui.Label("rram.logo.text", "rram.logo", RogueUiRect.Full, "RR", 16, "0.95 0.52 0.20 1", "MiddleCenter");
+        ui.Label("rram.brand", "rram.header", Rect(0.071f, 0.39f, 0.38f, 0.91f), "ROGUERUST", 18, _config.UI.Theme.Text, "MiddleLeft");
+        ui.Label("rram.product", "rram.header", Rect(0.071f, 0.08f, 0.55f, 0.43f), "ADMINISTRATION  •  AdminMenu 2.4.9  •  RogueRust 4.2.9", 8, "0.50 0.78 0.83 1", "MiddleLeft");
+        ui.Label("rram.health", "rram.header", Rect(0.70f, 0f, 0.91f, 1f), "● SYSTEM HEALTHY", 9, _config.UI.Theme.Success, "MiddleRight");
+        string appearance = UiActionCallback(s.Player, "ui.appearance", () => { s.AppearanceOpen = !s.AppearanceOpen; Draw(s); });
+        ui.Button("rram.appearance", "rram.header", Rect(0.920f, 0.20f, 0.950f, 0.80f), "⚙", appearance, "0.025 0.060 0.072 0.98", 13);
         string closeAdmin = UiActionCallback(s.Player, "ui.close.admin", () => CloseAdminMenu(s));
-        ui.Button("rram.close", "rram.titlebar", Rect(0.925f, 0.14f, 0.982f, 0.86f), "×", closeAdmin, _config.UI.Theme.Danger, 15);
+        ui.Button("rram.close", "rram.header", Rect(0.958f, 0.20f, 0.988f, 0.80f), "×", closeAdmin, _config.UI.Theme.Danger, 15);
 
-        ui.Panel("rram.navrail", "rram.frame", Rect(0.006f, 0.898f, 0.994f, 0.942f), _config.UI.Theme.Background);
         DrawNavigation(ui, s);
-
-        ui.Panel("rram.body", "rram.frame", Rect(0.006f, 0.008f, 0.994f, 0.894f), _config.UI.Theme.Surface);
         DrawHeader(ui, s);
+        ui.Label("rram.footer.left", "rram.footer", Rect(0.015f, 0f, 0.62f, 1f), "RogueRust Administration  |  Oxide / Carbon", 8, _config.UI.Theme.MutedText, "MiddleLeft");
+        ui.Label("rram.footer.right", "rram.footer", Rect(0.65f, 0f, 0.985f, 1f), "● Healthy  •  Admin  •  " + BasePlayer.activePlayerList.Count + " Players", 8, _config.UI.Theme.MutedText, "MiddleRight");
 
         switch (s.Menu)
         {
             case MenuType.Dashboard: DrawDashboard(ui, s); break;
             case MenuType.Players: DrawPlayers(ui, s); break;
             case MenuType.Teleport: DrawTeleport(ui, s); break;
+            case MenuType.Commands: DrawAdminCommands(ui, s); break;
             case MenuType.Permissions: DrawPermissions(ui, s); break;
             case MenuType.Groups: DrawGroups(ui, s); break;
             case MenuType.Convars: DrawConvars(ui, s); break;
             case MenuType.Plugins: DrawPlugins(ui, s); break;
             case MenuType.Give: DrawGive(ui, s); break;
             case MenuType.Vehicles: DrawVehicles(ui, s); break;
+            case MenuType.Diagnostics: DrawDiagnostics(ui, s); break;
         }
+        if (s.AppearanceOpen) DrawAppearance(ui, s);
 
         ShowUiIfChanged(s.Player, ui);
         if (s.Menu == MenuType.Give && _config.UI.UseNativeItemIcons && s.NativeGiveIcons.Count > 0)
-        {
-            NextTick(() =>
-            {
-                if (s.Player != null && s.Player.IsConnected && s.Menu == MenuType.Give)
-                    ShowNativeGiveIcons(s);
-            });
-        }
+            NextTick(() => { if (s.Player != null && s.Player.IsConnected && s.Menu == MenuType.Give) ShowNativeGiveIcons(s); });
         if (s.Menu == MenuType.Vehicles && _config.UI.UseNativeItemIcons)
+            NextTick(() => { if (s.Player != null && s.Player.IsConnected && s.Menu == MenuType.Vehicles) ShowNativeVehicleIcons(s); });
+    }
+
+    private void DrawAppearance(RogueUiDocument ui, Session s)
+    {
+        ui.Panel("rram.appearance.overlay", "rram.frame", Rect(0.57f, 0.12f, 0.965f, 0.89f), "0.008 0.020 0.028 0.985");
+        ui.Panel("rram.appearance.accent", "rram.appearance.overlay", Rect(0f, 0.992f, 1f, 1f), "0.10 0.68 0.82 1");
+        ui.Label("rram.appearance.title", "rram.appearance.overlay", Rect(0.06f, 0.88f, 0.72f, 0.97f), "APPEARANCE & WINDOW", 16, _config.UI.Theme.Text, "MiddleLeft");
+        string close = UiActionCallback(s.Player, "appearance.close", () => { s.AppearanceOpen = false; Draw(s); });
+        ui.Button("rram.appearance.close", "rram.appearance.overlay", Rect(0.86f, 0.89f, 0.95f, 0.96f), "×", close, _config.UI.Theme.Danger, 13);
+
+        ui.Label("rram.appearance.window.label", "rram.appearance.overlay", Rect(0.06f, 0.77f, 0.45f, 0.84f), "WINDOW SIZE", 10, _config.UI.Theme.MutedText, "MiddleLeft");
+        WindowMode[] modes = { WindowMode.Compact, WindowMode.Standard, WindowMode.Full };
+        for (int i = 0; i < modes.Length; i++)
         {
-            NextTick(() =>
-            {
-                if (s.Player != null && s.Player.IsConnected && s.Menu == MenuType.Vehicles)
-                    ShowNativeVehicleIcons(s);
-            });
+            WindowMode mode = modes[i]; float x = 0.06f + i * 0.295f;
+            string cb = UiActionCallback(s.Player, "appearance.window." + mode, () => { s.Window = mode; Draw(s); });
+            ui.Button("rram.appearance.window." + mode, "rram.appearance.overlay", Rect(x, 0.69f, x + 0.26f, 0.76f), mode.ToString().ToUpperInvariant(), cb, s.Window == mode ? _config.UI.Theme.Accent : _config.UI.Theme.SurfaceAlt, 10);
         }
+
+        ui.Label("rram.appearance.scale.label", "rram.appearance.overlay", Rect(0.06f, 0.57f, 0.60f, 0.64f), $"UI SCALE  {_config.UI.Scale:0.00}×", 10, _config.UI.Theme.MutedText, "MiddleLeft");
+        string scaleDown = UiActionCallback(s.Player, "appearance.scale.down", () => SetUiScale(s, _config.UI.Scale - 0.05f));
+        string scaleUp = UiActionCallback(s.Player, "appearance.scale.up", () => SetUiScale(s, _config.UI.Scale + 0.05f));
+        ui.Button("rram.appearance.scale.down", "rram.appearance.overlay", Rect(0.06f, 0.49f, 0.20f, 0.56f), "−", scaleDown, _config.UI.Theme.SurfaceAlt, 13);
+        ui.Button("rram.appearance.scale.up", "rram.appearance.overlay", Rect(0.22f, 0.49f, 0.36f, 0.56f), "+", scaleUp, _config.UI.Theme.SurfaceAlt, 13);
+
+        ui.Label("rram.appearance.dim.label", "rram.appearance.overlay", Rect(0.06f, 0.38f, 0.60f, 0.45f), $"WORLD DIMMING  {(int)(s.WorldDimming * 100)}%", 10, _config.UI.Theme.MutedText, "MiddleLeft");
+        string dimDown = UiActionCallback(s.Player, "appearance.dim.down", () => { s.WorldDimming = Math.Max(0f, s.WorldDimming - 0.05f); Draw(s); });
+        string dimUp = UiActionCallback(s.Player, "appearance.dim.up", () => { s.WorldDimming = Math.Min(0.45f, s.WorldDimming + 0.05f); Draw(s); });
+        ui.Button("rram.appearance.dim.down", "rram.appearance.overlay", Rect(0.06f, 0.30f, 0.20f, 0.37f), "−", dimDown, _config.UI.Theme.SurfaceAlt, 13);
+        ui.Button("rram.appearance.dim.up", "rram.appearance.overlay", Rect(0.22f, 0.30f, 0.36f, 0.37f), "+", dimUp, _config.UI.Theme.SurfaceAlt, 13);
+
+        ui.Panel("rram.appearance.sample", "rram.appearance.overlay", Rect(0.53f, 0.30f, 0.94f, 0.62f), _config.UI.Theme.Surface);
+        ui.Label("rram.appearance.sample.title", "rram.appearance.sample", Rect(0.08f, 0.67f, 0.92f, 0.90f), "LIVE SAMPLE", 11, _config.UI.Theme.Text, "MiddleLeft");
+        ui.Label("rram.appearance.sample.glass", "rram.appearance.sample", Rect(0.08f, 0.47f, 0.92f, 0.64f), "Blue/black glass", 9, _config.UI.Theme.MutedText, "MiddleLeft");
+        ui.Label("rram.appearance.sample.info", "rram.appearance.sample", Rect(0.08f, 0.31f, 0.92f, 0.48f), "Cyan information", 9, _config.UI.Theme.MutedText, "MiddleLeft");
+        ui.Label("rram.appearance.sample.brand", "rram.appearance.sample", Rect(0.08f, 0.15f, 0.92f, 0.32f), "Orange brand accent", 9, _config.UI.Theme.MutedText, "MiddleLeft");
+        ui.Label("rram.appearance.note", "rram.appearance.overlay", Rect(0.06f, 0.08f, 0.94f, 0.20f), "Window presets resize the whole RRAM shell without expensive drag updates.", 9, _config.UI.Theme.MutedText, "MiddleLeft");
     }
 
     private void EnsurePersistentCursor(BasePlayer player)
@@ -1169,19 +1283,17 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     {
         MenuType[] all = (MenuType[])Enum.GetValues(typeof(MenuType));
         List<MenuType> available = all.Where(x => CanAccess(s.Player, x)).ToList();
-        const float start = 0.006f;
-        const float end = 0.994f;
-        const float gap = 0.004f;
-        float width = (end - start - gap * Math.Max(0, available.Count - 1)) / Math.Max(1, available.Count);
+        const float top = 0.965f;
+        const float row = 0.078f;
+        const float height = 0.061f;
         for (int i = 0; i < available.Count; i++)
         {
             MenuType menu = available[i];
-            float left = start + i * (width + gap);
-            string cb = UiActionCallback(s.Player, $"nav.{menu}", () =>
-            {
-                s.Menu = menu; s.SubMenu = 0; s.ResetListState(); Draw(s);
-            });
-            ui.Tab($"rram.nav.{menu}", "rram.navrail", Rect(left, 0.08f, left + width, 0.92f), ShortMenuName(menu), cb, s.Menu == menu);
+            float yMax = top - i * row;
+            float yMin = yMax - height;
+            string cb = UiActionCallback(s.Player, $"nav.{menu}", () => { s.Menu = menu; s.SubMenu = 0; s.ResetListState(); Draw(s); });
+            if (s.Menu == menu) ui.Panel("rram.nav.rail." + menu, "rram.nav", Rect(0.015f, yMin, 0.030f, yMax), "0.95 0.42 0.12 1");
+            ui.Button("rram.nav." + menu, "rram.nav", Rect(0.04f, yMin, 0.94f, yMax), ShortMenuName(menu), cb, s.Menu == menu ? "0.035 0.095 0.115 0.96" : "0.012 0.030 0.040 0.42", 9);
         }
     }
 
@@ -1189,7 +1301,9 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     {
         MenuType.Dashboard => "HOME",
         MenuType.Permissions => "PERMS",
+        MenuType.Diagnostics => "DIAG",
         MenuType.Teleport => "TP",
+        MenuType.Commands => "COMMANDS",
         MenuType.Give => "ITEMS",
         MenuType.Vehicles => "VEHICLES",
         _ => menu.ToString().ToUpperInvariant()
@@ -1197,14 +1311,17 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     private void DrawHeader(RogueUiDocument ui, Session s)
     {
-        ui.Label("rram.title", "rram.body", Rect(0.025f, 0.935f, 0.42f, 0.987f), GetHeaderTitle(s), 16, _config.UI.Theme.Text, "MiddleLeft");
+        ui.Label("rram.title", "rram.body", Rect(0.03f, 0.91f, 0.75f, 0.98f), GetHeaderTitle(s), 17, _config.UI.Theme.Text, "MiddleLeft");
         if (MenuSupportsSearch(s.Menu))
         {
-            ui.Label("rram.search.label", "rram.body", Rect(0.575f, 0.944f, 0.635f, 0.982f), "SEARCH", 8, _config.UI.Theme.MutedText, "MiddleRight");
             string searchCb = UiCallback(s.Player, "search", arg => { s.Search = UiCallbackArgument(arg, 0).Trim(); s.Page = 0; Draw(s); });
-            ui.Input("rram.search", "rram.body", Rect(0.642f, 0.944f, 0.862f, 0.982f), s.Search, searchCb, 11, _config.UI.Theme.Text, 64);
+            // The input owns the full visible search region so every point in the field is clickable.
+            // Use the input's own text as the empty-state hint; a separate label can intercept Rust CUI pointer events.
+            ui.Input("rram.search", "rram.body", Rect(0.58f, 0.91f, 0.86f, 0.965f),
+                string.IsNullOrWhiteSpace(s.Search) ? "SEARCH" : s.Search, searchCb, 10,
+                string.IsNullOrWhiteSpace(s.Search) ? _config.UI.Theme.MutedText : _config.UI.Theme.Text, 64);
             string clear = UiActionCallback(s.Player, "search.clear", () => { s.Search = string.Empty; s.Character = "~"; s.Page = 0; Draw(s); });
-            ui.Button("rram.search.clear", "rram.body", Rect(0.870f, 0.944f, 0.940f, 0.982f), "CLEAR", clear, _config.UI.Theme.SurfaceAlt, 9);
+            ui.Button("rram.search.clear", "rram.body", Rect(0.87f, 0.91f, 0.95f, 0.965f), "CLEAR", clear, _config.UI.Theme.SurfaceAlt, 9);
         }
     }
 
@@ -1277,8 +1394,8 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     private void DrawDashboard(RogueUiDocument ui, Session s)
     {
-        int online = BasePlayer.activePlayerList.Count;
-        int sleepers = BasePlayer.sleepingPlayerList.Count;
+        int online = Rogue.Players.ActiveCount;
+        int sleepers = Rogue.Players.SleepingCount;
         int pluginsLoaded = Interface.Oxide.RootPluginManager.GetPlugins().Count(p => p != null && !p.IsCorePlugin);
         int monumentCount = 0;
         try { monumentCount = DiscoverMenuMonuments(false).Count; } catch { }
@@ -1315,6 +1432,15 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         DrawDashboardShortcut(ui, s, 1, "TELEPORT", MenuType.Teleport, 0.265f);
         DrawDashboardShortcut(ui, s, 2, "GIVE", MenuType.Give, 0.475f);
         DrawDashboardShortcut(ui, s, 3, "PLUGINS", MenuType.Plugins, 0.685f);
+
+        if (CanAccess(s.Player, MenuType.Diagnostics))
+        {
+            string diag = UiActionCallback(s.Player, "dashboard.diagnostics", () => { s.Menu = MenuType.Diagnostics; s.SubMenu = 0; s.ResetListState(); Draw(s); });
+            ui.Button("rram.dashboard.diagnostics", "rram.body", Rect(0.055f, 0.165f, 0.235f, 0.225f), "DLL DIAGNOSTICS", diag, _config.UI.Theme.SurfaceAlt, 10);
+            string kernelState = Rogue.Lifecycle.State.ToString();
+            string healthColor = Rogue.Dependencies.UnsatisfiedRequiredCount == 0 ? _config.UI.Theme.Success : _config.UI.Theme.Warning;
+            ui.Badge("rram.dashboard.kernel", "rram.body", Rect(0.250f, 0.172f, 0.455f, 0.218f), "KERNEL " + kernelState, healthColor);
+        }
     }
 
     private void DrawEnvironmentControls(RogueUiDocument ui, Session s)
@@ -1397,6 +1523,29 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         else Draw(s);
     }
 
+    private void DrawAdminCommands(RogueUiDocument ui, Session s)
+    {
+        ui.Label("rram.commands.help", "rram.body", Rect(0.055f, 0.855f, 0.94f, 0.91f), "CONFIGURED ADMIN COMMANDS • event-driven • no polling", 10, _config.UI.Theme.MutedText, "MiddleLeft");
+        var commands = (_config.Commands.AdminCommands ?? new List<AdminCommandEntry>())
+            .Where(x => PermissionRequirementMet(s.Player, x.RequiredPermission)).ToList();
+        for (int i = 0; i < commands.Count; i++)
+        {
+            AdminCommandEntry entry = commands[i];
+            int col = i % 3, row = i / 3;
+            float left = 0.055f + col * 0.30f;
+            float top = 0.80f - row * 0.105f;
+            string cb = UiActionCallback(s.Player, "admincmd." + i, () =>
+            {
+                Action run = () => ExecuteCommand(s, entry, entry.SubType == CommandSubType.Chat);
+                if (entry.RequireConfirmation) Confirm(s, entry.Name, entry.Description.Length > 0 ? entry.Description : "Run this command?", run);
+                else run();
+            });
+            ui.Button("rram.admincmd." + i, "rram.body", Rect(left, top - 0.06f, left + 0.27f, top), entry.Name.ToUpperInvariant(), cb, entry.RequireConfirmation ? _config.UI.Theme.Warning : _config.UI.Theme.SurfaceAlt, 10);
+            if (!string.IsNullOrWhiteSpace(entry.Description))
+                ui.Label("rram.admincmd.desc." + i, "rram.body", Rect(left, top - 0.095f, left + 0.27f, top - 0.062f), entry.Description, 8, _config.UI.Theme.MutedText, "UpperLeft");
+        }
+    }
+
     #endregion
 
     #region Players and player actions
@@ -1417,6 +1566,22 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         ui.Toggle("rram.players.offline", "rram.body", Rect(0.170f, 0.862f, 0.206f, 0.900f), s.ShowOffline, offline);
         ui.Label("rram.players.offline.label", "rram.body", Rect(0.211f, 0.862f, 0.330f, 0.900f), "RECENT / OFFLINE", 9, _config.UI.Theme.MutedText, "MiddleLeft");
 
+        if (HasAdminPermission(s.Player, BulkPermission))
+        {
+            string bulk = UiActionCallback(s.Player, "players.bulk.toggle", () => { s.BulkMode = !s.BulkMode; if (!s.BulkMode) s.BulkSelectedPlayers.Clear(); Draw(s); });
+            ui.Button("rram.players.bulk.toggle", "rram.body", Rect(0.345f, 0.858f, 0.475f, 0.902f), s.BulkMode ? "BULK • ON" : "BULK SELECT", bulk, s.BulkMode ? _config.UI.Theme.Accent : _config.UI.Theme.SurfaceAlt, 8);
+            if (s.BulkMode)
+            {
+                ui.Label("rram.players.bulk.count", "rram.body", Rect(0.485f, 0.858f, 0.60f, 0.902f), s.BulkSelectedPlayers.Count + " SELECTED", 8, _config.UI.Theme.MutedText, "MiddleLeft");
+                string heal = UiActionCallback(s.Player, "players.bulk.heal", () => BulkHeal(s));
+                string reset = UiActionCallback(s.Player, "players.bulk.reset", () => BulkResetMetabolism(s));
+                string strip = UiActionCallback(s.Player, "players.bulk.strip", () => Confirm(s, "BULK STRIP", "Strip inventory from all selected online players?", () => BulkStrip(s)));
+                ui.Button("rram.players.bulk.heal", "rram.body", Rect(0.605f, 0.858f, 0.705f, 0.902f), "HEAL ALL", heal, _config.UI.Theme.Success, 8);
+                ui.Button("rram.players.bulk.reset", "rram.body", Rect(0.710f, 0.858f, 0.820f, 0.902f), "RESET META", reset, _config.UI.Theme.SurfaceAlt, 8);
+                ui.Button("rram.players.bulk.strip", "rram.body", Rect(0.825f, 0.858f, 0.940f, 0.902f), "STRIP ALL", strip, _config.UI.Theme.Danger, 8);
+            }
+        }
+
         List<RecentPlayer> players = GetVisiblePlayers(s);
         const int pageSize = 32;
         DrawCharacterFilter(ui, s, players, x => x.Name);
@@ -1425,17 +1590,61 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         {
             RecentPlayer rp = page[i]; int col = i % 4, row = i / 4;
             float left = 0.052f + col * 0.222f; float top = 0.825f - row * 0.088f;
-            string cb = UiActionCallback(s.Player, $"player.open.{s.Page}.{i}", () => { s.SelectedPlayerId = rp.Id; s.SelectedPlayerName = rp.Name; Draw(s); });
+            string cb = UiActionCallback(s.Player, $"player.open.{s.Page}.{i}", () => { if (s.BulkMode) { if (!s.BulkSelectedPlayers.Add(rp.Id)) s.BulkSelectedPlayers.Remove(rp.Id); Draw(s); } else { s.SelectedPlayerId = rp.Id; s.SelectedPlayerName = rp.Name; Draw(s); } });
             string status = IsOnline(rp.Id) ? "ONLINE" : "OFFLINE";
             string card = $"rram.player.{i}";
-            ui.Panel(card, "rram.body", Rect(left, top - 0.067f, left + 0.210f, top), _config.UI.Theme.SurfaceAlt);
-            ui.Button($"rram.player.btn.{i}", card, Rect(0.02f, 0.30f, 0.98f, 0.94f), rp.Name, cb, "0 0 0 0", 9, "MiddleLeft");
+            ui.Panel(card, "rram.body", Rect(left, top - 0.067f, left + 0.210f, top), s.BulkMode && s.BulkSelectedPlayers.Contains(rp.Id) ? _config.UI.Theme.AccentMuted : _config.UI.Theme.SurfaceAlt);
+            ui.Button($"rram.player.btn.{i}", card, Rect(0.02f, 0.30f, 0.98f, 0.94f), rp.Name, cb, "0 0 0 0", 9, "MiddleCenter");
             string adminBadge = GetServerAdminBadge(rp.Id);
             if (!string.IsNullOrEmpty(adminBadge))
                 ui.Badge($"rram.player.admin.{i}", card, Rect(0.70f, 0.58f, 0.97f, 0.91f), adminBadge, _config.UI.Theme.Success);
             ui.Label($"rram.player.status.{i}", card, Rect(0.03f, 0.06f, 0.97f, 0.30f), status + "  •  " + rp.Id, 7, IsOnline(rp.Id) ? _config.UI.Theme.Success : _config.UI.Theme.MutedText, "MiddleLeft");
         }
         DrawPagerWithSize(ui, s, players.Count, pageSize);
+    }
+
+
+    private List<BasePlayer> GetBulkOnlineTargets(Session s)
+    {
+        if (s == null || s.BulkSelectedPlayers.Count == 0) return new List<BasePlayer>();
+        return BasePlayer.activePlayerList.Where(x => x != null && x.IsConnected && s.BulkSelectedPlayers.Contains(x.UserIDString)).ToList();
+    }
+
+    private void BulkHeal(Session s)
+    {
+        if (!HasAdminPermission(s.Player, HealPermission)) { Toast(s.Player, "Bulk", GetLang("Error.NoPermission", s.Player), _config.UI.Theme.Danger); return; }
+        List<BasePlayer> targets = GetBulkOnlineTargets(s);
+        foreach (BasePlayer target in targets) { if (target.IsWounded()) target.StopWounded(); target.Heal(target.MaxHealth()); }
+        Audit(s.Player, $"Bulk healed {targets.Count} player(s)");
+        Toast(s.Player, "Bulk", $"Healed {targets.Count} online player(s).", _config.UI.Theme.Success);
+        Draw(s);
+    }
+
+    private void BulkResetMetabolism(Session s)
+    {
+        if (!HasAdminPermission(s.Player, HealPermission)) { Toast(s.Player, "Bulk", GetLang("Error.NoPermission", s.Player), _config.UI.Theme.Danger); return; }
+        List<BasePlayer> targets = GetBulkOnlineTargets(s);
+        foreach (BasePlayer target in targets)
+        {
+            target.metabolism.bleeding.value = 0; target.metabolism.calories.value = target.metabolism.calories.max;
+            target.metabolism.hydration.value = target.metabolism.hydration.max; target.metabolism.radiation_level.value = 0;
+            target.metabolism.radiation_poison.value = 0; target.metabolism.poison.value = 0; target.metabolism.wetness.value = 0;
+            target.metabolism.SendChanges();
+        }
+        Audit(s.Player, $"Bulk reset metabolism for {targets.Count} player(s)");
+        Toast(s.Player, "Bulk", $"Reset metabolism for {targets.Count} online player(s).", _config.UI.Theme.Success);
+        Draw(s);
+    }
+
+    private void BulkStrip(Session s)
+    {
+        if (!HasAdminPermission(s.Player, StripPermission)) { DestroyUi(s.Player, Overlay); Toast(s.Player, "Bulk", GetLang("Error.NoPermission", s.Player), _config.UI.Theme.Danger); return; }
+        List<BasePlayer> targets = GetBulkOnlineTargets(s);
+        foreach (BasePlayer target in targets) target.inventory.Strip();
+        DestroyUi(s.Player, Overlay);
+        Audit(s.Player, $"Bulk stripped inventory from {targets.Count} player(s)");
+        Toast(s.Player, "Bulk", $"Stripped {targets.Count} online player(s).", _config.UI.Theme.Success);
+        Draw(s);
     }
 
     private void DrawPlayerSelection(RogueUiDocument ui, Session s)
@@ -1615,7 +1824,10 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         ui.Panel("rram.teleport.details", "rram.body", Rect(0.445f, 0.055f, 0.94f, 0.80f), _config.UI.Theme.Background);
         if (string.IsNullOrEmpty(s.SelectedMonumentGroup) || !groups.TryGetValue(s.SelectedMonumentGroup, out List<RogueMonumentInfo> instances))
         {
-            ui.Label("rram.teleport.hint", "rram.teleport.details", Rect(0.08f, 0.44f, 0.92f, 0.58f), "SELECT A MONUMENT TYPE\nTO VIEW EVERY LOCATION ON THIS MAP", 13, _config.UI.Theme.MutedText, "MiddleCenter"); return;
+            // Rust CUI renders escaped newlines inconsistently across runtimes; use two centered labels instead.
+            ui.Label("rram.teleport.hint.title", "rram.teleport.details", Rect(0.08f, 0.50f, 0.92f, 0.58f), "SELECT A MONUMENT TYPE", 13, _config.UI.Theme.MutedText, "MiddleCenter");
+            ui.Label("rram.teleport.hint.body", "rram.teleport.details", Rect(0.08f, 0.44f, 0.92f, 0.52f), "TO VIEW EVERY LOCATION ON THIS MAP", 11, _config.UI.Theme.MutedText, "MiddleCenter");
+            return;
         }
         ui.Label("rram.teleport.selected", "rram.teleport.details", Rect(0.05f, 0.92f, 0.95f, 0.985f), s.SelectedMonumentGroup.ToUpperInvariant(), 15, _config.UI.Theme.Text, "MiddleLeft");
         ui.Label("rram.teleport.count", "rram.teleport.details", Rect(0.05f, 0.875f, 0.95f, 0.925f), $"{instances.Count} LOCATION{(instances.Count == 1 ? string.Empty : "S")}", 9, _config.UI.Theme.MutedText, "MiddleLeft");
@@ -1692,7 +1904,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             string cb = UiActionCallback(s.Player, "teleport.player." + i, () => { TeleportSelfTo(s, target); });
             string card = "rram.teleport.player.card." + i;
             ui.Panel(card, "rram.body", Rect(left, top - 0.067f, left + 0.210f, top), _config.UI.Theme.SurfaceAlt);
-            ui.Button("rram.teleport.player.btn." + i, card, Rect(0.02f, 0.30f, 0.98f, 0.94f), StripName(target.displayName), cb, "0 0 0 0", 9, "MiddleLeft");
+            ui.Button("rram.teleport.player.btn." + i, card, Rect(0.02f, 0.30f, 0.98f, 0.94f), StripName(target.displayName), cb, "0 0 0 0", 9, "MiddleCenter");
             ui.Label("rram.teleport.player.grid." + i, card, Rect(0.03f, 0.06f, 0.97f, 0.30f), SafeGridReference(target.transform.position) + " • " + target.UserIDString, 7, _config.UI.Theme.MutedText, "MiddleLeft");
         }
         DrawPagerWithSize(ui, s, players.Count, pageSize);
@@ -1871,6 +2083,10 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             actions.Add(("TP PLAYER TO ME", TeleportPermission, false, () => TeleportPlayerToSelf(s, target)));
             actions.Add(("TP TO AUTHED ENTITY", TeleportPermission, false, () => TeleportToEntity(s, target, true)));
             actions.Add(("TP TO OWNED ENTITY", TeleportPermission, false, () => TeleportToEntity(s, target, false)));
+            actions.Add(("INVENTORY", InventoryPermission, false, () => ShowInventoryInspection(s, target)));
+            actions.Add(("SPECTATE", SpectatePermission, false, () => StartSpectate(s, target)));
+            actions.Add(("MOD NOTES", NotesPermission, false, () => ShowModerationNotes(s)));
+            actions.Add(("ACTION HISTORY", AuditPermission, false, () => ShowAuditHistory(s)));
         }
         actions.Add(("VIEW PERMISSIONS", PermissionPermission, false, () => { s.Menu = MenuType.Permissions; s.SubMenu = (int)PermissionSubType.Player; Draw(s); }));
 
@@ -1963,6 +2179,121 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         if (entities == null || entities.Length == 0) { Toast(s.Player, "Teleport", "No matching entities found for player.", _config.UI.Theme.Warning); return; }
         BaseEntity entity = entities[UnityEngine.Random.Range(0, entities.Length)];
         if (!TeleportPlayerWithProtection(s.Player, entity.transform.position, (authed ? "authed" : "owned") + " entity " + entity.ShortPrefabName)) return; Audit(s.Player, $"Teleported to {(authed ? "authed" : "owned")} entity {entity.ShortPrefabName} for {TargetText(target)}"); Draw(s);
+    }
+
+    private void TeleportBack(Session s)
+    {
+        if (_teleport == null) return;
+        RogueTeleportResult result = _teleport.Back(Rogue.Player(s.Player), new RogueSafePositionOptions { SearchRadius = 18f, Attempts = 36, RequireEntityClearance = true });
+        if (!result.Success) { Toast(s.Player, "Teleport", string.IsNullOrWhiteSpace(result.Error) ? "No previous location is available." : result.Error, _config.UI.Theme.Warning); return; }
+        StartTeleportProtection(s.Player, "return teleport");
+        Audit(s.Player, "Returned to previous teleport location at " + SafeGridReference(result.Destination));
+        Toast(s.Player, "Teleport", "Returned to " + SafeGridReference(result.Destination), _config.UI.Theme.Success);
+        Draw(s);
+    }
+
+    private void ShowInventoryInspection(Session s, BasePlayer target)
+    {
+        RogueUiDocument ui = CreateOverlayUi(); ApplyTheme(ui);
+        ui.Modal("rram.inventory.modal", Overlay, RogueUiRect.Centered(0.68f, 0.72f));
+        ui.Title("rram.inventory.title", "rram.inventory.modal", Rect(0.04f, 0.91f, 0.86f, 0.98f), "INVENTORY • " + StripName(target.displayName), "MiddleLeft");
+        ui.Button("rram.inventory.close", "rram.inventory.modal", Rect(0.89f, 0.92f, 0.96f, 0.975f), "×", "roguerust.ui.close " + Overlay, _config.UI.Theme.Danger, 13);
+        DrawInventoryContainer(ui, target.inventory.containerBelt, "BELT", 0.05f, 0.62f);
+        DrawInventoryContainer(ui, target.inventory.containerWear, "WEAR", 0.36f, 0.62f);
+        DrawInventoryContainer(ui, target.inventory.containerMain, "MAIN", 0.67f, 0.62f);
+        ShowUi(s.Player, ui, true);
+        Audit(s.Player, "Inspected inventory of " + TargetText(target));
+    }
+
+    private void DrawInventoryContainer(RogueUiDocument ui, ItemContainer container, string title, float left, float top)
+    {
+        ui.Label("rram.inv." + title + ".title", "rram.inventory.modal", Rect(left, top + 0.20f, left + 0.27f, top + 0.25f), title, 10, _config.UI.Theme.Text, "MiddleLeft");
+        var items = container?.itemList ?? new List<Item>();
+        int count = Math.Min(items.Count, 14);
+        for (int i = 0; i < count; i++)
+        {
+            Item item = items[i]; float y = top + 0.17f - i * 0.045f;
+            string name = item.info?.displayName?.english ?? item.info?.shortname ?? "item";
+            ui.Label("rram.inv." + title + "." + i, "rram.inventory.modal", Rect(left, y, left + 0.27f, y + 0.038f), item.amount + " × " + name, 9, _config.UI.Theme.MutedText, "MiddleLeft");
+        }
+        if (items.Count > count) ui.Label("rram.inv." + title + ".more", "rram.inventory.modal", Rect(left, 0.05f, left + 0.27f, 0.09f), "+ " + (items.Count - count) + " more", 8, _config.UI.Theme.MutedText, "MiddleLeft");
+    }
+
+    private void StartSpectate(Session s, BasePlayer target)
+    {
+        if (target == s.Player) { Toast(s.Player, "Spectate", "You cannot spectate yourself.", _config.UI.Theme.Warning); return; }
+        _spectateReturn[s.Player.userID] = s.Player.transform.position;
+        CloseAdminMenu(s);
+        s.Player.StartSpectating();
+        s.Player.UpdateSpectateTarget(target.UserIDString);
+        Audit(s.Player, "Started spectating " + TargetText(target));
+        Toast(s.Player, "Spectate", "Spectating " + StripName(target.displayName) + ". Use native spectate controls to exit.", _config.UI.Theme.Success, 4f);
+    }
+
+    private void ReturnFromSpectate(Session s)
+    {
+        if (!_spectateReturn.TryGetValue(s.Player.userID, out Vector3 returnPosition)) return;
+        s.Player.StopSpectating();
+        s.Player.SetParent(null, true, true);
+        _spectateReturn.Remove(s.Player.userID);
+        if (_teleport != null)
+        {
+            RogueTeleportResult result = _teleport.Teleport(Rogue.Player(s.Player), returnPosition, new RogueSafePositionOptions { SearchRadius = 18f, Attempts = 36, RequireEntityClearance = true });
+            if (result.Success) StartTeleportProtection(s.Player, "spectate return");
+        }
+        Audit(s.Player, "Returned from spectate mode");
+        Toast(s.Player, "Spectate", "Returned from spectate mode.", _config.UI.Theme.Success);
+        Draw(s);
+    }
+
+    private void ShowModerationNotes(Session s)
+    {
+        RogueUiDocument ui = CreateOverlayUi(); ApplyTheme(ui);
+        ui.Modal("rram.notes.modal", Overlay, RogueUiRect.Centered(0.62f, 0.62f));
+        ui.Title("rram.notes.title", "rram.notes.modal", Rect(0.05f, 0.88f, 0.82f, 0.97f), "MODERATION NOTES • " + s.SelectedPlayerName, "MiddleLeft");
+        ui.Button("rram.notes.close", "rram.notes.modal", Rect(0.88f, 0.90f, 0.95f, 0.97f), "×", "roguerust.ui.close " + Overlay, _config.UI.Theme.Danger, 13);
+        string input = UiCallback(s.Player, "notes.input", arg => s.ModerationNoteDraft = UiCallbackArgument(arg, 0));
+        ui.Input("rram.notes.input", "rram.notes.modal", Rect(0.05f, 0.77f, 0.76f, 0.84f), s.ModerationNoteDraft, input, 10, _config.UI.Theme.Text, 240);
+        string add = UiActionCallback(s.Player, "notes.add", () => AddModerationNote(s));
+        ui.Button("rram.notes.add", "rram.notes.modal", Rect(0.78f, 0.77f, 0.95f, 0.84f), "ADD NOTE", add, _config.UI.Theme.Success, 9);
+        if (!_moderationNotes.TryGetValue(s.SelectedPlayerId, out List<ModerationNote>? notes)) notes = new List<ModerationNote>();
+        var recent = notes.OrderByDescending(x => x.Utc).Take(9).ToList();
+        for (int i = 0; i < recent.Count; i++)
+        {
+            var note = recent[i]; float y = 0.70f - i * 0.066f;
+            string stamp = DateTimeOffset.FromUnixTimeSeconds(note.Utc).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+            ui.Label("rram.notes." + i, "rram.notes.modal", Rect(0.05f, y, 0.95f, y + 0.055f), stamp + " • " + note.AdminName + " • " + note.Text, 8, _config.UI.Theme.MutedText, "MiddleLeft");
+        }
+        ShowUi(s.Player, ui, true);
+    }
+
+    private void AddModerationNote(Session s)
+    {
+        string text = (s.ModerationNoteDraft ?? string.Empty).Trim();
+        if (text.Length == 0) { Toast(s.Player, "Notes", "Enter a note first.", _config.UI.Theme.Warning); return; }
+        if (!_moderationNotes.TryGetValue(s.SelectedPlayerId, out List<ModerationNote>? notes)) _moderationNotes[s.SelectedPlayerId] = notes = new List<ModerationNote>();
+        notes.Add(new ModerationNote { Utc = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), AdminId = s.Player.UserIDString, AdminName = StripName(s.Player.displayName), Text = text });
+        while (notes.Count > _config.Data.MaxNotesPerPlayer) notes.RemoveAt(0);
+        s.ModerationNoteDraft = string.Empty; SaveWorkflowData();
+        Audit(s.Player, "Added moderation note for " + s.SelectedPlayerName + " (" + s.SelectedPlayerId + ")");
+        DestroyUi(s.Player, Overlay); ShowModerationNotes(s);
+    }
+
+    private void ShowAuditHistory(Session s)
+    {
+        RogueUiDocument ui = CreateOverlayUi(); ApplyTheme(ui);
+        ui.Modal("rram.audit.modal", Overlay, RogueUiRect.Centered(0.72f, 0.72f));
+        ui.Title("rram.audit.title", "rram.audit.modal", Rect(0.04f, 0.91f, 0.84f, 0.98f), "ADMIN ACTION HISTORY • " + s.SelectedPlayerName, "MiddleLeft");
+        ui.Button("rram.audit.close", "rram.audit.modal", Rect(0.90f, 0.92f, 0.96f, 0.975f), "×", "roguerust.ui.close " + Overlay, _config.UI.Theme.Danger, 13);
+        string id = s.SelectedPlayerId;
+        var rows = _auditHistory.Where(x => x.Message.IndexOf(id, StringComparison.OrdinalIgnoreCase) >= 0 || x.Message.IndexOf(s.SelectedPlayerName, StringComparison.OrdinalIgnoreCase) >= 0).OrderByDescending(x => x.Utc).Take(14).ToList();
+        for (int i = 0; i < rows.Count; i++)
+        {
+            AuditEntry entry = rows[i]; float y = 0.84f - i * 0.055f;
+            string stamp = DateTimeOffset.FromUnixTimeSeconds(entry.Utc).ToLocalTime().ToString("MM-dd HH:mm");
+            ui.Label("rram.audit." + i, "rram.audit.modal", Rect(0.04f, y, 0.96f, y + 0.045f), stamp + " • " + entry.AdminName + " • " + entry.Message, 8, _config.UI.Theme.MutedText, "MiddleLeft");
+        }
+        ShowUi(s.Player, ui, true);
     }
 
     private bool TeleportPlayerWithProtection(BasePlayer player, Vector3 destination, string reason)
@@ -2096,7 +2427,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             });
             string state = direct ? "DIRECT" : inherited ? "INHERITED" : "OFF";
             string color = direct ? _config.UI.Theme.Success : inherited ? _config.UI.Theme.Warning : _config.UI.Theme.SurfaceAlt;
-            ui.Button("rram.perm." + i, "rram.body", Rect(left, top - 0.060f, left + 0.210f, top), entry.Key + "  •  " + state, cb, color, 8, "MiddleLeft");
+            ui.Button("rram.perm." + i, "rram.body", Rect(left, top - 0.060f, left + 0.210f, top), entry.Key + "  •  " + state, cb, color, 8, "MiddleCenter");
         }
         DrawPagerWithSize(ui, s, filtered.Count, pageSize);
     }
@@ -2148,7 +2479,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         {
             string group = page[i]; int col = i % 4, row = i / 4; float left = 0.052f + col * 0.222f; float top = 0.815f - row * 0.086f;
             string cb = UiActionCallback(s.Player, $"group.select.{s.Page}.{i}", () => { s.SelectedGroup = group; Draw(s); });
-            ui.Button("rram.group.select." + i, "rram.body", Rect(left, top - 0.060f, left + 0.210f, top), group, cb, _config.UI.Theme.SurfaceAlt, 9, "MiddleLeft");
+            ui.Button("rram.group.select." + i, "rram.body", Rect(left, top - 0.060f, left + 0.210f, top), group, cb, _config.UI.Theme.SurfaceAlt, 9, "MiddleCenter");
         }
         DrawPagerWithSize(ui, s, groups.Count, pageSize);
     }
@@ -2220,7 +2551,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
                 if (member) permission.RemoveUserGroup(s.SelectedPlayerId, group); else permission.AddUserGroup(s.SelectedPlayerId, group);
                 Audit(s.Player, $"{(member ? "Removed" : "Added")} {s.SelectedPlayerName} {(member ? "from" : "to")} group {group}"); Draw(s);
             });
-            ui.Button("rram.usergroup." + i, "rram.body", Rect(left, top - 0.060f, left + 0.210f, top), group + (member ? " • MEMBER" : ""), cb, member ? _config.UI.Theme.Success : _config.UI.Theme.SurfaceAlt, 8, "MiddleLeft");
+            ui.Button("rram.usergroup." + i, "rram.body", Rect(left, top - 0.060f, left + 0.210f, top), group + (member ? " • MEMBER" : ""), cb, member ? _config.UI.Theme.Success : _config.UI.Theme.SurfaceAlt, 8, "MiddleCenter");
         }
         DrawPagerWithSize(ui, s, groups.Count, pageSize);
     }
@@ -2324,6 +2655,59 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     #endregion
 
+    #region RogueRust diagnostics
+
+    private void DrawDiagnostics(RogueUiDocument ui, Session s)
+    {
+        RogueDatabaseSnapshot db = Rogue.Database.GetSnapshot();
+        RogueHttpSnapshot http = Rogue.Http.GetSnapshot();
+        TimeSpan dllUptime = RogueRustDiagnostics.Uptime;
+
+        ui.Label("rram.diag.title", "rram.body", Rect(0.055f, 0.855f, 0.70f, 0.91f), "ROGUERUST DLL • LIVE SNAPSHOT", 15, _config.UI.Theme.Text, "MiddleLeft");
+        ui.Label("rram.diag.help", "rram.body", Rect(0.55f, 0.855f, 0.94f, 0.91f), "Read on demand • no dashboard polling", 9, _config.UI.Theme.MutedText, "MiddleRight");
+
+        var cards = new (string Title, string Value, bool Warning)[]
+        {
+            ("KERNEL", Rogue.Lifecycle.State.ToString(), Rogue.Dependencies.UnsatisfiedRequiredCount > 0),
+            ("SERVICES", Rogue.Registry.Count.ToString(), false),
+            ("CAPABILITIES", Rogue.Capabilities.Count.ToString(), false),
+            ("MODULES", Rogue.Modules.Count.ToString(), false),
+            ("DEPENDENCIES", Rogue.Dependencies.UnsatisfiedRequiredCount + " missing", Rogue.Dependencies.UnsatisfiedRequiredCount > 0),
+            ("DLL UPTIME", FormatDuration((float)dllUptime.TotalSeconds), false),
+            ("UI DOCUMENTS", Rogue.Ui.ActiveDocumentCount.ToString(), Rogue.Ui.ShowFailures > 0),
+            ("UI FAILURES", Rogue.Ui.ShowFailures.ToString(), Rogue.Ui.ShowFailures > 0),
+            ("SCHEDULER", Rogue.Scheduler.Count + " active", Rogue.Scheduler.Failures > 0),
+            ("HTTP", http.ActiveRequests + " active / " + http.QueuedRequests + " queued", http.Failures > 0),
+            ("DATABASE", db.RegisteredConnections + " conn / " + db.Failures + " failed", db.Failures > 0),
+            ("WORLD SCANS", Rogue.World.EntityScans + " / " + Rogue.World.EntityScanFailures + " failed", Rogue.World.EntityScanFailures > 0),
+            ("CACHE", Rogue.Cache.Count + " entries", false),
+            ("EVENTS", Rogue.Events.SubscriptionCount + " subscriptions", RogueRustDiagnostics.EventFailures > 0),
+            ("COMMANDS", Rogue.Commands.Count + " registered", Rogue.Commands.Failures > 0),
+            ("ADAPTERS", Rogue.Adapters.AvailableCount + "/" + Rogue.Adapters.All.Count + " available", Rogue.Adapters.Failures > 0),
+            ("PROFILED", Rogue.Profiler.Operations + " / " + Rogue.Profiler.SlowOperations + " slow", Rogue.Profiler.Failures > 0),
+            ("CIRCUITS", Rogue.CircuitBreakers.RejectedCalls + " rejected", Rogue.CircuitBreakers.RejectedCalls > 0)
+        };
+
+        for (int i = 0; i < cards.Length; i++)
+        {
+            int col = i % 3, row = i / 3;
+            float left = 0.052f + col * 0.296f;
+            float top = 0.815f - row * 0.105f;
+            string card = "rram.diag.card." + i;
+            ui.Panel(card, "rram.body", Rect(left, top - 0.082f, left + 0.280f, top), _config.UI.Theme.SurfaceAlt);
+            ui.Label(card + ".title", card, Rect(0.04f, 0.58f, 0.96f, 0.91f), cards[i].Title, 8, _config.UI.Theme.MutedText, "MiddleLeft");
+            ui.Label(card + ".value", card, Rect(0.04f, 0.10f, 0.96f, 0.60f), cards[i].Value, 11, cards[i].Warning ? _config.UI.Theme.Warning : _config.UI.Theme.Text, "MiddleLeft");
+        }
+
+        string refresh = UiActionCallback(s.Player, "diag.refresh", () => Draw(s));
+        ui.Button("rram.diag.refresh", "rram.body", Rect(0.052f, 0.075f, 0.20f, 0.125f), "REFRESH SNAPSHOT", refresh, _config.UI.Theme.AccentMuted, 9);
+        ui.Label("rram.diag.footer", "rram.body", Rect(0.22f, 0.075f, 0.94f, 0.125f),
+            $"Integration calls {RogueRustDiagnostics.IntegrationCalls} • failures {RogueRustDiagnostics.IntegrationFailures} • cache {RogueRustDiagnostics.CacheHits} hits / {RogueRustDiagnostics.CacheMisses} misses",
+            8, _config.UI.Theme.MutedText, "MiddleLeft");
+    }
+
+    #endregion
+
     #region Convars
 
     private void DrawConvars(RogueUiDocument ui, Session s)
@@ -2331,6 +2715,11 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         // Console descriptors are static for the running Rust build; cache the list once.
         // Values are still read live from each command object while drawing.
         List<ConsoleSystem.Command> vars = Filter(_serverConvarCache, s, x => x.FullName + " " + x.Description).ToList();
+        if (s.SubMenu == 1) vars = vars.Where(x => s.FavouriteConvars.Contains(x.FullName)).ToList();
+        string allVars = UiActionCallback(s.Player, "convar.filter.all", () => { s.SubMenu = 0; s.Page = 0; Draw(s); });
+        string favVars = UiActionCallback(s.Player, "convar.filter.fav", () => { s.SubMenu = 1; s.Page = 0; Draw(s); });
+        ui.Button("rram.convar.filter.all", "rram.body", Rect(0.052f, 0.858f, 0.135f, 0.900f), "ALL", allVars, s.SubMenu == 0 ? _config.UI.Theme.Accent : _config.UI.Theme.SurfaceAlt, 8);
+        ui.Button("rram.convar.filter.fav", "rram.body", Rect(0.140f, 0.858f, 0.245f, 0.900f), "FAVOURITES", favVars, s.SubMenu == 1 ? _config.UI.Theme.Accent : _config.UI.Theme.SurfaceAlt, 8);
         const int pageSize = 21;
         DrawCharacterFilter(ui, s, vars, x => x.FullName); List<ConsoleSystem.Command> page = PageWithSize(vars, s.Page, pageSize);
         for (int i = 0; i < page.Count; i++)
@@ -2341,7 +2730,9 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             ui.Panel(card, "rram.body", Rect(left, top - 0.084f, left + 0.280f, top), _config.UI.Theme.SurfaceAlt);
             ui.Label("rram.convar.name." + i, card, Rect(0.025f, 0.52f, 0.66f, 0.92f), variable.FullName, 8, _config.UI.Theme.Text, "MiddleLeft");
             ui.Label("rram.convar.desc." + i, card, Rect(0.025f, 0.08f, 0.66f, 0.50f), variable.Description ?? string.Empty, 7, _config.UI.Theme.MutedText, "MiddleLeft");
-            ui.Input("rram.convar.input." + i, card, Rect(0.69f, 0.18f, 0.97f, 0.82f), variable.String ?? string.Empty, cb, 9, _config.UI.Theme.Text, 64, false, "MiddleCenter");
+            string fav = UiActionCallback(s.Player, $"convar.fav.{s.Page}.{i}", () => { if (!s.FavouriteConvars.Add(variable.FullName)) s.FavouriteConvars.Remove(variable.FullName); Draw(s); });
+            ui.Button("rram.convar.fav." + i, card, Rect(0.64f, 0.18f, 0.71f, 0.82f), s.FavouriteConvars.Contains(variable.FullName) ? "★" : "☆", fav, "0 0 0 0", 11);
+            ui.Input("rram.convar.input." + i, card, Rect(0.72f, 0.18f, 0.97f, 0.82f), variable.String ?? string.Empty, cb, 9, _config.UI.Theme.Text, 64, false, "MiddleCenter");
         }
         DrawPagerWithSize(ui, s, vars.Count, pageSize);
     }
@@ -2353,6 +2744,14 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private void DrawPlugins(RogueUiDocument ui, Session s)
     {
         List<PluginInfo> infos = GetPluginInfos(); infos = Filter(infos, s, x => x.Title + " " + x.Name + " " + x.Description).ToList();
+        if (s.SubMenu == 1) infos = infos.Where(x => x.Loaded).ToList();
+        else if (s.SubMenu == 2) infos = infos.Where(x => !x.Loaded).ToList();
+        string allPlugins = UiActionCallback(s.Player, "plugin.filter.all", () => { s.SubMenu = 0; s.Page = 0; Draw(s); });
+        string loadedPlugins = UiActionCallback(s.Player, "plugin.filter.loaded", () => { s.SubMenu = 1; s.Page = 0; Draw(s); });
+        string unloadedPlugins = UiActionCallback(s.Player, "plugin.filter.unloaded", () => { s.SubMenu = 2; s.Page = 0; Draw(s); });
+        ui.Button("rram.plugin.filter.all", "rram.body", Rect(0.052f, 0.858f, 0.125f, 0.900f), "ALL", allPlugins, s.SubMenu == 0 ? _config.UI.Theme.Accent : _config.UI.Theme.SurfaceAlt, 8);
+        ui.Button("rram.plugin.filter.loaded", "rram.body", Rect(0.130f, 0.858f, 0.225f, 0.900f), "LOADED", loadedPlugins, s.SubMenu == 1 ? _config.UI.Theme.Accent : _config.UI.Theme.SurfaceAlt, 8);
+        ui.Button("rram.plugin.filter.unloaded", "rram.body", Rect(0.230f, 0.858f, 0.335f, 0.900f), "UNLOADED", unloadedPlugins, s.SubMenu == 2 ? _config.UI.Theme.Accent : _config.UI.Theme.SurfaceAlt, 8);
         const int pageSize = 21;
         DrawCharacterFilter(ui, s, infos, x => x.Title); List<PluginInfo> page = PageWithSize(infos, s.Page, pageSize);
         for (int i = 0; i < page.Count; i++)
@@ -2365,14 +2764,14 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             ui.Badge("rram.plugin.state." + i, card, Rect(0.58f, 0.57f, 0.69f, 0.88f), p.Loaded ? "ON" : "OFF", p.Loaded ? _config.UI.Theme.Success : _config.UI.Theme.Danger);
             if (p.Loaded)
             {
-                string reload = UiActionCallback(s.Player, $"plugin.reload.{i}", () => { Interface.Oxide.ReloadPlugin(p.FileName); Audit(s.Player, "Reloaded plugin " + p.Name); Draw(s); });
-                string unload = UiActionCallback(s.Player, $"plugin.unload.{i}", () => Confirm(s, "UNLOAD PLUGIN", "Unload " + p.Title + "?", () => { Interface.Oxide.UnloadPlugin(p.FileName); Audit(s.Player, "Unloaded plugin " + p.Name); Draw(s); }));
+                string reload = UiActionCallback(s.Player, $"plugin.reload.{i}", () => { Interface.Oxide.ReloadPlugin(p.FileName); _pluginInfoCacheDirty = true; Audit(s.Player, "Reloaded plugin " + p.Name); Draw(s); });
+                string unload = UiActionCallback(s.Player, $"plugin.unload.{i}", () => Confirm(s, "UNLOAD PLUGIN", "Unload " + p.Title + "?", () => { Interface.Oxide.UnloadPlugin(p.FileName); _pluginInfoCacheDirty = true; Audit(s.Player, "Unloaded plugin " + p.Name); Draw(s); }));
                 ui.Button("rram.plugin.reload." + i, card, Rect(0.71f, 0.54f, 0.97f, 0.90f), "RELOAD", reload, _config.UI.Theme.Warning, 8);
                 ui.Button("rram.plugin.unload." + i, card, Rect(0.71f, 0.10f, 0.97f, 0.46f), "UNLOAD", unload, _config.UI.Theme.Danger, 8);
             }
             else
             {
-                string load = UiActionCallback(s.Player, $"plugin.load.{i}", () => { Interface.Oxide.LoadPlugin(p.FileName); Audit(s.Player, "Loaded plugin " + p.Name); Draw(s); });
+                string load = UiActionCallback(s.Player, $"plugin.load.{i}", () => { Interface.Oxide.LoadPlugin(p.FileName); _pluginInfoCacheDirty = true; Audit(s.Player, "Loaded plugin " + p.Name); Draw(s); });
                 ui.Button("rram.plugin.load." + i, card, Rect(0.71f, 0.20f, 0.97f, 0.80f), "LOAD", load, _config.UI.Theme.Success, 8);
             }
         }
@@ -3012,12 +3411,40 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         }
     }
 
-    private void GiveItemAmount(Session s, ItemDefinition item, int amount)
+    private void GiveItemAmount(Session s, ItemDefinition definition, int amount)
     {
-        if (s == null || item == null) return;
-        s.GiveAmount = Math.Max(1, amount);
-        s.SkinId = 0;
-        GiveItem(s, item, false);
+        if (s == null || definition == null || s.Player == null || !s.Player.IsConnected) return;
+
+        BasePlayer? target = FindBasePlayer(s.SelectedPlayerId);
+        if (target == null || !target.IsConnected)
+        {
+            Toast(s.Player, "Give", "Target must be online.", _config.UI.Theme.Warning);
+            return;
+        }
+
+        int givenAmount = Math.Max(1, amount);
+        Item? created = ItemManager.Create(definition, givenAmount);
+        if (created == null)
+        {
+            Toast(s.Player, "Give", "Item could not be created.", _config.UI.Theme.Danger);
+            return;
+        }
+
+        // Quick-give is deliberately non-modal. Do not rebuild the item browser here:
+        // admins must be able to press 1 / 100 / 1K / STACK repeatedly without the
+        // originating CUI buttons being destroyed and recreated between clicks.
+        target.GiveItem(created, BaseEntity.GiveItemReason.PickedUp);
+        RecordRecentGive(s, definition);
+        Audit(s.Player, $"Quick-gave {givenAmount} x {definition.displayName.english} to {TargetText(target)}");
+        Toast(s.Player, "Give", string.Format(GetLang("Notice.Given", s.Player), givenAmount, definition.displayName.english, target.displayName), _config.UI.Theme.Success);
+    }
+
+    private static void RecordRecentGive(Session s, ItemDefinition definition)
+    {
+        s.RecentGiveItems.RemoveAll(x => string.Equals(x, definition.shortname, StringComparison.OrdinalIgnoreCase));
+        s.RecentGiveItems.Insert(0, definition.shortname);
+        if (s.RecentGiveItems.Count > 24)
+            s.RecentGiveItems.RemoveRange(24, s.RecentGiveItems.Count - 24);
     }
 
     private void DrawGiveOverlay(Session s, ItemDefinition item, bool blueprint)
@@ -3045,9 +3472,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         if (item == null) { Toast(s.Player, "Give", "Item could not be created.", _config.UI.Theme.Danger); return; }
         if (blueprint) item.blueprintTarget = definition.itemid;
         target.GiveItem(item, BaseEntity.GiveItemReason.PickedUp);
-        s.RecentGiveItems.RemoveAll(x => string.Equals(x, definition.shortname, StringComparison.OrdinalIgnoreCase));
-        s.RecentGiveItems.Insert(0, definition.shortname);
-        if (s.RecentGiveItems.Count > 24) s.RecentGiveItems.RemoveRange(24, s.RecentGiveItems.Count - 24);
+        RecordRecentGive(s, definition);
         int givenAmount = s.GiveAmount; ulong givenSkin = s.SkinId;
         Audit(s.Player, $"Gave {givenAmount} x {(blueprint ? "blueprint " : "")}{definition.displayName.english} to {TargetText(target)} skin={givenSkin}");
         s.GiveAmount = 1;
@@ -3253,12 +3678,14 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         MenuType.Dashboard => true,
         MenuType.Players => HasAdminPermission(player, PlayerPermission),
         MenuType.Teleport => HasAdminPermission(player, TeleportPermission),
+        MenuType.Commands => HasAdminPermission(player, CommandsPermission),
         MenuType.Permissions => HasAdminPermission(player, PermissionPermission),
         MenuType.Groups => HasAdminPermission(player, GroupPermission),
         MenuType.Convars => HasAdminPermission(player, ConvarPermission),
         MenuType.Plugins => HasAdminPermission(player, PluginPermission),
         MenuType.Give => HasAdminPermission(player, GivePermission),
         MenuType.Vehicles => HasAdminPermission(player, VehiclePermission),
+        MenuType.Diagnostics => HasAdminPermission(player, DiagnosticsPermission),
         _ => false
     };
 
@@ -3411,13 +3838,50 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     {
         if (player == null || !player.IsConnected) return;
 
-        // Compact notification anchored low/right so it never covers the menu close button.
-        // Keep this as its own named Popup document so repeated notifications replace cleanly.
-        RogueUiDocument ui = CreatePopupUi();
-        ui.Panel("rram.toast", Popup, Rect(0.655f, 0.035f, 0.965f, 0.095f), color);
-        ui.Label("rram.toast.title", "rram.toast", Rect(0.035f, 0.52f, 0.965f, 0.90f), title.ToUpperInvariant(), 10, _config.UI.Theme.Text, "MiddleLeft");
-        ui.Label("rram.toast.message", "rram.toast", Rect(0.035f, 0.10f, 0.965f, 0.56f), message, 9, _config.UI.Theme.Text, "MiddleLeft");
-        ShowUi(player, ui, true);
+        // Notifications are visual-only. Build them directly as non-raycasting CUI instead
+        // of using a full-screen RogueUI popup document, so rapid admin actions remain clickable.
+        DestroyUi(player, Popup);
+        CuiElementContainer toast = new CuiElementContainer();
+        toast.Add(new CuiElement
+        {
+            Name = Popup,
+            Parent = "Overlay",
+            Components =
+            {
+                new CuiRectTransformComponent { AnchorMin = "0 0", AnchorMax = "1 1" }
+            }
+        });
+        toast.Add(new CuiElement
+        {
+            Name = "rram.toast",
+            Parent = Popup,
+            Components =
+            {
+                new CuiImageComponent { Color = color, BlocksRaycast = false },
+                new CuiRectTransformComponent { AnchorMin = "0.655 0.035", AnchorMax = "0.965 0.095" }
+            }
+        });
+        toast.Add(new CuiElement
+        {
+            Name = "rram.toast.title",
+            Parent = "rram.toast",
+            Components =
+            {
+                new CuiTextComponent { Text = title.ToUpperInvariant(), FontSize = 10, Color = _config.UI.Theme.Text, Align = TextAnchor.MiddleLeft },
+                new CuiRectTransformComponent { AnchorMin = "0.035 0.52", AnchorMax = "0.965 0.90" }
+            }
+        });
+        toast.Add(new CuiElement
+        {
+            Name = "rram.toast.message",
+            Parent = "rram.toast",
+            Components =
+            {
+                new CuiTextComponent { Text = message, FontSize = 9, Color = _config.UI.Theme.Text, Align = TextAnchor.MiddleLeft },
+                new CuiRectTransformComponent { AnchorMin = "0.035 0.10", AnchorMax = "0.965 0.56" }
+            }
+        });
+        CuiHelper.AddUi(player, toast);
 
         double lifetime = Math.Max(0.5, Math.Min(30.0, durationSeconds));
         string delayKey = "toast-close-" + player.userID;
@@ -3436,9 +3900,23 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         ShowUi(s.Player, ui, true);
     }
 
+    private void QueueAuditSave()
+    {
+        if (_auditSaveQueued) return;
+        _auditSaveQueued = true;
+        Delay(TimeSpan.FromSeconds(2), () =>
+        {
+            _auditSaveQueued = false;
+            SaveData(AuditHistoryDataKey, _auditHistory);
+        }, "adminmenu-audit-save");
+    }
+
     private async void Audit(BasePlayer player, string message)
     {
         LogInformation("AdminMenu", player.displayName + " (" + player.userID + "): " + message);
+        _auditHistory.Add(new AuditEntry { Utc = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), AdminId = player.UserIDString, AdminName = StripName(player.displayName), Message = message });
+        while (_auditHistory.Count > _config.Data.MaxAuditEntries) _auditHistory.RemoveAt(0);
+        QueueAuditSave();
         if (string.IsNullOrWhiteSpace(_config.Integrations.LogWebhook)) return;
         try
         {
