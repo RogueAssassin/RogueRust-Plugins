@@ -9,13 +9,13 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "1.9.2")]
+    [Info("RogueRustGridPower", "RogueAssassin", "1.9.3")]
     [Description("RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics, and player-facing grid events.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {
         #region Constants
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 9, 2);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 9, 3);
 
         [RoguePermission]
         private const string PermissionAdmin = "roguerustgridpower.admin";
@@ -369,6 +369,8 @@ namespace Oxide.Plugins
                 ["Command.PowerRemove"] = "{0}",
                 ["Command.ClimbInspect"] = "{0}",
                 ["Command.ClimbInspectNone"] = "No cached GRID pole was found within {0:0}m.",
+                ["Command.Target"] = "Target inspector | Name={0} | Path={1} | Position={2}. Full hierarchy written to server console.",
+                ["Command.TargetNone"] = "No world object was found under your cursor within {0:0}m.",
                 ["Grid.StateChanged"] = "Public grid state changed to {0}."
             };
 
@@ -672,6 +674,67 @@ namespace Oxide.Plugins
                 "Command.Scan",
                 context.NativePlayer,
                 _gridPower.GetPlayerInfrastructureStatus()));
+        }
+
+        [RogueCommand(
+            "rrgrid.target",
+            Aliases = new[] { "gridpower.target", "rrgrid.cursor" },
+            Description = "Inspects the exact world object under the admin cursor so RogueRust pole types can be identified without modifying native infrastructure.",
+            Usage = "rrgrid.target",
+            Category = "GridPower",
+            Permission = PermissionAdmin,
+            AllowChat = true,
+            AllowConsole = false)]
+        private RogueCommandResult CommandTarget(RogueCommandContext context)
+        {
+            BasePlayer player = context.NativePlayer;
+            if (player == null)
+                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
+
+            const float maxDistance = 250f;
+            UnityEngine.Ray ray = new UnityEngine.Ray(player.eyes.position, player.eyes.HeadForward());
+            UnityEngine.RaycastHit hit;
+            if (!UnityEngine.Physics.Raycast(ray, out hit, maxDistance, UnityEngine.Physics.DefaultRaycastLayers, UnityEngine.QueryTriggerInteraction.Collide))
+                return RogueCommandResult.Fail(Localize("Command.TargetNone", player, maxDistance));
+
+            UnityEngine.Transform target = hit.transform;
+            if (target == null)
+                return RogueCommandResult.Fail(Localize("Command.TargetNone", player, maxDistance));
+
+            // Walk the hierarchy for diagnostics only. This command never changes, tags,
+            // spawns, kills, or reclassifies Rust's native infrastructure.
+            List<UnityEngine.Transform> hierarchy = new List<UnityEngine.Transform>();
+            UnityEngine.Transform current = target;
+            int guard = 0;
+            while (current != null && guard++ < 16)
+            {
+                hierarchy.Add(current);
+                current = current.parent;
+            }
+
+            string path = BuildTransformPath(target);
+            DiagnosticPuts("[RogueRust/GridPower Target] ===== CURSOR TARGET =====");
+            DiagnosticPuts("[RogueRust/GridPower Target] Hit=" + target.name +
+                " | Path=" + path +
+                " | Position=" + hit.point +
+                " | Collider=" + (hit.collider != null ? hit.collider.GetType().Name : "<none>"));
+
+            for (int i = 0; i < hierarchy.Count; i++)
+            {
+                UnityEngine.Transform item = hierarchy[i];
+                BaseEntity entity = item.GetComponent<BaseEntity>();
+                DiagnosticPuts("[RogueRust/GridPower Target] Level=" + i +
+                    " | Name=" + item.name +
+                    " | Components=" + GetComponentTypeList(item.gameObject) +
+                    " | EntityType=" + (entity != null ? entity.GetType().Name : "<none>") +
+                    " | Prefab=" + (entity != null ? (entity.PrefabName ?? "<none>") : "<none>") +
+                    " | Position=" + item.position);
+            }
+
+            player.SendConsoleCommand("ddraw.sphere", 15f, UnityEngine.Color.cyan, hit.point, 0.25f);
+            player.SendConsoleCommand("ddraw.text", 15f, UnityEngine.Color.cyan, hit.point + UnityEngine.Vector3.up * 0.5f, target.name);
+
+            return RogueCommandResult.Ok(Localize("Command.Target", player, target.name, path, hit.point));
         }
 
         [RogueCommand(
