@@ -9,13 +9,13 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "1.9.3")]
+    [Info("RogueRustGridPower", "RogueAssassin", "1.9.4")]
     [Description("RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics, and player-facing grid events.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {
         #region Constants
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 9, 3);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 9, 4);
 
         [RoguePermission]
         private const string PermissionAdmin = "roguerustgridpower.admin";
@@ -488,7 +488,7 @@ namespace Oxide.Plugins
             // A forced infrastructure scan can therefore see our own persisted transformer
             // as native IO.  The authoritative vanilla marker is the native access spawn
             // point (powergridAccess), so normalise that self-contamination before the
-            // player-grid service consumes schema-4 references.
+            // player-grid service consumes schema-6 references.
             RepairSelfContaminatedPlayerReferences();
 
             string configured = RogueGridPowerPlayerService.Configure(
@@ -1535,7 +1535,7 @@ namespace Oxide.Plugins
         [RogueCommand(
             "rrgrid.power.inspect",
             Aliases = new[] { "gridpower.power.inspect" },
-            Description = "Inspects the nearest schema-4 GridPower pole and the current controlled power test state.",
+            Description = "Inspects the nearest schema-6 GridPower pole and the current controlled power test state.",
             Usage = "rrgrid.power.inspect",
             Category = "GridPower",
             Permission = PermissionAdmin,
@@ -1631,7 +1631,7 @@ namespace Oxide.Plugins
         }
 
         /// <summary>
-        /// Repairs a schema-4 discovery edge case caused by RogueRust's own saving
+        /// Repairs a schema-6 discovery edge case caused by RogueRust's own saving
         /// PowergridIOAccessPoint transformers being rediscovered as vanilla IO.
         /// Native vanilla poles have powergridAccess=true (native access spawn point).
         /// A pole with powergridAccess=false + ioAccessPoint=true after RogueRust has
@@ -1649,7 +1649,7 @@ namespace Oxide.Plugins
             try
             {
                 JObject doc = JObject.Parse(File.ReadAllText(path));
-                if ((doc.Value<int?>("schema") ?? 0) != 4)
+                if ((doc.Value<int?>("schema") ?? 0) != 6)
                     return 0;
 
                 JArray poles = doc["playerPoles"] as JArray;
