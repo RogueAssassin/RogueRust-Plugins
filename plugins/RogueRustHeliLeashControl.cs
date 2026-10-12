@@ -7,17 +7,17 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHeliLeashControl", "RogueAssassin", "2.1.0")]
+    [Info("RogueRustHeliLeashControl", "RogueAssassin", "2.1.3")]
     [Description("Keeps a heavily damaged Patrol Helicopter near the last valid attacker.")]
     public sealed class RogueRustHeliLeashControl : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.0";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 0);
+        private const string PluginVersion = "2.1.3";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 3);
         private const ulong ChatIconSteamId = 76561198639403056UL;
         private ConfigData _config;
         private float _maxDistanceSquared;
-        private readonly Dictionary<BaseHelicopter, LeashState> _trackedHelicopters =
-            new Dictionary<BaseHelicopter, LeashState>();
+        private readonly Dictionary<PatrolHelicopter, LeashState> _trackedHelicopters =
+            new Dictionary<PatrolHelicopter, LeashState>();
 
         private class ConfigData
         {
@@ -106,6 +106,8 @@ namespace Oxide.Plugins
         protected override void LoadConfig()
         {
             base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
             try
             {
                 Newtonsoft.Json.Linq.JObject raw = Config.ReadObject<Newtonsoft.Json.Linq.JObject>();
@@ -191,7 +193,7 @@ namespace Oxide.Plugins
                 }
 
                 Repeat(TimeSpan.FromSeconds(_config.CheckInterval),
-                    delegate { ExecuteProtected(CheckTrackedHelicopters, "LeashCheck"); },
+                    delegate { if (_trackedHelicopters.Count != 0) ExecuteProtected(CheckTrackedHelicopters, "LeashCheck"); },
                     "heli-leash-check");
                 LogInformation("Lifecycle", string.Format(
                     "Leash active below {0:0} HP with a {1:0} metre radius.",
@@ -204,15 +206,21 @@ namespace Oxide.Plugins
             _trackedHelicopters.Clear();
         }
 
-        private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
+        // The patrol helicopter is its own entity type. It is not a BaseHelicopter (that covers the
+        // player-flown ones), which is what this plugin tested for before 2.1.2 and why the leash never
+        // engaged. Oxide raises a dedicated hook when it is hit, so ordinary combat never reaches here.
+        private void OnPatrolHelicopterTakeDamage(PatrolHelicopter helicopter, HitInfo info)
         {
+            if (helicopter == null || info == null || !_config.EnableLeash)
+                return;
+
             ExecuteProtected(() =>
             {
-                if (!_config.EnableLeash || info == null || info.InitiatorPlayer == null)
+                if (info.InitiatorPlayer == null)
                     return;
 
-                BaseHelicopter helicopter = entity as BaseHelicopter;
-                if (helicopter == null || !string.Equals(helicopter.ShortPrefabName, "patrolhelicopter", StringComparison.OrdinalIgnoreCase))
+                // A RogueRustHeliCrash helicopter is flying to its crash site and must not be pulled off course.
+                if (Interface.CallHook("IsHeliCrashHelicopter", helicopter) != null)
                     return;
 
                 float projectedHealth = helicopter.Health() - info.damageTypes.Total();
@@ -230,14 +238,9 @@ namespace Oxide.Plugins
             });
         }
 
-        private void OnEntityKill(BaseNetworkable entity)
+        private void OnEntityKill(PatrolHelicopter helicopter)
         {
-            ExecuteProtected(() =>
-            {
-                BaseHelicopter helicopter = entity as BaseHelicopter;
-                if (helicopter != null)
-                    _trackedHelicopters.Remove(helicopter);
-            });
+            if (helicopter != null) _trackedHelicopters.Remove(helicopter);
         }
 
         private void CheckTrackedHelicopters()
@@ -245,16 +248,16 @@ namespace Oxide.Plugins
             if (_trackedHelicopters.Count == 0)
                 return;
 
-            List<BaseHelicopter> remove = null;
-            foreach (KeyValuePair<BaseHelicopter, LeashState> pair in _trackedHelicopters)
+            List<PatrolHelicopter> remove = null;
+            foreach (KeyValuePair<PatrolHelicopter, LeashState> pair in _trackedHelicopters)
             {
-                BaseHelicopter helicopter = pair.Key;
+                PatrolHelicopter helicopter = pair.Key;
                 BasePlayer attacker = pair.Value.Attacker;
                 if (helicopter == null || helicopter.IsDestroyed || helicopter.Health() <= 0f ||
                     attacker == null || !attacker.IsConnected || attacker.IsDead())
                 {
                     if (remove == null)
-                        remove = new List<BaseHelicopter>();
+                        remove = new List<PatrolHelicopter>();
                     remove.Add(helicopter);
                     continue;
                 }
@@ -265,7 +268,7 @@ namespace Oxide.Plugins
                 if (distanceSquared <= _maxDistanceSquared)
                     continue;
 
-                PatrolHelicopterAI helicopterAi = helicopter.GetComponent<PatrolHelicopterAI>();
+                PatrolHelicopterAI helicopterAi = helicopter.myAI;
                 if (helicopterAi == null)
                     continue;
 

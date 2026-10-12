@@ -1,24 +1,29 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Oxide.Core;
+using Oxide.Ext.RogueRust;
 using Oxide.Ext.RogueRust.Plugins;
 using Oxide.Ext.RogueRust.SDK;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "1.9.3")]
-    [Description("RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics, and player-facing grid events.")]
+    [Info("RogueRustGridPower", "RogueAssassin", "2.0.2")]
+    [Description("RogueRust GridPower: automatic world streetlights plus output control for Rust's native power-grid access points.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {
         #region Constants
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 9, 3);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 2);
+        private static readonly VersionNumber MinimumBackend = new VersionNumber(4, 4, 56);
 
         [RoguePermission]
         private const string PermissionAdmin = "roguerustgridpower.admin";
+
+        private const string LadderPrefab = "assets/prefabs/building/ladder.wall.wood/ladder.wooden.wall.prefab";
+        private static int _ladderRaycastMask = -1;
 
         #endregion
 
@@ -34,8 +39,14 @@ namespace Oxide.Plugins
             [JsonProperty("Street Lights", Order = 20)]
             public StreetLightSettings StreetLights = new StreetLightSettings();
 
-            [JsonProperty("Player Grid Power", Order = 30)]
-            public PlayerGridSettings PlayerGrid = new PlayerGridSettings();
+            [JsonProperty("Native Power Grid", Order = 30)]
+            public NativeGridSettings NativeGrid = new NativeGridSettings();
+
+            [JsonProperty("Native Pole Transformers", Order = 32)]
+            public PoleTransformerSettings PoleTransformers = new PoleTransformerSettings();
+
+            [JsonProperty("Power Pole Ladders", Order = 35)]
+            public LadderSettings Ladders = new LadderSettings();
 
             [JsonProperty("Player Notifications", Order = 40)]
             public NotificationSettings Notifications = new NotificationSettings();
@@ -74,64 +85,65 @@ namespace Oxide.Plugins
             public int SelectionSeed = 0;
         }
 
-        private sealed class PlayerGridSettings
+        private sealed class NativeGridSettings
         {
             [JsonProperty("Enabled")]
             public bool Enabled = false;
 
-            [JsonProperty("Discover Power Poles")]
-            public bool DiscoverPowerPoles = true;
+            [JsonProperty("Output Mode (Vanilla, Convars, Fixed)")]
+            public string Mode = "Convars";
 
-            [JsonProperty("Power Poles")]
-            public PowerPoleSettings PowerPoles = new PowerPoleSettings();
+            [JsonProperty("Convars: Base Output (-1 = keep server value)")]
+            public int BaseOutput = -1;
 
-            [JsonProperty("Require Vanilla Power Grid")]
-            public bool RequireVanillaPowerGrid = false;
+            [JsonProperty("Convars: Maximum Output (-1 = keep server value)")]
+            public int MaxOutput = 600;
 
+            [JsonProperty("Override Power Plant Requirement")]
+            public bool OverridePowerPlantRequirement = false;
+
+            [JsonProperty("Fixed: Output")]
+            public int FixedOutput = 100;
+
+            [JsonProperty("Only While Grid Online (follows street light hours)")]
+            public bool FixedRequiresGridOnline = false;
+
+            [JsonProperty("Respect powergrid.enabled")]
+            public bool RespectPowergridDisabled = true;
         }
 
-        private sealed class PowerPoleSettings
+        private sealed class PoleTransformerSettings
         {
             [JsonProperty("Enabled")]
             public bool Enabled = true;
 
-            [JsonProperty("Density Percent (0-100)")]
+            [JsonProperty("Density Percent (share of native poles with a transformer)")]
             public int DensityPercent = 100;
 
             [JsonProperty("Selection Seed")]
             public int SelectionSeed = 0;
 
-            [JsonProperty("Power Output")]
-            public int PowerOutput = 600;
-
-            [JsonProperty("Limit Transformer Output")]
-            public bool LimitTransformerOutput = true;
-
-            [JsonProperty("Transformer Maximum Output")]
-            public int TransformerMaximumOutput = 100;
-
-            [JsonProperty("Spawn Batch Size")]
-            public int SpawnBatchSize = 2;
-
-            [JsonProperty("Batch Interval Seconds")]
-            public float BatchIntervalSeconds = 0.25f;
-
-            [JsonProperty("Allow Wooden Ladders On Grid Power Poles")]
-            public bool AllowLaddersOnPoles = true;
-
-            [JsonProperty("Ladder Pole Detection Radius")]
-            public float LadderPoleDetectionRadius = 4f;
-
-            [JsonProperty("Show Ladder Placement GameTip")]
-            public bool ShowLadderPlacementGameTip = true;
-
-            [JsonProperty("Ladder Placement GameTip Duration Seconds")]
-            public float LadderPlacementGameTipDurationSeconds = 2.5f;
-
-            [JsonProperty("Ladder Placement Success Message")]
-            public string LadderPlacementSuccessMessage = "Ladder attached to RogueRust GridPower pole.";
+            [JsonProperty("Transformers Fitted Per Frame")]
+            public int SpawnsPerFrame = 4;
         }
 
+        private sealed class LadderSettings
+        {
+            [JsonProperty("Allow Wooden Ladders On Power Poles")]
+            public bool Enabled = true;
+
+            [JsonProperty("Pole Detection Radius")]
+            public float DetectionRadius = 4f;
+
+            [JsonProperty("Show Placement GameTip")]
+            public bool ShowGameTip = true;
+
+            [JsonProperty("Placement GameTip Duration Seconds")]
+            public float GameTipDurationSeconds = 2.5f;
+
+            [JsonProperty("Placement Success Message")]
+            public string SuccessMessage = "Ladder attached to the power pole.";
+        }
 
         private sealed class NotificationSettings
         {
@@ -157,6 +169,18 @@ namespace Oxide.Plugins
 
             [JsonProperty("Refresh Street Light Cache Minutes")]
             public float RefreshCacheMinutes = 10f;
+
+            [JsonProperty("Street Light Frame Budget Milliseconds")]
+            public double StreetlightFrameBudgetMs = 1.0d;
+
+            [JsonProperty("Street Light Fixtures Per Frame (0 = all at once)")]
+            public int StreetlightFixturesPerFrame = 12;
+
+            [JsonProperty("Native Grid Refresh Budget Milliseconds")]
+            public double NativeRefreshBudgetMs = 1.0d;
+
+            [JsonProperty("Native Grid Access Points Refreshed Per Frame")]
+            public int NativeRefreshPerFrame = 32;
         }
 
         private sealed class DeveloperSettings
@@ -177,14 +201,16 @@ namespace Oxide.Plugins
 
             try
             {
-                // Read raw JSON first. Typed deserialization populates field defaults in
-                // memory, which otherwise hides sections missing from an older config.
-                Newtonsoft.Json.Linq.JObject raw = Config.ReadObject<Newtonsoft.Json.Linq.JObject>();
+                // Read raw JSON first: typed deserialization fills defaults in memory, which would
+                // hide sections missing from an older config. Keys no longer used are dropped on save.
+                JObject raw = Config.ReadObject<JObject>();
                 bool missingSections =
                     raw == null ||
                     raw["General Settings"] == null ||
                     raw["Street Lights"] == null ||
-                    raw["Player Grid Power"] == null ||
+                    raw["Native Power Grid"] == null ||
+                    raw["Native Pole Transformers"] == null ||
+                    raw["Power Pole Ladders"] == null ||
                     raw["Player Notifications"] == null ||
                     raw["Performance Settings"] == null ||
                     raw["Developer Settings"] == null ||
@@ -197,10 +223,10 @@ namespace Oxide.Plugins
                 VersionNumber loadedVersion = _config.Version;
                 bool changed = missingSections;
                 changed |= EnsureConfigDefaults();
-                changed |= MigrateConfig(loadedVersion);
 
                 if (_config.Version != CurrentVersion)
                 {
+                    LogInformation("Configuration", "Configuration migrated from v" + loadedVersion + " to v" + CurrentVersion + ".");
                     _config.Version = CurrentVersion;
                     changed = true;
                 }
@@ -233,92 +259,97 @@ namespace Oxide.Plugins
 
             if (_config.General == null) { _config.General = new GeneralSettings(); changed = true; }
             if (_config.StreetLights == null) { _config.StreetLights = new StreetLightSettings(); changed = true; }
-            if (_config.PlayerGrid == null) { _config.PlayerGrid = new PlayerGridSettings(); changed = true; }
-            if (_config.PlayerGrid.PowerPoles == null) { _config.PlayerGrid.PowerPoles = new PowerPoleSettings(); changed = true; }
-            int poleDensity = Math.Max(0, Math.Min(100, _config.PlayerGrid.PowerPoles.DensityPercent));
-            if (poleDensity != _config.PlayerGrid.PowerPoles.DensityPercent) { _config.PlayerGrid.PowerPoles.DensityPercent = poleDensity; changed = true; }
-            int poleOutput = Math.Max(0, _config.PlayerGrid.PowerPoles.PowerOutput);
-            if (poleOutput != _config.PlayerGrid.PowerPoles.PowerOutput) { _config.PlayerGrid.PowerPoles.PowerOutput = poleOutput; changed = true; }
-            int transformerMaximumOutput = Math.Max(0, _config.PlayerGrid.PowerPoles.TransformerMaximumOutput);
-            if (transformerMaximumOutput != _config.PlayerGrid.PowerPoles.TransformerMaximumOutput) { _config.PlayerGrid.PowerPoles.TransformerMaximumOutput = transformerMaximumOutput; changed = true; }
-            int batchSize = Math.Max(1, Math.Min(2, _config.PlayerGrid.PowerPoles.SpawnBatchSize));
-            if (batchSize != _config.PlayerGrid.PowerPoles.SpawnBatchSize) { _config.PlayerGrid.PowerPoles.SpawnBatchSize = batchSize; changed = true; }
-            float ladderRadius = Math.Max(1f, Math.Min(8f, _config.PlayerGrid.PowerPoles.LadderPoleDetectionRadius));
-            if (Math.Abs(ladderRadius - _config.PlayerGrid.PowerPoles.LadderPoleDetectionRadius) > 0.001f) { _config.PlayerGrid.PowerPoles.LadderPoleDetectionRadius = ladderRadius; changed = true; }
-            float ladderTipDuration = Math.Max(1f, Math.Min(10f, _config.PlayerGrid.PowerPoles.LadderPlacementGameTipDurationSeconds));
-            if (Math.Abs(ladderTipDuration - _config.PlayerGrid.PowerPoles.LadderPlacementGameTipDurationSeconds) > 0.001f) { _config.PlayerGrid.PowerPoles.LadderPlacementGameTipDurationSeconds = ladderTipDuration; changed = true; }
-            float batchInterval = Math.Max(0.25f, _config.PlayerGrid.PowerPoles.BatchIntervalSeconds);
-            if (Math.Abs(batchInterval - _config.PlayerGrid.PowerPoles.BatchIntervalSeconds) > 0.001f) { _config.PlayerGrid.PowerPoles.BatchIntervalSeconds = batchInterval; changed = true; }
-
+            if (_config.NativeGrid == null) { _config.NativeGrid = new NativeGridSettings(); changed = true; }
+            if (_config.Ladders == null) { _config.Ladders = new LadderSettings(); changed = true; }
+            if (_config.PoleTransformers == null) { _config.PoleTransformers = new PoleTransformerSettings(); changed = true; }
+            changed |= ClampInt(ref _config.PoleTransformers.DensityPercent, 0, 100);
+            changed |= ClampInt(ref _config.PoleTransformers.SpawnsPerFrame, 1, 64);
             if (_config.Notifications == null) { _config.Notifications = new NotificationSettings(); changed = true; }
             if (_config.Performance == null) { _config.Performance = new PerformanceSettings(); changed = true; }
             if (_config.Developer == null) { _config.Developer = new DeveloperSettings(); changed = true; }
 
-            float onHour = ClampHour(_config.StreetLights.TurnOnHour);
-            if (Math.Abs(onHour - _config.StreetLights.TurnOnHour) > 0.001f)
+            RogueNativeGridMode mode;
+            if (!TryParseMode(_config.NativeGrid.Mode, out mode))
             {
-                _config.StreetLights.TurnOnHour = onHour;
+                PrintWarning("Unknown native grid output mode '" + _config.NativeGrid.Mode + "'; using Convars.");
+                mode = RogueNativeGridMode.Convars;
+            }
+            string modeName = mode.ToString();
+            if (!string.Equals(modeName, _config.NativeGrid.Mode, StringComparison.Ordinal)) { _config.NativeGrid.Mode = modeName; changed = true; }
+
+            changed |= ClampInt(ref _config.NativeGrid.BaseOutput, -1, 100000);
+            changed |= ClampInt(ref _config.NativeGrid.MaxOutput, -1, 100000);
+            changed |= ClampInt(ref _config.NativeGrid.FixedOutput, 0, 100000);
+            if (_config.NativeGrid.BaseOutput >= 0 && _config.NativeGrid.MaxOutput >= 0 && _config.NativeGrid.MaxOutput < _config.NativeGrid.BaseOutput)
+            {
+                _config.NativeGrid.MaxOutput = _config.NativeGrid.BaseOutput;
                 changed = true;
             }
 
-            float offHour = ClampHour(_config.StreetLights.TurnOffHour);
-            if (Math.Abs(offHour - _config.StreetLights.TurnOffHour) > 0.001f)
-            {
-                _config.StreetLights.TurnOffHour = offHour;
-                changed = true;
-            }
+            changed |= ClampFloat(ref _config.Ladders.DetectionRadius, 1f, 8f);
+            changed |= ClampFloat(ref _config.Ladders.GameTipDurationSeconds, 1f, 10f);
 
-            int density = Math.Max(0, Math.Min(100, _config.StreetLights.DensityPercent));
-            if (density != _config.StreetLights.DensityPercent)
-            {
-                _config.StreetLights.DensityPercent = density;
-                changed = true;
-            }
+            changed |= ClampFloat(ref _config.StreetLights.TurnOnHour, 0f, 23.99f);
+            changed |= ClampFloat(ref _config.StreetLights.TurnOffHour, 0f, 23.99f);
+            changed |= ClampInt(ref _config.StreetLights.DensityPercent, 0, 100);
 
-            float checkInterval = Math.Max(5f, _config.Performance.CheckIntervalSeconds);
-            if (Math.Abs(checkInterval - _config.Performance.CheckIntervalSeconds) > 0.001f)
-            {
-                _config.Performance.CheckIntervalSeconds = checkInterval;
-                changed = true;
-            }
+            changed |= ClampFloat(ref _config.Performance.CheckIntervalSeconds, 5f, 3600f);
+            changed |= ClampFloat(ref _config.Performance.RefreshCacheMinutes, 1f, 1440f);
+            changed |= ClampDouble(ref _config.Performance.StreetlightFrameBudgetMs, 0d, 8d);
+            changed |= ClampInt(ref _config.Performance.StreetlightFixturesPerFrame, 0, 256);
+            changed |= ClampDouble(ref _config.Performance.NativeRefreshBudgetMs, 0d, 8d);
+            changed |= ClampInt(ref _config.Performance.NativeRefreshPerFrame, 1, 512);
 
-            float refreshMinutes = Math.Max(1f, _config.Performance.RefreshCacheMinutes);
-            if (Math.Abs(refreshMinutes - _config.Performance.RefreshCacheMinutes) > 0.001f)
-            {
-                _config.Performance.RefreshCacheMinutes = refreshMinutes;
-                changed = true;
-            }
-
-            float gameTipDuration = Math.Max(1f, Math.Min(30f, _config.Notifications.DurationSeconds));
-            if (Math.Abs(gameTipDuration - _config.Notifications.DurationSeconds) > 0.001f)
-            {
-                _config.Notifications.DurationSeconds = gameTipDuration;
-                changed = true;
-            }
+            changed |= ClampFloat(ref _config.Notifications.DurationSeconds, 1f, 30f);
 
             return changed;
         }
 
-        private bool MigrateConfig(VersionNumber loadedVersion)
+        private static bool ClampInt(ref int value, int min, int max)
         {
-            if (loadedVersion == CurrentVersion)
-                return false;
-
-            // Value-preserving migration: missing v1.6.0 sections receive defaults while
-            // existing administrator values remain untouched.
-            _config.Version = CurrentVersion;
-            LogInformation("Configuration",
-                "Configuration migrated from v" + loadedVersion + " to v" + CurrentVersion + ".");
+            int clamped = Math.Max(min, Math.Min(max, value));
+            if (clamped == value) return false;
+            value = clamped;
             return true;
+        }
+
+        private static bool ClampFloat(ref float value, float min, float max)
+        {
+            float clamped = Math.Max(min, Math.Min(max, value));
+            if (Math.Abs(clamped - value) < 0.0001f) return false;
+            value = clamped;
+            return true;
+        }
+
+        private static bool ClampDouble(ref double value, double min, double max)
+        {
+            double clamped = double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value));
+            if (Math.Abs(clamped - value) < 0.0001d) return false;
+            value = clamped;
+            return true;
+        }
+
+        private static bool TryParseMode(string value, out RogueNativeGridMode mode)
+        {
+            mode = RogueNativeGridMode.Vanilla;
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            try
+            {
+                mode = (RogueNativeGridMode)Enum.Parse(typeof(RogueNativeGridMode), value.Trim(), true);
+                return Enum.IsDefined(typeof(RogueNativeGridMode), mode);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         #endregion
 
         #region Logging Policy
 
-        // Routine operational logging stays intentionally light. Detailed discovery,
-        // per-entity, inspection and recovery traces are emitted only when the
-        // Developer Settings -> Log Diagnostics switch is enabled.
+        // Routine operational logging stays light. Detailed diagnostics are emitted only when
+        // Developer Settings -> Log Diagnostics is enabled.
         private bool DiagnosticsEnabled =>
             _config != null &&
             _config.Developer != null &&
@@ -326,18 +357,14 @@ namespace Oxide.Plugins
 
         private void DiagnosticLog(string area, string message)
         {
-            if (!DiagnosticsEnabled)
-                return;
-
-            LogInformation(area, message);
+            if (DiagnosticsEnabled)
+                LogInformation(area, message);
         }
 
         private void DiagnosticPuts(string message)
         {
-            if (!DiagnosticsEnabled)
-                return;
-
-            Puts(message);
+            if (DiagnosticsEnabled)
+                Puts(message);
         }
 
         #endregion
@@ -351,24 +378,15 @@ namespace Oxide.Plugins
                 ["Error.StreetlightsDisabled"] = "Streetlight control is currently disabled.",
                 ["Error.BackendUnavailable"] = "RogueRust GridPower backend is unavailable.",
                 ["Error.PlayerOnly"] = "This command must be run by an in-game player.",
-                ["Command.Status"] = "RogueRustGridPower v{0} | Backend=RogueRust 4.1.27 | WorldHour={1:0.00} | Desired={2} | {3}",
+                ["Command.Status"] = "RogueRustGridPower v{0} | Backend=RogueRust {1} | WorldHour={2:0.00} | Desired={3} | {4}",
                 ["Command.Refresh"] = "GridPower refresh complete. Discovered={0}. {1}",
-                ["Command.Apply"] = "GridPower configuration reapplied. {0}",
+                ["Command.Apply"] = "GridPower configuration reapplied. {0} | {1}",
                 ["Command.Grid"] = "Public Grid | State={0} | Cell={1} | PoweredHere={2} | GridStateChanges={3}",
-                ["Command.Infrastructure"] = "{0}",
-                ["Command.Scan"] = "Player infrastructure scan complete. {0}",
-                ["Command.Debug"] = "GridPower debug markers drawn for 30 seconds. Poles={0} | Streetlights={1} | Substations={2} | Conflicts={3}",
-                ["Command.DebugUnavailable"] = "GridPower reference files are not available yet. Run rrgrid.scan first.",
-                ["Command.PowerProbe"] = "Nearest GRID pole probe | Distance={0:0.0}m | NearbyEntities={1} | IOEntities={2}. Details written to server console.",
-                ["Command.PowerProbeNone"] = "No discovered GRID pole was found within {0:0}m.",
-                ["Command.Inspect"] = "Infrastructure inspector complete | PoleDistance={0:0.0}m | NearbyTransforms={1} | RelevantTransforms={2} | IOEntities={3}. See server console.",
-                ["Command.InspectNone"] = "No discovered GRID pole was found within {0:0}m.",
-                ["Command.PowerTestDisabled"] = "Player Grid Power is disabled in configuration.",
-                ["Command.PowerInspect"] = "{0}",
-                ["Command.PowerTest"] = "{0}",
-                ["Command.PowerRemove"] = "{0}",
-                ["Command.ClimbInspect"] = "{0}",
-                ["Command.ClimbInspectNone"] = "No cached GRID pole was found within {0:0}m.",
+                ["Command.Native"] = "{0}",
+                ["Command.NativeRefresh"] = "Native grid re-indexed and policy reapplied. {0}",
+                ["Command.NativeInspect"] = "{0}",
+                ["Command.NativePoles"] = "{0}",
+                ["Command.Debug"] = "GridPower debug markers drawn for 30 seconds within {0:0}m. AccessPoints={1} (wired {2}) | Streetlights={3}",
                 ["Command.Target"] = "Target inspector | Name={0} | Path={1} | Position={2}. Full hierarchy written to server console.",
                 ["Command.TargetNone"] = "No world object was found under your cursor within {0:0}m.",
                 ["Grid.StateChanged"] = "Public grid state changed to {0}."
@@ -388,14 +406,12 @@ namespace Oxide.Plugins
         private Timer _startupTimer;
         private Timer _streetlightTimer;
         private Timer _refreshTimer;
-        private Timer _playerGridTimer;
         private Timer _gameTipTimer;
         private Timer _commandQueueTimer;
         private bool? _lastDesiredState;
         private bool _serverReady;
         private bool _gameTipVisible;
-        private readonly List<UnityEngine.Vector3> _ladderPoleCache = new List<UnityEngine.Vector3>();
-        private DateTime _ladderPoleCacheUtc = DateTime.MinValue;
+        private bool _nativeGridApplied;
 
         #endregion
 
@@ -403,8 +419,10 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            LogInformation("Lifecycle",
-                Name + " v" + CurrentVersion + " initialized using RogueRust services.");
+            // Only pay for OnPlayerInput (every input tick, every player) when ladders are enabled.
+            Unsubscribe(nameof(OnPlayerInput));
+
+            LogInformation("Lifecycle", Name + " v" + CurrentVersion + " initialized using RogueRust services.");
 
             try
             {
@@ -414,8 +432,7 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
-                LogError("GridPower",
-                    "RogueRust 4.1.27 GridPower backend could not be acquired: " + ex.Message);
+                LogError("GridPower", "RogueRust GridPower backend could not be acquired: " + ex.Message);
             }
         }
 
@@ -431,16 +448,16 @@ namespace Oxide.Plugins
 
             if (_gridPower == null)
             {
-                LogError("GridPower",
-                    "RogueRust GridPower backend is unavailable. Install RogueRust DLL or newer and restart the server.");
+                LogError("GridPower", "RogueRust GridPower backend is unavailable. Install RogueRust " + MinimumBackend + " or newer and restart the server.");
                 return;
             }
+
+            if (RogueRustExtension.CurrentVersion < MinimumBackend)
+                LogWarning("GridPower", "RogueRust " + RogueRustExtension.CurrentVersion + " is older than the required " + MinimumBackend + "; native grid features may be unavailable.");
 
             ApplyBackendConfiguration();
 
             // Pump RogueRust's shared cooperative command queue at a conservative rate.
-            // Heavy admin commands enqueue work and return immediately instead of creating
-            // entity/network bursts in the player's command frame.
             _commandQueueTimer?.Destroy();
             _commandQueueTimer = timer.Every(0.35f, () =>
             {
@@ -448,11 +465,10 @@ namespace Oxide.Plugins
                     RogueCommandQueueService.Pump(1);
             });
 
-            if (_config.PlayerGrid.Enabled && _config.PlayerGrid.DiscoverPowerPoles)
-                _gridPower.RefreshPlayerInfrastructure(false);
+            if (_config.Ladders.Enabled)
+                Subscribe(nameof(OnPlayerInput));
 
-            // Keep OnServerInitialized lightweight. Streetlights and player-grid
-            // population begin on the next scheduler slice and remain independent.
+            // Keep OnServerInitialized light; streetlights and native grid policy start next slice.
             _startupTimer?.Destroy();
             _startupTimer = timer.Once(0.1f, () =>
             {
@@ -465,58 +481,8 @@ namespace Oxide.Plugins
                 else
                     LogWarning("GridPower", "Streetlight control is disabled in configuration.");
 
-                StartPlayerGridController();
-            });
-        }
-
-
-        private void StartPlayerGridController()
-        {
-            _playerGridTimer?.Destroy();
-            _playerGridTimer = null;
-
-            if (_config.PlayerGrid == null || !_config.PlayerGrid.Enabled ||
-                _config.PlayerGrid.PowerPoles == null || !_config.PlayerGrid.PowerPoles.Enabled)
-            {
-                RogueGridPowerPlayerService.Configure(false, 0, 0, 0, false);
-                return;
-            }
-
-            PowerPoleSettings poles = _config.PlayerGrid.PowerPoles;
-
-            // Saving RogueRust transformers use Rust's native PowergridIOAccessPoint prefab.
-            // A forced infrastructure scan can therefore see our own persisted transformer
-            // as native IO.  The authoritative vanilla marker is the native access spawn
-            // point (powergridAccess), so normalise that self-contamination before the
-            // player-grid service consumes schema-4 references.
-            RepairSelfContaminatedPlayerReferences();
-
-            string configured = RogueGridPowerPlayerService.Configure(
-                true,
-                poles.DensityPercent,
-                poles.SelectionSeed,
-                poles.PowerOutput,
-                _config.PlayerGrid.RequireVanillaPowerGrid,
-                poles.LimitTransformerOutput,
-                poles.TransformerMaximumOutput);
-
-            DiagnosticLog("PowerPoles", configured);
-
-            string started = RogueGridPowerRecoveryService.Reconcile(false);
-            DiagnosticLog("PowerPoles", started);
-
-            _playerGridTimer = timer.Every(poles.BatchIntervalSeconds, () =>
-            {
-                if (!_serverReady || !_config.General.Enabled)
-                    return;
-
-                bool more = RogueGridPowerRecoveryService.ProcessBatch(poles.SpawnBatchSize);
-                if (more)
-                    return;
-
-                _playerGridTimer?.Destroy();
-                _playerGridTimer = null;
-                DiagnosticLog("PowerPoles", "Ready :: " + RogueGridPowerPlayerService.Status());
+                ApplyNativeGrid();
+                ApplyPoleTransformers();
             });
         }
 
@@ -527,7 +493,7 @@ namespace Oxide.Plugins
         [RogueCommand(
             "rrgrid.status",
             Aliases = new[] { "gridpower.status" },
-            Description = "Shows RogueRust GridPower streetlight status.",
+            Description = "Shows RogueRust GridPower streetlight and native grid status.",
             Usage = "rrgrid.status",
             Category = "GridPower",
             Permission = PermissionAdmin,
@@ -535,29 +501,27 @@ namespace Oxide.Plugins
             AllowConsole = true)]
         private RogueCommandResult CommandStatus(RogueCommandContext context)
         {
-            RogueCommandResult unavailable = CheckCommandAvailability();
+            RogueCommandResult unavailable = CheckBackend();
             if (unavailable != null)
                 return unavailable;
 
             float hour = GetWorldHour();
-            bool desired = IsNightWindow(
-                hour,
-                _config.StreetLights.TurnOnHour,
-                _config.StreetLights.TurnOffHour);
+            bool desired = IsNightWindow(hour, _config.StreetLights.TurnOnHour, _config.StreetLights.TurnOffHour);
 
             return RogueCommandResult.Ok(Localize(
                 "Command.Status",
                 context.NativePlayer,
                 CurrentVersion,
+                RogueRustExtension.CurrentVersion,
                 hour,
                 desired ? "ON" : "OFF",
-                _gridPower.GetStreetlightStatus()));
+                _gridPower.GetStreetlightStatus() + "\n" + _gridPower.GetNativeGridStatus() + "\n" + _gridPower.GetNativePoleTransformerStatus()));
         }
 
         [RogueCommand(
             "rrgrid.refresh",
             Aliases = new[] { "gridpower.refresh" },
-            Description = "Refreshes discovered streetlights and reapplies the current GridPower state.",
+            Description = "Rebuilds the streetlight references and reapplies the current GridPower state.",
             Usage = "rrgrid.refresh",
             Category = "GridPower",
             Permission = PermissionAdmin,
@@ -565,7 +529,7 @@ namespace Oxide.Plugins
             AllowConsole = true)]
         private RogueCommandResult CommandRefresh(RogueCommandContext context)
         {
-            RogueCommandResult unavailable = CheckCommandAvailability();
+            RogueCommandResult unavailable = CheckStreetlights();
             if (unavailable != null)
                 return unavailable;
 
@@ -574,17 +538,13 @@ namespace Oxide.Plugins
             _lastDesiredState = null;
             EvaluateStreetlights(true, false);
 
-            return RogueCommandResult.Ok(Localize(
-                "Command.Refresh",
-                context.NativePlayer,
-                discovered,
-                _gridPower.GetStreetlightStatus()));
+            return RogueCommandResult.Ok(Localize("Command.Refresh", context.NativePlayer, discovered, _gridPower.GetStreetlightStatus()));
         }
 
         [RogueCommand(
             "rrgrid.apply",
             Aliases = new[] { "gridpower.apply" },
-            Description = "Reapplies GridPower configuration and the current world-time streetlight state.",
+            Description = "Reapplies configuration: streetlight density/streaming, the current world-time streetlight state and the native grid output policy.",
             Usage = "rrgrid.apply",
             Category = "GridPower",
             Permission = PermissionAdmin,
@@ -592,24 +552,26 @@ namespace Oxide.Plugins
             AllowConsole = true)]
         private RogueCommandResult CommandApply(RogueCommandContext context)
         {
-            RogueCommandResult unavailable = CheckCommandAvailability();
+            RogueCommandResult unavailable = CheckBackend();
             if (unavailable != null)
                 return unavailable;
 
             ApplyBackendConfiguration();
-            _lastDesiredState = null;
-            EvaluateStreetlights(true, false);
+            if (_config.StreetLights.Enabled)
+            {
+                _lastDesiredState = null;
+                EvaluateStreetlights(true, false);
+            }
+            ApplyNativeGrid();
+            ApplyPoleTransformers();
 
-            return RogueCommandResult.Ok(Localize(
-                "Command.Apply",
-                context.NativePlayer,
-                _gridPower.GetStreetlightStatus()));
+            return RogueCommandResult.Ok(Localize("Command.Apply", context.NativePlayer, _gridPower.GetStreetlightStatus(), _gridPower.GetNativeGridStatus()));
         }
 
         [RogueCommand(
             "rrgrid.grid",
             Aliases = new[] { "gridpower.grid" },
-            Description = "Shows the authoritative public-grid state and the caller's backend grid cell.",
+            Description = "Shows the public-grid state and the caller's backend grid cell.",
             Usage = "rrgrid.grid",
             Category = "GridPower",
             Permission = PermissionAdmin,
@@ -617,69 +579,197 @@ namespace Oxide.Plugins
             AllowConsole = true)]
         private RogueCommandResult CommandGrid(RogueCommandContext context)
         {
-            RogueCommandResult unavailable = CheckCommandAvailability();
+            RogueCommandResult unavailable = CheckBackend();
             if (unavailable != null)
                 return unavailable;
 
             BasePlayer player = context.NativePlayer;
             UnityEngine.Vector3 position = player != null ? player.transform.position : UnityEngine.Vector3.zero;
-            string cell = _gridPower.GetGridCell(position);
-            bool powered = _gridPower.IsPowered(position);
 
             return RogueCommandResult.Ok(Localize(
                 "Command.Grid",
                 player,
                 _gridPower.GridOnline ? "ONLINE" : "OFFLINE",
-                cell,
-                powered ? "YES" : "NO",
+                _gridPower.GetGridCell(position),
+                _gridPower.IsPowered(position) ? "YES" : "NO",
                 _gridPower.GridStateChanges));
         }
 
         [RogueCommand(
-            "rrgrid.infrastructure",
-            Aliases = new[] { "gridpower.infrastructure" },
-            Description = "Shows cached player GridPower infrastructure discovery status.",
-            Usage = "rrgrid.infrastructure",
+            "rrgrid.native",
+            Aliases = new[] { "gridpower.native" },
+            Description = "Shows Rust native power-grid access points, wiring and the active output policy.",
+            Usage = "rrgrid.native",
             Category = "GridPower",
             Permission = PermissionAdmin,
             AllowChat = true,
             AllowConsole = true)]
-        private RogueCommandResult CommandInfrastructure(RogueCommandContext context)
+        private RogueCommandResult CommandNative(RogueCommandContext context)
         {
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
+            RogueCommandResult unavailable = CheckBackend();
+            if (unavailable != null)
+                return unavailable;
 
-            return RogueCommandResult.Ok(Localize(
-                "Command.Infrastructure",
-                context.NativePlayer,
-                _gridPower.GetPlayerInfrastructureStatus()));
+            return RogueCommandResult.Ok(Localize("Command.Native", context.NativePlayer, _gridPower.GetNativeGridStatus()));
         }
 
         [RogueCommand(
-            "rrgrid.scan",
-            Aliases = new[] { "gridpower.scan" },
-            Description = "Rebuilds the read-only player GridPower infrastructure reference cache.",
-            Usage = "rrgrid.scan",
+            "rrgrid.native.refresh",
+            Aliases = new[] { "gridpower.native.refresh" },
+            Description = "Re-indexes native access points and re-pushes the configured output policy in frame-budgeted batches.",
+            Usage = "rrgrid.native.refresh",
             Category = "GridPower",
             Permission = PermissionAdmin,
             AllowChat = true,
             AllowConsole = true)]
-        private RogueCommandResult CommandScan(RogueCommandContext context)
+        private RogueCommandResult CommandNativeRefresh(RogueCommandContext context)
         {
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
+            RogueCommandResult unavailable = CheckBackend();
+            if (unavailable != null)
+                return unavailable;
 
-            _gridPower.RefreshPlayerInfrastructure(true);
-            return RogueCommandResult.Ok(Localize(
-                "Command.Scan",
-                context.NativePlayer,
-                _gridPower.GetPlayerInfrastructureStatus()));
+            _gridPower.RefreshNativeAccessPoints();
+            ApplyNativeGrid();
+            return RogueCommandResult.Ok(Localize("Command.NativeRefresh", context.NativePlayer, _gridPower.GetNativeGridStatus()));
+        }
+
+        [RogueCommand(
+            "rrgrid.native.inspect",
+            Aliases = new[] { "gridpower.native.inspect" },
+            Description = "Inspects the nearest native access point: saving flag, wired slots, current energy and maximum output.",
+            Usage = "rrgrid.native.inspect",
+            Category = "GridPower",
+            Permission = PermissionAdmin,
+            AllowChat = true,
+            AllowConsole = false)]
+        private RogueCommandResult CommandNativeInspect(RogueCommandContext context)
+        {
+            RogueCommandResult unavailable = CheckBackend();
+            if (unavailable != null)
+                return unavailable;
+
+            BasePlayer player = context.NativePlayer;
+            if (player == null)
+                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
+
+            const float radius = 30f;
+            string result = _gridPower.InspectNativeAccessPoint(player.transform.position, radius);
+
+            PowergridIOAccessPoint accessPoint;
+            if (_gridPower.TryFindNearestAccessPoint(player.transform.position, radius, out accessPoint) && accessPoint != null)
+            {
+                UnityEngine.Vector3 p = accessPoint.transform.position;
+                player.SendConsoleCommand("ddraw.sphere", 20f, UnityEngine.Color.magenta, p, 0.6f);
+                player.SendConsoleCommand("ddraw.text", 20f, UnityEngine.Color.magenta, p + UnityEngine.Vector3.up, "NATIVE ACCESS POINT");
+            }
+
+            DiagnosticPuts("[RogueRust/GridPower Native] " + result);
+            return RogueCommandResult.Ok(Localize("Command.NativeInspect", player, result));
+        }
+
+        [RogueCommand(
+            "rrgrid.native.poles",
+            Aliases = new[] { "gridpower.native.poles" },
+            Description = "Shows native pole transformer fitting. Add 'apply' to re-run it with the current config (fills poles that are missing one; never adds a second).",
+            Usage = "rrgrid.native.poles [apply]",
+            Category = "GridPower",
+            Permission = PermissionAdmin,
+            AllowChat = true,
+            AllowConsole = true)]
+        private RogueCommandResult CommandNativePoles(RogueCommandContext context, string[] commandArgs)
+        {
+            RogueCommandResult unavailable = CheckBackend();
+            if (unavailable != null)
+                return unavailable;
+
+            bool apply = commandArgs != null && commandArgs.Length > 0 &&
+                         string.Equals(commandArgs[0], "apply", StringComparison.OrdinalIgnoreCase);
+            if (apply)
+                ApplyPoleTransformers();
+            return RogueCommandResult.Ok(Localize("Command.NativePoles", context.NativePlayer, _gridPower.GetNativePoleTransformerStatus()));
+        }
+
+        [RogueCommand(
+            "rrgrid.debug",
+            Aliases = new[] { "gridpower.debug" },
+            Description = "Draws temporary admin-only markers for native access points and streetlight fixtures within 200m.",
+            Usage = "rrgrid.debug",
+            Category = "GridPower",
+            Permission = PermissionAdmin,
+            AllowChat = true,
+            AllowConsole = false)]
+        private RogueCommandResult CommandDebug(RogueCommandContext context)
+        {
+            RogueCommandResult unavailable = CheckBackend();
+            if (unavailable != null)
+                return unavailable;
+
+            BasePlayer player = context.NativePlayer;
+            if (player == null)
+                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
+
+            const float radius = 200f;
+            const float duration = 30f;
+            float radiusSqr = radius * radius;
+            UnityEngine.Vector3 origin = player.transform.position;
+            int accessPoints = 0;
+            int wired = 0;
+            int streetlights = 0;
+
+            try
+            {
+                // Admin-only, on demand: a typed lookup of ~1k access points is cheap.
+                PowergridIOAccessPoint[] found = UnityEngine.Object.FindObjectsByType<PowergridIOAccessPoint>(UnityEngine.FindObjectsSortMode.None);
+                for (int i = 0; i < found.Length; i++)
+                {
+                    PowergridIOAccessPoint ap = found[i];
+                    if (ap == null || ap.IsDestroyed)
+                        continue;
+
+                    UnityEngine.Vector3 pos = ap.transform.position;
+                    if ((pos - origin).sqrMagnitude > radiusSqr)
+                        continue;
+
+                    bool isWired = IsWired(ap);
+                    if (isWired) wired++;
+                    accessPoints++;
+                    DrawDebugMarker(player, pos, isWired ? UnityEngine.Color.green : UnityEngine.Color.cyan, isWired ? "ACCESS POINT (WIRED)" : "ACCESS POINT", duration);
+                }
+
+                string streetlightPath = _gridPower.ReferenceFilePath;
+                if (File.Exists(streetlightPath))
+                {
+                    JArray fixtures = JObject.Parse(File.ReadAllText(streetlightPath))["streetlights"] as JArray;
+                    if (fixtures != null)
+                    {
+                        foreach (JToken entry in fixtures)
+                        {
+                            UnityEngine.Vector3 pos = new UnityEngine.Vector3(
+                                entry.Value<float?>("x") ?? 0f,
+                                entry.Value<float?>("y") ?? 0f,
+                                entry.Value<float?>("z") ?? 0f);
+                            if ((pos - origin).sqrMagnitude > radiusSqr)
+                                continue;
+
+                            DrawDebugMarker(player, pos, UnityEngine.Color.yellow, "STREETLIGHT", duration);
+                            streetlights++;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PrintError("GridPower debug visualization failed: " + ex.Message);
+                return RogueCommandResult.Fail("GridPower debug visualization failed. Check the server console.");
+            }
+
+            return RogueCommandResult.Ok(Localize("Command.Debug", player, radius, accessPoints, wired, streetlights));
         }
 
         [RogueCommand(
             "rrgrid.target",
             Aliases = new[] { "gridpower.target", "rrgrid.cursor" },
-            Description = "Inspects the exact world object under the admin cursor so RogueRust pole types can be identified without modifying native infrastructure.",
+            Description = "Inspects the exact world object under the admin cursor without modifying it.",
             Usage = "rrgrid.target",
             Category = "GridPower",
             Permission = PermissionAdmin,
@@ -694,738 +784,34 @@ namespace Oxide.Plugins
             const float maxDistance = 250f;
             UnityEngine.Ray ray = new UnityEngine.Ray(player.eyes.position, player.eyes.HeadForward());
             UnityEngine.RaycastHit hit;
-            if (!UnityEngine.Physics.Raycast(ray, out hit, maxDistance, UnityEngine.Physics.DefaultRaycastLayers, UnityEngine.QueryTriggerInteraction.Collide))
+            if (!UnityEngine.Physics.Raycast(ray, out hit, maxDistance, UnityEngine.Physics.DefaultRaycastLayers, UnityEngine.QueryTriggerInteraction.Collide) || hit.transform == null)
                 return RogueCommandResult.Fail(Localize("Command.TargetNone", player, maxDistance));
 
             UnityEngine.Transform target = hit.transform;
-            if (target == null)
-                return RogueCommandResult.Fail(Localize("Command.TargetNone", player, maxDistance));
-
-            // Walk the hierarchy for diagnostics only. This command never changes, tags,
-            // spawns, kills, or reclassifies Rust's native infrastructure.
-            List<UnityEngine.Transform> hierarchy = new List<UnityEngine.Transform>();
-            UnityEngine.Transform current = target;
-            int guard = 0;
-            while (current != null && guard++ < 16)
-            {
-                hierarchy.Add(current);
-                current = current.parent;
-            }
-
             string path = BuildTransformPath(target);
             DiagnosticPuts("[RogueRust/GridPower Target] ===== CURSOR TARGET =====");
-            DiagnosticPuts("[RogueRust/GridPower Target] Hit=" + target.name +
-                " | Path=" + path +
-                " | Position=" + hit.point +
-                " | Collider=" + (hit.collider != null ? hit.collider.GetType().Name : "<none>"));
+            DiagnosticPuts("[RogueRust/GridPower Target] Hit=" + target.name + " | Path=" + path + " | Position=" + hit.point +
+                           " | Collider=" + (hit.collider != null ? hit.collider.GetType().Name : "<none>"));
 
-            for (int i = 0; i < hierarchy.Count; i++)
+            UnityEngine.Transform current = target;
+            int level = 0;
+            while (current != null && level < 16)
             {
-                UnityEngine.Transform item = hierarchy[i];
-                BaseEntity entity = item.GetComponent<BaseEntity>();
-                DiagnosticPuts("[RogueRust/GridPower Target] Level=" + i +
-                    " | Name=" + item.name +
-                    " | Components=" + GetComponentTypeList(item.gameObject) +
-                    " | EntityType=" + (entity != null ? entity.GetType().Name : "<none>") +
-                    " | Prefab=" + (entity != null ? (entity.PrefabName ?? "<none>") : "<none>") +
-                    " | Position=" + item.position);
+                BaseEntity entity = current.GetComponent<BaseEntity>();
+                DiagnosticPuts("[RogueRust/GridPower Target] Level=" + level +
+                               " | Name=" + current.name +
+                               " | Components=" + GetComponentTypeList(current.gameObject) +
+                               " | EntityType=" + (entity != null ? entity.GetType().Name : "<none>") +
+                               " | Prefab=" + (entity != null ? (entity.PrefabName ?? "<none>") : "<none>") +
+                               " | Position=" + current.position);
+                current = current.parent;
+                level++;
             }
 
             player.SendConsoleCommand("ddraw.sphere", 15f, UnityEngine.Color.cyan, hit.point, 0.25f);
             player.SendConsoleCommand("ddraw.text", 15f, UnityEngine.Color.cyan, hit.point + UnityEngine.Vector3.up * 0.5f, target.name);
 
             return RogueCommandResult.Ok(Localize("Command.Target", player, target.name, path, hit.point));
-        }
-
-        [RogueCommand(
-            "rrgrid.debug",
-            Aliases = new[] { "gridpower.debug" },
-            Description = "Draws temporary admin-only GridPower discovery markers within 200m.",
-            Usage = "rrgrid.debug",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandDebug(RogueCommandContext context)
-        {
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-
-            BasePlayer player = context.NativePlayer;
-            if (player == null)
-                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
-
-            string playerPath = _gridPower.PlayerReferenceFilePath;
-            string streetlightPath = _gridPower.ReferenceFilePath;
-
-            if (!File.Exists(playerPath) || !File.Exists(streetlightPath))
-                return RogueCommandResult.Fail(Localize("Command.DebugUnavailable", player));
-
-            try
-            {
-                JObject playerDoc = JObject.Parse(File.ReadAllText(playerPath));
-                JObject streetlightDoc = JObject.Parse(File.ReadAllText(streetlightPath));
-
-                List<UnityEngine.Vector3> streetlights = ReadDebugPositions(streetlightDoc["streetlights"]);
-                List<UnityEngine.Vector3> poles = ReadDebugPositions(playerDoc["playerPoles"]);
-                List<UnityEngine.Vector3> substations = ReadDebugPositions(playerDoc["substations"]);
-
-                const float radius = 200f;
-                const float duration = 30f;
-                float radiusSqr = radius * radius;
-                int drawnPoles = 0;
-                int drawnStreetlights = 0;
-                int drawnSubstations = 0;
-                int conflicts = 0;
-
-                UnityEngine.Vector3 origin = player.transform.position;
-
-                for (int i = 0; i < poles.Count; i++)
-                {
-                    UnityEngine.Vector3 pos = poles[i];
-                    if ((pos - origin).sqrMagnitude > radiusSqr)
-                        continue;
-
-                    bool conflict = IsNearAny(pos, streetlights, 4f);
-                    if (conflict)
-                        conflicts++;
-
-                    DrawDebugMarker(
-                        player,
-                        pos,
-                        conflict ? UnityEngine.Color.red : UnityEngine.Color.cyan,
-                        conflict ? "GRID POLE - CONFLICT" : "GRID POLE");
-                    drawnPoles++;
-                }
-
-                for (int i = 0; i < streetlights.Count; i++)
-                {
-                    UnityEngine.Vector3 pos = streetlights[i];
-                    if ((pos - origin).sqrMagnitude > radiusSqr)
-                        continue;
-
-                    DrawDebugMarker(player, pos, UnityEngine.Color.yellow, "STREETLIGHT - EXCLUDED");
-                    drawnStreetlights++;
-                }
-
-                for (int i = 0; i < substations.Count; i++)
-                {
-                    UnityEngine.Vector3 pos = substations[i];
-                    if ((pos - origin).sqrMagnitude > radiusSqr)
-                        continue;
-
-                    DrawDebugMarker(player, pos, UnityEngine.Color.green, "SUBSTATION");
-                    drawnSubstations++;
-                }
-
-                return RogueCommandResult.Ok(Localize(
-                    "Command.Debug",
-                    player,
-                    drawnPoles,
-                    drawnStreetlights,
-                    drawnSubstations,
-                    conflicts));
-            }
-            catch (Exception ex)
-            {
-                PrintError("GridPower debug visualization failed: " + ex.Message);
-                return RogueCommandResult.Fail("GridPower debug visualization failed. Check the server console.");
-            }
-        }
-
-        private static List<UnityEngine.Vector3> ReadDebugPositions(JToken token)
-        {
-            List<UnityEngine.Vector3> result = new List<UnityEngine.Vector3>();
-            JArray array = token as JArray;
-            if (array == null)
-                return result;
-
-            foreach (JToken entry in array)
-            {
-                float x = entry.Value<float?>("x") ?? 0f;
-                float y = entry.Value<float?>("y") ?? 0f;
-                float z = entry.Value<float?>("z") ?? 0f;
-                result.Add(new UnityEngine.Vector3(x, y, z));
-            }
-
-            return result;
-        }
-
-        private static bool IsNearAny(
-            UnityEngine.Vector3 position,
-            List<UnityEngine.Vector3> references,
-            float radius)
-        {
-            float radiusSqr = radius * radius;
-
-            for (int i = 0; i < references.Count; i++)
-            {
-                UnityEngine.Vector3 delta = references[i] - position;
-                delta.y = 0f;
-                if (delta.sqrMagnitude <= radiusSqr)
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static void DrawDebugMarker(
-            BasePlayer player,
-            UnityEngine.Vector3 position,
-            UnityEngine.Color color,
-            string label)
-        {
-            UnityEngine.Vector3 marker = position + UnityEngine.Vector3.up * 2f;
-            player.SendConsoleCommand("ddraw.sphere", 30f, color, marker, 0.45f);
-            player.SendConsoleCommand("ddraw.text", 30f, color, marker + UnityEngine.Vector3.up * 0.75f, label);
-        }
-
-        [RogueCommand(
-            "rrgrid.powerprobe",
-            Aliases = new[] { "gridpower.powerprobe" },
-            Description = "Inspects the nearest discovered GRID pole for existing vanilla/networked electrical entities without changing anything.",
-            Usage = "rrgrid.powerprobe",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandPowerProbe(RogueCommandContext context)
-        {
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-
-            BasePlayer player = context.NativePlayer;
-            if (player == null)
-                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
-
-            string playerPath = _gridPower.PlayerReferenceFilePath;
-            if (!File.Exists(playerPath))
-                return RogueCommandResult.Fail(Localize("Command.DebugUnavailable", player));
-
-            try
-            {
-                JObject playerDoc = JObject.Parse(File.ReadAllText(playerPath));
-                List<UnityEngine.Vector3> poles = ReadDebugPositions(playerDoc["playerPoles"]);
-                UnityEngine.Vector3 origin = player.transform.position;
-
-                const float maxPoleDistance = 75f;
-                float bestSqr = maxPoleDistance * maxPoleDistance;
-                UnityEngine.Vector3 nearest = UnityEngine.Vector3.zero;
-                bool found = false;
-
-                for (int i = 0; i < poles.Count; i++)
-                {
-                    float sqr = (poles[i] - origin).sqrMagnitude;
-                    if (sqr >= bestSqr)
-                        continue;
-
-                    bestSqr = sqr;
-                    nearest = poles[i];
-                    found = true;
-                }
-
-                if (!found)
-                    return RogueCommandResult.Fail(Localize("Command.PowerProbeNone", player, maxPoleDistance));
-
-                const float probeRadius = 18f;
-                UnityEngine.Collider[] colliders = UnityEngine.Physics.OverlapSphere(
-                    nearest,
-                    probeRadius,
-                    UnityEngine.Physics.AllLayers,
-                    UnityEngine.QueryTriggerInteraction.Collide);
-
-                HashSet<BaseEntity> entities = new HashSet<BaseEntity>();
-                int ioCount = 0;
-
-                for (int i = 0; i < colliders.Length; i++)
-                {
-                    UnityEngine.Collider collider = colliders[i];
-                    if (collider == null)
-                        continue;
-
-                    BaseEntity entity = collider.GetComponentInParent<BaseEntity>();
-                    if (entity == null || entity.IsDestroyed || !entities.Add(entity))
-                        continue;
-
-                    IOEntity io = entity as IOEntity;
-                    if (io != null)
-                        ioCount++;
-
-                    string prefab = entity.PrefabName ?? string.Empty;
-                    string type = entity.GetType().Name;
-                    float distance = UnityEngine.Vector3.Distance(nearest, entity.transform.position);
-
-                    DiagnosticPuts(
-                        "[RogueRust/GridPower Probe] " +
-                        "Pole=" + nearest +
-                        " | Entity=" + type +
-                        " | Prefab=" + prefab +
-                        " | Distance=" + distance.ToString("0.00") + "m" +
-                        " | IO=" + (io != null ? "YES" : "NO"));
-
-                    player.SendConsoleCommand(
-                        "ddraw.text",
-                        20f,
-                        io != null ? UnityEngine.Color.green : UnityEngine.Color.white,
-                        entity.transform.position + UnityEngine.Vector3.up * 1.0f,
-                        io != null ? "IO: " + type : type);
-                }
-
-                player.SendConsoleCommand(
-                    "ddraw.sphere",
-                    20f,
-                    UnityEngine.Color.magenta,
-                    nearest,
-                    1.25f);
-
-                player.SendConsoleCommand(
-                    "ddraw.text",
-                    20f,
-                    UnityEngine.Color.magenta,
-                    nearest + UnityEngine.Vector3.up * 2.5f,
-                    "GRID POWER PROBE");
-
-                return RogueCommandResult.Ok(Localize(
-                    "Command.PowerProbe",
-                    player,
-                    UnityEngine.Mathf.Sqrt(bestSqr),
-                    entities.Count,
-                    ioCount));
-            }
-            catch (Exception ex)
-            {
-                PrintError("GridPower pole probe failed: " + ex);
-                return RogueCommandResult.Fail("GridPower pole probe failed. Check the server console.");
-            }
-        }
-
-        [RogueCommand(
-            "rrgrid.inspect",
-            Aliases = new[] { "gridpower.inspect" },
-            Description = "Inspects the nearest cached GRID pole's static transform hierarchy and relevant electrical components.",
-            Usage = "rrgrid.inspect",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandInspect(RogueCommandContext context)
-        {
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-
-            BasePlayer player = context.NativePlayer;
-            if (player == null)
-                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
-
-            string playerPath = _gridPower.PlayerReferenceFilePath;
-            if (!File.Exists(playerPath))
-                return RogueCommandResult.Fail(Localize("Command.DebugUnavailable", player));
-
-            try
-            {
-                JObject playerDoc = JObject.Parse(File.ReadAllText(playerPath));
-                List<UnityEngine.Vector3> poles = ReadDebugPositions(playerDoc["playerPoles"]);
-                UnityEngine.Vector3 origin = player.transform.position;
-
-                const float maxPoleDistance = 75f;
-                float bestSqr = maxPoleDistance * maxPoleDistance;
-                UnityEngine.Vector3 nearest = UnityEngine.Vector3.zero;
-                bool found = false;
-
-                for (int i = 0; i < poles.Count; i++)
-                {
-                    float sqr = (poles[i] - origin).sqrMagnitude;
-                    if (sqr >= bestSqr)
-                        continue;
-
-                    bestSqr = sqr;
-                    nearest = poles[i];
-                    found = true;
-                }
-
-                if (!found)
-                    return RogueCommandResult.Fail(Localize("Command.InspectNone", player, maxPoleDistance));
-
-                const float transformRadius = 14f;
-                float transformRadiusSqr = transformRadius * transformRadius;
-                UnityEngine.Transform[] transforms = UnityEngine.Resources.FindObjectsOfTypeAll<UnityEngine.Transform>();
-                int nearbyTransforms = 0;
-                int relevantTransforms = 0;
-
-                DiagnosticPuts("[RogueRust/GridPower Inspect] ===== BEGIN =====");
-                DiagnosticPuts("[RogueRust/GridPower Inspect] Pole=" + nearest +
-                     " | PlayerDistance=" + UnityEngine.Mathf.Sqrt(bestSqr).ToString("0.00") + "m");
-
-                for (int i = 0; i < transforms.Length; i++)
-                {
-                    UnityEngine.Transform t = transforms[i];
-                    if (t == null || !t.gameObject.scene.IsValid() || !t.gameObject.scene.isLoaded)
-                        continue;
-
-                    UnityEngine.Vector3 delta = t.position - nearest;
-                    if (delta.sqrMagnitude > transformRadiusSqr)
-                        continue;
-
-                    nearbyTransforms++;
-
-                    string name = t.name ?? string.Empty;
-                    string parentName = t.parent != null ? (t.parent.name ?? string.Empty) : "<none>";
-                    if (!IsRelevantInfrastructureName(name) && !IsRelevantInfrastructureName(parentName))
-                        continue;
-
-                    relevantTransforms++;
-                    string rootName = t.root != null ? (t.root.name ?? string.Empty) : "<none>";
-                    string path = BuildTransformPath(t);
-                    string components = GetComponentTypeList(t.gameObject);
-
-                    DiagnosticPuts("[RogueRust/GridPower Inspect] Transform" +
-                         " | Distance=" + delta.magnitude.ToString("0.00") + "m" +
-                         " | Name=" + name +
-                         " | Parent=" + parentName +
-                         " | Root=" + rootName +
-                         " | Path=" + path +
-                         " | Components=" + components);
-
-                    player.SendConsoleCommand(
-                        "ddraw.text",
-                        25f,
-                        UnityEngine.Color.yellow,
-                        t.position + UnityEngine.Vector3.up * 0.35f,
-                        name);
-                }
-
-                // Secondary networked-entity check: only report IO or infrastructure-related
-                // entities, avoiding the tree/junk/loot noise from the original probe.
-                UnityEngine.Collider[] colliders = UnityEngine.Physics.OverlapSphere(
-                    nearest,
-                    18f,
-                    UnityEngine.Physics.AllLayers,
-                    UnityEngine.QueryTriggerInteraction.Collide);
-
-                HashSet<BaseEntity> entities = new HashSet<BaseEntity>();
-                int ioCount = 0;
-
-                for (int i = 0; i < colliders.Length; i++)
-                {
-                    UnityEngine.Collider collider = colliders[i];
-                    if (collider == null)
-                        continue;
-
-                    BaseEntity entity = collider.GetComponentInParent<BaseEntity>();
-                    if (entity == null || entity.IsDestroyed || !entities.Add(entity))
-                        continue;
-
-                    IOEntity io = entity as IOEntity;
-                    string prefab = entity.PrefabName ?? string.Empty;
-                    string type = entity.GetType().Name;
-
-                    if (io == null &&
-                        !IsRelevantInfrastructureName(prefab) &&
-                        !IsRelevantInfrastructureName(type))
-                        continue;
-
-                    if (io != null)
-                        ioCount++;
-
-                    float distance = UnityEngine.Vector3.Distance(nearest, entity.transform.position);
-                    DiagnosticPuts("[RogueRust/GridPower Inspect] Entity" +
-                         " | Distance=" + distance.ToString("0.00") + "m" +
-                         " | Type=" + type +
-                         " | Prefab=" + prefab +
-                         " | IO=" + (io != null ? "YES" : "NO"));
-                }
-
-                player.SendConsoleCommand(
-                    "ddraw.sphere",
-                    25f,
-                    UnityEngine.Color.magenta,
-                    nearest,
-                    1.25f);
-                player.SendConsoleCommand(
-                    "ddraw.text",
-                    25f,
-                    UnityEngine.Color.magenta,
-                    nearest + UnityEngine.Vector3.up * 2.5f,
-                    "GRID INFRASTRUCTURE INSPECT");
-
-                DiagnosticPuts("[RogueRust/GridPower Inspect] Summary" +
-                     " | NearbyTransforms=" + nearbyTransforms +
-                     " | RelevantTransforms=" + relevantTransforms +
-                     " | IOEntities=" + ioCount);
-                DiagnosticPuts("[RogueRust/GridPower Inspect] ===== END =====");
-
-                return RogueCommandResult.Ok(Localize(
-                    "Command.Inspect",
-                    player,
-                    UnityEngine.Mathf.Sqrt(bestSqr),
-                    nearbyTransforms,
-                    relevantTransforms,
-                    ioCount));
-            }
-            catch (Exception ex)
-            {
-                PrintError("GridPower infrastructure inspector failed: " + ex);
-                return RogueCommandResult.Fail("GridPower infrastructure inspector failed. Check the server console.");
-            }
-        }
-
-        private static bool IsRelevantInfrastructureName(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return false;
-
-            string n = value.ToLowerInvariant();
-            return n.Contains("power") ||
-                   n.Contains("pole") ||
-                   n.Contains("transform") ||
-                   n.Contains("electric") ||
-                   n.Contains("socket") ||
-                   n.Contains("output") ||
-                   n.Contains("root") ||
-                   n.Contains("switch") ||
-                   n.Contains("substation") ||
-                   n.Contains("fuse");
-        }
-
-        private static string BuildTransformPath(UnityEngine.Transform transform)
-        {
-            if (transform == null)
-                return "<null>";
-
-            List<string> parts = new List<string>();
-            UnityEngine.Transform current = transform;
-            int guard = 0;
-
-            while (current != null && guard++ < 16)
-            {
-                parts.Add(current.name ?? "<unnamed>");
-                current = current.parent;
-            }
-
-            parts.Reverse();
-            return string.Join("/", parts.ToArray());
-        }
-
-        private static string GetComponentTypeList(UnityEngine.GameObject gameObject)
-        {
-            if (gameObject == null)
-                return "<none>";
-
-            UnityEngine.Component[] components = gameObject.GetComponents<UnityEngine.Component>();
-            List<string> names = new List<string>();
-
-            for (int i = 0; i < components.Length; i++)
-            {
-                UnityEngine.Component component = components[i];
-                if (component == null)
-                    continue;
-
-                string name = component.GetType().Name;
-                if (!names.Contains(name))
-                    names.Add(name);
-            }
-
-            return names.Count > 0 ? string.Join(",", names.ToArray()) : "<none>";
-        }
-
-        [RogueCommand(
-            "rrgrid.climb.inspect",
-            Aliases = new[] { "gridpower.climb.inspect" },
-            Description = "Inspects the nearest cached GRID pole for Rust native climb-ladder components without changing the world.",
-            Usage = "rrgrid.climb.inspect",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandClimbInspect(RogueCommandContext context)
-        {
-            if (!_config.General.Enabled)
-                return RogueCommandResult.Fail(Message("Error.PluginDisabled"));
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-
-            BasePlayer player = context.NativePlayer;
-            if (player == null)
-                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
-
-            string playerPath = _gridPower.PlayerReferenceFilePath;
-            if (!File.Exists(playerPath))
-                return RogueCommandResult.Fail(Localize("Command.DebugUnavailable", player));
-
-            try
-            {
-                JObject playerDoc = JObject.Parse(File.ReadAllText(playerPath));
-                List<UnityEngine.Vector3> poles = ReadDebugPositions(playerDoc["playerPoles"]);
-                UnityEngine.Vector3 origin = player.transform.position;
-
-                const float maxPoleDistance = 75f;
-                float bestSqr = maxPoleDistance * maxPoleDistance;
-                UnityEngine.Vector3 nearest = UnityEngine.Vector3.zero;
-                bool found = false;
-
-                for (int i = 0; i < poles.Count; i++)
-                {
-                    float sqr = (poles[i] - origin).sqrMagnitude;
-                    if (sqr >= bestSqr)
-                        continue;
-
-                    bestSqr = sqr;
-                    nearest = poles[i];
-                    found = true;
-                }
-
-                if (!found)
-                    return RogueCommandResult.Fail(Localize("Command.ClimbInspectNone", player, maxPoleDistance));
-
-                const float transformRadius = 8f;
-                float transformRadiusSqr = transformRadius * transformRadius;
-                UnityEngine.Transform[] transforms = UnityEngine.Resources.FindObjectsOfTypeAll<UnityEngine.Transform>();
-                int ladderObjects = 0;
-                int triggerLadders = 0;
-                int colliders = 0;
-
-                DiagnosticPuts("[RogueRust/GridPower Climb] ===== BEGIN =====");
-                DiagnosticPuts("[RogueRust/GridPower Climb] Pole=" + nearest +
-                     " | PlayerDistance=" + UnityEngine.Mathf.Sqrt(bestSqr).ToString("0.00") + "m");
-
-                for (int i = 0; i < transforms.Length; i++)
-                {
-                    UnityEngine.Transform t = transforms[i];
-                    if (t == null || !t.gameObject.scene.IsValid() || !t.gameObject.scene.isLoaded)
-                        continue;
-
-                    UnityEngine.Vector3 delta = t.position - nearest;
-                    if (delta.sqrMagnitude > transformRadiusSqr)
-                        continue;
-
-                    string name = t.name ?? string.Empty;
-                    string parentName = t.parent != null ? (t.parent.name ?? string.Empty) : "<none>";
-                    string components = GetComponentTypeList(t.gameObject);
-                    bool ladderNamed =
-                        name.IndexOf("ladder", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        parentName.IndexOf("ladder", StringComparison.OrdinalIgnoreCase) >= 0;
-                    bool hasTriggerLadder = components.IndexOf("TriggerLadder", StringComparison.OrdinalIgnoreCase) >= 0;
-                    bool hasCollider = components.IndexOf("Collider", StringComparison.OrdinalIgnoreCase) >= 0;
-
-                    if (!ladderNamed && !hasTriggerLadder)
-                        continue;
-
-                    ladderObjects++;
-                    if (hasTriggerLadder) triggerLadders++;
-                    if (hasCollider) colliders++;
-
-                    DiagnosticPuts("[RogueRust/GridPower Climb] Transform" +
-                         " | Name=" + name +
-                         " | Parent=" + parentName +
-                         " | Root=" + (t.root != null ? (t.root.name ?? "<none>") : "<none>") +
-                         " | ActiveSelf=" + t.gameObject.activeSelf +
-                         " | ActiveHierarchy=" + t.gameObject.activeInHierarchy +
-                         " | Components=" + components +
-                         " | Path=" + BuildTransformPath(t));
-                }
-
-                DiagnosticPuts("[RogueRust/GridPower Climb] Summary" +
-                     " | LadderObjects=" + ladderObjects +
-                     " | TriggerLadders=" + triggerLadders +
-                     " | Colliders=" + colliders);
-                DiagnosticPuts("[RogueRust/GridPower Climb] ===== END =====");
-
-                string summary =
-                    "Climb inspect | PoleDistance=" + UnityEngine.Mathf.Sqrt(bestSqr).ToString("0.0") + "m" +
-                    " | LadderObjects=" + ladderObjects +
-                    " | TriggerLadders=" + triggerLadders +
-                    " | Colliders=" + colliders +
-                    ". Details written to server console.";
-
-                return RogueCommandResult.Ok(Localize("Command.ClimbInspect", player, summary));
-            }
-            catch (Exception ex)
-            {
-                PrintError("GridPower climb inspector failed: " + ex);
-                return RogueCommandResult.Fail("GridPower climb inspector failed. Check the server console.");
-            }
-        }
-
-        [RogueCommand(
-            "rrgrid.climb.test",
-            Aliases = new[] { "gridpower.climb.test" },
-            Description = "Creates one temporary non-networked native TriggerLadder test on the nearest power access point.",
-            Usage = "rrgrid.climb.test",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandClimbTest(RogueCommandContext context)
-        {
-            if (!_config.General.Enabled)
-                return RogueCommandResult.Fail(Message("Error.PluginDisabled"));
-            BasePlayer player = context.NativePlayer;
-            if (player == null)
-                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
-
-            string result = RogueGridPowerClimbService.CreateTest(player.transform.position);
-            DiagnosticPuts("[RogueRust/GridPower Climb] " + result);
-            return result.IndexOf("FAILED", StringComparison.OrdinalIgnoreCase) >= 0
-                ? RogueCommandResult.Fail(result)
-                : RogueCommandResult.Ok(result);
-        }
-
-        [RogueCommand(
-            "rrgrid.climb.teststatus",
-            Aliases = new[] { "gridpower.climb.teststatus" },
-            Description = "Shows the temporary native climbing test state on the nearest power access point.",
-            Usage = "rrgrid.climb.teststatus",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandClimbTestStatus(RogueCommandContext context)
-        {
-            BasePlayer player = context.NativePlayer;
-            if (player == null)
-                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
-            string result = RogueGridPowerClimbService.Inspect(player.transform.position);
-            DiagnosticPuts("[RogueRust/GridPower Climb] " + result);
-            return RogueCommandResult.Ok(result);
-        }
-
-        [RogueCommand(
-            "rrgrid.climb.remove",
-            Aliases = new[] { "gridpower.climb.remove" },
-            Description = "Removes the temporary native climbing test from the nearest power access point.",
-            Usage = "rrgrid.climb.remove",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandClimbRemove(RogueCommandContext context)
-        {
-            BasePlayer player = context.NativePlayer;
-            if (player == null)
-                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
-            string result = RogueGridPowerClimbService.RemoveNearest(player.transform.position);
-            DiagnosticPuts("[RogueRust/GridPower Climb] " + result);
-            return RogueCommandResult.Ok(result);
-        }
-
-        [RogueCommand(
-            "rrgrid.playergrid",
-            Aliases = new[] { "gridpower.playergrid" },
-            Description = "Shows the RogueRust player power-pole backend status.",
-            Usage = "rrgrid.playergrid",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = true)]
-        private RogueCommandResult CommandPlayerGridStatus(RogueCommandContext context)
-        {
-            if (!_config.General.Enabled)
-                return RogueCommandResult.Fail(Message("Error.PluginDisabled"));
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-            string status = RogueGridPowerPlayerService.Status();
-            DiagnosticPuts("[RogueRust/GridPower] Player grid status :: " + status);
-            return RogueCommandResult.Ok(status);
         }
 
         [RogueCommand(
@@ -1440,273 +826,43 @@ namespace Oxide.Plugins
         private RogueCommandResult CommandGridHelp(RogueCommandContext context)
         {
             string help =
-                "RogueRustGridPower v1.9.2 commands\n" +
-                "rrgrid.apply\nrrgrid.climb.inspect\nrrgrid.climb.remove\nrrgrid.climb.test\nrrgrid.climb.teststatus\nrrgrid.debug\nrrgrid.grid\nrrgrid.help\nrrgrid.infrastructure\nrrgrid.inspect\nrrgrid.playergrid\nrrgrid.power.inspect\nrrgrid.power.remove\nrrgrid.power.test\nrrgrid.powerprobe\nrrgrid.rebuild\nrrgrid.rebuild.status\nrrgrid.refresh\nrrgrid.scan\nrrgrid.status\n" +
-                "Chat: /rrgrid ... | F1/server/RCON: rrgrid....\n" +
-                "Nearest/inspect commands require an in-game player position.";
-            DiagnosticPuts("[RogueRust/GridPower Help]\n" + help);
+                "RogueRustGridPower v" + CurrentVersion + " commands\n" +
+                "rrgrid.status - streetlight + native grid status\n" +
+                "rrgrid.apply - reapply configuration\n" +
+                "rrgrid.refresh - rebuild streetlight references\n" +
+                "rrgrid.grid - public grid state at your position\n" +
+                "rrgrid.native - native access points, wiring, output policy\n" +
+                "rrgrid.native.refresh - re-index and re-push output\n" +
+                "rrgrid.native.inspect - nearest access point details (in-game)\n" +
+                "rrgrid.native.poles [apply] - transformers on native poles (density, fill missing)\n" +
+                "rrgrid.debug - markers within 200m (in-game)\n" +
+                "rrgrid.target - inspect the object under your cursor (in-game)\n" +
+                "Chat: /rrgrid ... | F1/server/RCON: rrgrid....";
             return RogueCommandResult.Ok(help);
         }
 
-
-        [RogueCommand(
-            "rrgrid.rebuild",
-            Aliases = new[] { "gridpower.rebuild" },
-            Description = "Safely rebuilds player GridPower references and reconciles saved transformers using the DLL recovery pipeline.",
-            Usage = "rrgrid.rebuild",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = true)]
-        private RogueCommandResult CommandRebuild(RogueCommandContext context)
-        {
-            if (!_config.General.Enabled)
-                return RogueCommandResult.Fail(Message("Error.PluginDisabled"));
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-            if (_config.PlayerGrid == null || !_config.PlayerGrid.Enabled ||
-                _config.PlayerGrid.PowerPoles == null || !_config.PlayerGrid.PowerPoles.Enabled)
-                return RogueCommandResult.Fail("Player Grid Power poles are disabled in configuration.");
-            if (RogueGridPowerRecoveryService.RecoveryActive)
-                return RogueCommandResult.Fail("A GridPower recovery cycle is already active.");
-
-            _playerGridTimer?.Destroy();
-            _playerGridTimer = null;
-
-            ApplyBackendConfiguration();
-
-            PowerPoleSettings poles = _config.PlayerGrid.PowerPoles;
-            string configured = RogueGridPowerPlayerService.Configure(
-                true,
-                poles.DensityPercent,
-                poles.SelectionSeed,
-                poles.PowerOutput,
-                _config.PlayerGrid.RequireVanillaPowerGrid,
-                poles.LimitTransformerOutput,
-                poles.TransformerMaximumOutput);
-
-            DiagnosticPuts("[RogueRust/GridPower Rebuild] Configuration :: " + configured);
-
-            // DLL 4.1.10 owns cache validation/rebuild policy. Healthy reference and
-            // population caches are reused; missing/invalid/empty references are rebuilt,
-            // self-owned transformer IO contamination is repaired, and saved Rust wiring
-            // remains untouched throughout recovery.
-            string result = RogueGridPowerRecoveryService.Reconcile(true);
-            DiagnosticPuts("[RogueRust/GridPower Rebuild] " + result);
-
-            _playerGridTimer = timer.Every(poles.BatchIntervalSeconds, () =>
-            {
-                if (!_serverReady || !_config.General.Enabled)
-                    return;
-
-                bool more = RogueGridPowerRecoveryService.ProcessBatch(poles.SpawnBatchSize);
-                if (more)
-                    return;
-
-                _playerGridTimer?.Destroy();
-                _playerGridTimer = null;
-                DiagnosticPuts("[RogueRust/GridPower Rebuild] COMPLETE :: " + RogueGridPowerRecoveryService.Status());
-            });
-
-            return RogueCommandResult.Ok(result);
-        }
-
-        [RogueCommand(
-            "rrgrid.rebuild.status",
-            Aliases = new[] { "gridpower.rebuild.status" },
-            Description = "Shows the current/last GridPower recovery stage and player-grid reconciliation status.",
-            Usage = "rrgrid.rebuild.status",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = true)]
-        private RogueCommandResult CommandRebuildStatus(RogueCommandContext context)
-        {
-            if (!_config.General.Enabled)
-                return RogueCommandResult.Fail(Message("Error.PluginDisabled"));
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-
-            string status = RogueGridPowerRecoveryService.Status();
-            DiagnosticPuts("[RogueRust/GridPower Rebuild] " + status);
-            return RogueCommandResult.Ok(status);
-        }
-
-        [RogueCommand(
-            "rrgrid.power.inspect",
-            Aliases = new[] { "gridpower.power.inspect" },
-            Description = "Inspects the nearest schema-4 GridPower pole and the current controlled power test state.",
-            Usage = "rrgrid.power.inspect",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandPowerInspect(RogueCommandContext context)
-        {
-            RogueCommandResult unavailable = CheckPowerTestAvailability(context);
-            if (unavailable != null)
-                return unavailable;
-
-            string result = RogueGridPowerControlledTest.Inspect(context.NativePlayer.transform.position);
-            return RogueCommandResult.Ok(Localize("Command.PowerInspect", context.NativePlayer, result));
-        }
-
-        [RogueCommand(
-            "rrgrid.power.test",
-            Aliases = new[] { "gridpower.power.test" },
-            Description = "Creates one non-saving native Rust power-grid access entity on the nearest safe Rogue candidate pole.",
-            Usage = "rrgrid.power.test",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandPowerTest(RogueCommandContext context)
-        {
-            RogueCommandResult unavailable = CheckPowerTestAvailability(context);
-            if (unavailable != null)
-                return unavailable;
-
-            string result = RogueGridPowerControlledTest.TestNearest(context.NativePlayer.transform.position);
-            if (result.IndexOf("=FAILED", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                result.IndexOf("=BLOCKED", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                result.IndexOf("=NO-CANDIDATE", StringComparison.OrdinalIgnoreCase) >= 0)
-                return RogueCommandResult.Fail(result);
-
-            return RogueCommandResult.Ok(Localize("Command.PowerTest", context.NativePlayer, result));
-        }
-
-        [RogueCommand(
-            "rrgrid.power.remove",
-            Aliases = new[] { "gridpower.power.remove" },
-            Description = "Removes the active controlled GridPower test entity.",
-            Usage = "rrgrid.power.remove",
-            Category = "GridPower",
-            Permission = PermissionAdmin,
-            AllowChat = true,
-            AllowConsole = false)]
-        private RogueCommandResult CommandPowerRemove(RogueCommandContext context)
+        private RogueCommandResult CheckBackend()
         {
             if (!_config.General.Enabled)
                 return RogueCommandResult.Fail(Message("Error.PluginDisabled"));
 
             if (_gridPower == null)
                 return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-
-            if (context.NativePlayer == null)
-                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
-
-            string result = RogueGridPowerControlledTest.Remove();
-            return RogueCommandResult.Ok(Localize("Command.PowerRemove", context.NativePlayer, result));
-        }
-
-        private RogueCommandResult CheckPowerTestAvailability(RogueCommandContext context)
-        {
-            if (!_config.General.Enabled)
-                return RogueCommandResult.Fail(Message("Error.PluginDisabled"));
-
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-
-            if (context.NativePlayer == null)
-                return RogueCommandResult.Fail(Message("Error.PlayerOnly"));
-
-            if (_config.PlayerGrid == null || !_config.PlayerGrid.Enabled)
-                return RogueCommandResult.Fail(Localize("Command.PowerTestDisabled", context.NativePlayer));
 
             return null;
         }
 
-        private RogueCommandResult CheckCommandAvailability()
+        private RogueCommandResult CheckStreetlights()
         {
-            if (!_config.General.Enabled)
-                return RogueCommandResult.Fail(Message("Error.PluginDisabled"));
+            RogueCommandResult unavailable = CheckBackend();
+            if (unavailable != null)
+                return unavailable;
 
             if (!_config.StreetLights.Enabled)
                 return RogueCommandResult.Fail(Message("Error.StreetlightsDisabled"));
 
-            if (_gridPower == null)
-                return RogueCommandResult.Fail(Message("Error.BackendUnavailable"));
-
             return null;
         }
-
-        /// <summary>
-        /// Repairs a schema-4 discovery edge case caused by RogueRust's own saving
-        /// PowergridIOAccessPoint transformers being rediscovered as vanilla IO.
-        /// Native vanilla poles have powergridAccess=true (native access spawn point).
-        /// A pole with powergridAccess=false + ioAccessPoint=true after RogueRust has
-        /// populated transformers is our self-contamination signature.
-        /// </summary>
-        private int RepairSelfContaminatedPlayerReferences()
-        {
-            if (_gridPower == null)
-                return 0;
-
-            string path = _gridPower.PlayerReferenceFilePath;
-            if (string.IsNullOrEmpty(path) || !File.Exists(path))
-                return 0;
-
-            try
-            {
-                JObject doc = JObject.Parse(File.ReadAllText(path));
-                if ((doc.Value<int?>("schema") ?? 0) != 4)
-                    return 0;
-
-                JArray poles = doc["playerPoles"] as JArray;
-                if (poles == null || poles.Count == 0)
-                    return 0;
-
-                int repaired = 0;
-                foreach (JToken token in poles)
-                {
-                    JObject pole = token as JObject;
-                    if (pole == null)
-                        continue;
-
-                    bool powergridAccess = pole.Value<bool?>("powergridAccess") ?? false;
-                    bool ioAccessPoint = pole.Value<bool?>("ioAccessPoint") ?? false;
-                    string classification = pole.Value<string>("classification") ?? string.Empty;
-
-                    if (powergridAccess ||
-                        !ioAccessPoint ||
-                        !string.Equals(classification, "vanillaPowergrid", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    pole["classification"] = "candidate";
-                    pole["ioAccessPoint"] = false;
-                    repaired++;
-                }
-
-                if (repaired == 0)
-                    return 0;
-
-                JObject stats = doc["stats"] as JObject;
-                if (stats != null)
-                {
-                    int vanilla = 0;
-                    foreach (JToken token in poles)
-                    {
-                        JObject pole = token as JObject;
-                        if (pole != null &&
-                            string.Equals(pole.Value<string>("classification"), "vanillaPowergrid",
-                                StringComparison.OrdinalIgnoreCase))
-                            vanilla++;
-                    }
-                    stats["vanillaPowergrid"] = vanilla;
-                }
-
-                File.WriteAllText(path, doc.ToString(Newtonsoft.Json.Formatting.Indented));
-                DiagnosticPuts("[RogueRust/GridPower] Compatibility repair :: corrected " + repaired +
-                     " self-owned transformer IO classifications in " + Path.GetFileName(path) + ".");
-                return repaired;
-            }
-            catch (Exception ex)
-            {
-                PrintError("Failed to repair GridPower player references: " + ex.Message);
-                return 0;
-            }
-        }
-
 
         #endregion
 
@@ -1717,54 +873,43 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Cooldowns
-
-        // GridPower administration commands intentionally have no cooldown.
-        // They are permission-protected and execute only explicit administrative actions.
-
-        #endregion
-
         #region Hooks
 
-        // Keep hooks thin. World discovery and cinematic light ownership remain in the DLL.
-
+        // Subscribed only while ladders are enabled (see Init / OnServerInitialized).
         private void OnPlayerInput(BasePlayer player, InputState input)
         {
-            if (!_serverReady || player == null || input == null ||
-                !input.WasJustPressed(BUTTON.FIRE_PRIMARY) || _config == null ||
-                !_config.General.Enabled || _config.PlayerGrid == null || !_config.PlayerGrid.Enabled ||
-                _config.PlayerGrid.PowerPoles == null || !_config.PlayerGrid.PowerPoles.Enabled ||
-                !_config.PlayerGrid.PowerPoles.AllowLaddersOnPoles)
+            if (!_serverReady || player == null || input == null || !input.WasJustPressed(BUTTON.FIRE_PRIMARY))
                 return;
 
             Item item = player.GetActiveItem();
-            if (item == null || item.info == null ||
-                !string.Equals(item.info.shortname, "ladder.wooden.wall", StringComparison.OrdinalIgnoreCase))
+            if (item == null || item.info == null || !string.Equals(item.info.shortname, "ladder.wooden.wall", StringComparison.OrdinalIgnoreCase))
                 return;
 
-            HeldEntity held = player.GetHeldEntity();
-            Planner planner = held as Planner;
-            if (planner == null)
+            if (!(player.GetHeldEntity() is Planner) || _gridPower == null || !_config.Ladders.Enabled)
                 return;
+
+            if (_ladderRaycastMask < 0)
+                _ladderRaycastMask = UnityEngine.LayerMask.GetMask("World", "Deployed");
 
             UnityEngine.RaycastHit hit;
-            UnityEngine.Ray ray = player.eyes.BodyRay();
-            int mask = UnityEngine.LayerMask.GetMask("World", "Deployed");
-            if (!UnityEngine.Physics.Raycast(ray, out hit, 5f, mask, UnityEngine.QueryTriggerInteraction.Ignore))
+            if (!UnityEngine.Physics.Raycast(player.eyes.BodyRay(), out hit, 5f, _ladderRaycastMask, UnityEngine.QueryTriggerInteraction.Ignore))
                 return;
 
-            float poleDistance;
-            if (!IsGridPoleLadderTarget(hit.point, out poleDistance))
+            // Native access points sit on their poles, so the backend's O(nearby) access-point
+            // index replaces the old per-click reference-file parse.
+            UnityEngine.Vector3 polePosition;
+            int poleId;
+            if (!_gridPower.TryFindNearestPlayerPole(hit.point, _config.Ladders.DetectionRadius, out polePosition, out poleId))
                 return;
 
             string colliderName = hit.collider != null ? (hit.collider.name ?? string.Empty) : string.Empty;
             if (colliderName.IndexOf("powerline_pole", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                DiagnosticPuts("[RogueRust/GridPower Ladder] Near GRID pole but ray hit '" + colliderName + "'; native placement left unchanged.");
+                DiagnosticPuts("[RogueRust/GridPower Ladder] Near pole but ray hit '" + colliderName + "'; native placement left unchanged.");
                 return;
             }
 
-            BaseEntity ladder = SpawnGridPoleLadder(player, item, hit);
+            BaseEntity ladder = SpawnPoleLadder(player, item, hit);
             if (ladder == null)
             {
                 ShowPlayerGameTip(player, "GridPower could not attach the ladder at this position.", 2.5f);
@@ -1772,45 +917,19 @@ namespace Oxide.Plugins
             }
 
             item.UseItem(1);
-            if (_config.PlayerGrid.PowerPoles.ShowLadderPlacementGameTip)
-                ShowPlayerGameTip(player, _config.PlayerGrid.PowerPoles.LadderPlacementSuccessMessage, _config.PlayerGrid.PowerPoles.LadderPlacementGameTipDurationSeconds);
+            if (_config.Ladders.ShowGameTip)
+                ShowPlayerGameTip(player, _config.Ladders.SuccessMessage, _config.Ladders.GameTipDurationSeconds);
 
             DiagnosticPuts("[RogueRust/GridPower Ladder] Placed wooden ladder | Player=" + player.UserIDString +
-                " | PoleDistance=" + poleDistance.ToString("0.00") + "m | Collider=" + colliderName +
-                " | Position=" + ladder.transform.position);
+                           " | Pole=" + poleId + " | Collider=" + colliderName + " | Position=" + ladder.transform.position);
         }
 
-        private bool IsGridPoleLadderTarget(UnityEngine.Vector3 position, out float distance)
+        private BaseEntity SpawnPoleLadder(BasePlayer player, Item item, UnityEngine.RaycastHit hit)
         {
-            distance = float.MaxValue;
-            RefreshLadderPoleCache(false);
-            if (_ladderPoleCache.Count == 0)
-                return false;
-
-            float radius = _config.PlayerGrid.PowerPoles.LadderPoleDetectionRadius;
-            float radiusSqr = radius * radius;
-            for (int i = 0; i < _ladderPoleCache.Count; i++)
-            {
-                UnityEngine.Vector3 delta = _ladderPoleCache[i] - position;
-                delta.y = 0f;
-                float sqr = delta.sqrMagnitude;
-                if (sqr > radiusSqr)
-                    continue;
-
-                distance = UnityEngine.Mathf.Sqrt(sqr);
-                return true;
-            }
-            return false;
-        }
-
-        private BaseEntity SpawnGridPoleLadder(BasePlayer player, Item item, UnityEngine.RaycastHit hit)
-        {
-            const string ladderPrefab = "assets/prefabs/building/ladder.wall.wood/ladder.wooden.wall.prefab";
-
             UnityEngine.Vector3 normal = hit.normal;
             normal.y = 0f;
             if (normal.sqrMagnitude < 0.001f)
-                normal = (player.transform.position - hit.point);
+                normal = player.transform.position - hit.point;
             normal.y = 0f;
             if (normal.sqrMagnitude < 0.001f)
                 normal = player.eyes.BodyRay().direction;
@@ -1821,7 +940,7 @@ namespace Oxide.Plugins
             UnityEngine.Vector3 position = hit.point + normal * 0.08f;
             UnityEngine.Quaternion rotation = UnityEngine.Quaternion.LookRotation(-normal, UnityEngine.Vector3.up);
 
-            BaseEntity entity = GameManager.server.CreateEntity(ladderPrefab, position, rotation, true);
+            BaseEntity entity = GameManager.server.CreateEntity(LadderPrefab, position, rotation, true);
             if (entity == null)
                 return null;
 
@@ -1834,53 +953,9 @@ namespace Oxide.Plugins
             return entity;
         }
 
-        private void RefreshLadderPoleCache(bool force)
-        {
-            if (!force && _ladderPoleCache.Count > 0 &&
-                (DateTime.UtcNow - _ladderPoleCacheUtc).TotalSeconds < 30d)
-                return;
-
-            _ladderPoleCacheUtc = DateTime.UtcNow;
-            _ladderPoleCache.Clear();
-            if (_gridPower == null || string.IsNullOrEmpty(_gridPower.PlayerReferenceFilePath) ||
-                !File.Exists(_gridPower.PlayerReferenceFilePath))
-                return;
-
-            try
-            {
-                JObject doc = JObject.Parse(File.ReadAllText(_gridPower.PlayerReferenceFilePath));
-                JArray poles = doc["playerPoles"] as JArray;
-                if (poles == null)
-                    return;
-
-                foreach (JToken token in poles)
-                {
-                    JObject pole = token as JObject;
-                    if (pole == null)
-                        continue;
-                    string classification = pole.Value<string>("classification") ?? string.Empty;
-                    if (!string.Equals(classification, "candidate", StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(classification, "vanillaPowergrid", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    _ladderPoleCache.Add(new UnityEngine.Vector3(
-                        pole.Value<float?>("x") ?? 0f,
-                        pole.Value<float?>("y") ?? 0f,
-                        pole.Value<float?>("z") ?? 0f));
-                }
-            }
-            catch (Exception ex)
-            {
-                DiagnosticPuts("[RogueRust/GridPower Ladder] Failed to refresh pole cache: " + ex.Message);
-            }
-        }
-
         private void OnGridStateChanged(bool online)
         {
-            if (_config == null || _config.Developer == null || !DiagnosticsEnabled)
-                return;
-
-            LogInformation("GridPower",
-                Localize("Grid.StateChanged", null, online ? "ONLINE" : "OFFLINE"));
+            DiagnosticLog("GridPower", Localize("Grid.StateChanged", null, online ? "ONLINE" : "OFFLINE"));
         }
 
         #endregion
@@ -1892,80 +967,54 @@ namespace Oxide.Plugins
             DestroyTimers();
 
             int discovered = _gridPower.RefreshStreetlights(false);
-
-            if (DiagnosticsEnabled)
-            {
-                LogInformation("GridPower",
-                    "Controller ready. Discovered=" + discovered +
-                    ", Density=" + _gridPower.StreetlightDensity + "%" +
-                    ", Selected=" + _gridPower.SelectedStreetlights + ".");
-            }
+            DiagnosticLog("GridPower",
+                "Controller ready. Discovered=" + discovered +
+                ", Density=" + _gridPower.StreetlightDensity + "%" +
+                ", Selected=" + _gridPower.SelectedStreetlights + ".");
 
             // Startup/reload applies state silently. GameTips are reserved for a real
             // live transition across the configured day/night boundary.
             EvaluateStreetlights(true, false);
 
-            _streetlightTimer = timer.Every(
-                _config.Performance.CheckIntervalSeconds,
-                () => EvaluateStreetlights(false, true));
-
-            _refreshTimer = timer.Every(
-                _config.Performance.RefreshCacheMinutes * 60f,
-                RefreshStreetlightCache);
+            _streetlightTimer = timer.Every(_config.Performance.CheckIntervalSeconds, () => EvaluateStreetlights(false, true));
+            _refreshTimer = timer.Every(_config.Performance.RefreshCacheMinutes * 60f, RefreshStreetlightCache);
         }
 
         private void RefreshStreetlightCache()
         {
-            if (!CanOperate())
+            if (!CanOperateStreetlights())
                 return;
 
             int before = _gridPower.TrackedStreetlights;
             int after = _gridPower.RefreshStreetlights(false);
+            if (before != after)
+                DiagnosticLog("GridPower", "Streetlight cache refreshed. Discovered=" + after + ", Previous=" + before + ".");
 
-            if (DiagnosticsEnabled && before != after)
-            {
-                LogInformation("GridPower",
-                    "Streetlight cache refreshed. Discovered=" + after +
-                    ", Previous=" + before + ".");
-            }
-
-            // Refresh can rebuild DLL-owned light entities but must not generate a
-            // duplicate player notification for the same day/night state.
+            // Refresh can rebuild DLL-owned light entities but must not repeat the player notification.
             EvaluateStreetlights(true, false);
         }
 
         private void EvaluateStreetlights(bool force, bool allowNotification)
         {
-            if (!CanOperate())
+            if (!CanOperateStreetlights())
                 return;
 
             float hour = GetWorldHour();
-            bool shouldBeOn = IsNightWindow(
-                hour,
-                _config.StreetLights.TurnOnHour,
-                _config.StreetLights.TurnOffHour);
+            bool shouldBeOn = IsNightWindow(hour, _config.StreetLights.TurnOnHour, _config.StreetLights.TurnOffHour);
 
-            if (!force &&
-                _lastDesiredState.HasValue &&
-                _lastDesiredState.Value == shouldBeOn)
+            if (!force && _lastDesiredState.HasValue && _lastDesiredState.Value == shouldBeOn)
                 return;
 
-            bool stateChanged =
-                _lastDesiredState.HasValue &&
-                _lastDesiredState.Value != shouldBeOn;
+            bool stateChanged = _lastDesiredState.HasValue && _lastDesiredState.Value != shouldBeOn;
 
+            // Streamed by the backend: dusk/dawn spreads entity work across frames.
             int changed = _gridPower.SetStreetlights(shouldBeOn, false);
             _lastDesiredState = shouldBeOn;
 
-            if (DiagnosticsEnabled &&
-                (force || stateChanged || changed > 0))
-            {
-                LogInformation("GridPower",
-                    "Street lights " + (shouldBeOn ? "ON" : "OFF") +
-                    " at world hour " + hour.ToString("0.00") + ". " +
-                    _gridPower.GetStreetlightStatus() +
-                    " | Changed=" + changed);
-            }
+            if (force || stateChanged || changed > 0)
+                DiagnosticLog("GridPower",
+                    "Street lights " + (shouldBeOn ? "ON" : "OFF") + " at world hour " + hour.ToString("0.00") + ". " +
+                    _gridPower.GetStreetlightStatus() + " | Changed=" + changed);
 
             if (allowNotification && stateChanged)
                 ShowStateGameTip(shouldBeOn);
@@ -1976,12 +1025,74 @@ namespace Oxide.Plugins
             if (_gridPower == null)
                 return;
 
-            _gridPower.ConfigureStreetlights(
-                _config.StreetLights.DensityPercent,
-                _config.StreetLights.SelectionSeed);
+            _gridPower.ConfigureStreaming(_config.Performance.StreetlightFrameBudgetMs, _config.Performance.StreetlightFixturesPerFrame);
+            _gridPower.ConfigureStreetlights(_config.StreetLights.DensityPercent, _config.StreetLights.SelectionSeed);
         }
 
-        private bool CanOperate()
+        /// <summary>
+        /// Gives the configured share of Rust's native poles a transformer on the pole's own mount slot.
+        /// Poles that already have one are skipped; lowering the density never removes any.
+        /// </summary>
+        private void ApplyPoleTransformers()
+        {
+            if (_gridPower == null)
+                return;
+            if (RogueRustExtension.CurrentVersion < MinimumBackend)
+            {
+                LogWarning("GridPower", "Native pole transformers need RogueRust " + MinimumBackend + " or newer.");
+                return;
+            }
+
+            PoleTransformerSettings settings = _config.PoleTransformers;
+            string result = _gridPower.ConfigureNativePoleTransformers(settings.Enabled, settings.DensityPercent, settings.SelectionSeed, settings.SpawnsPerFrame);
+            LogInformation("GridPower", result);
+        }
+
+        private void ApplyNativeGrid()
+        {
+            if (_gridPower == null)
+                return;
+
+            NativeGridSettings settings = _config.NativeGrid;
+            if (!_config.General.Enabled || !settings.Enabled)
+            {
+                // Only touch the native grid when this plugin previously changed it.
+                if (_nativeGridApplied)
+                {
+                    _gridPower.ConfigureNativeGrid(new RogueNativeGridOptions { Mode = RogueNativeGridMode.Vanilla });
+                    _nativeGridApplied = false;
+                }
+                return;
+            }
+
+            RogueNativeGridMode mode;
+            TryParseMode(settings.Mode, out mode);
+
+            _gridPower.ConfigureNativeGrid(new RogueNativeGridOptions
+            {
+                Mode = mode,
+                BaseOutput = settings.BaseOutput,
+                MaxOutput = settings.MaxOutput,
+                FixedOutput = settings.FixedOutput,
+                OverridePowerPlantRequirement = settings.OverridePowerPlantRequirement,
+                FixedRequiresGridOnline = settings.FixedRequiresGridOnline,
+                RespectPowergridDisabled = settings.RespectPowergridDisabled,
+                RefreshFrameBudgetMilliseconds = _config.Performance.NativeRefreshBudgetMs,
+                MaxRefreshesPerFrame = _config.Performance.NativeRefreshPerFrame
+            });
+            _nativeGridApplied = mode != RogueNativeGridMode.Vanilla;
+
+            bool pinned = mode == RogueNativeGridMode.Fixed ||
+                          (mode == RogueNativeGridMode.Convars && settings.OverridePowerPlantRequirement);
+            if (pinned && settings.FixedRequiresGridOnline && !_config.StreetLights.Enabled)
+                LogWarning("GridPower", "Output is set to follow the grid-online window, but street lights (which drive it) are disabled. Access points will deliver 0.");
+            if (settings.OverridePowerPlantRequirement && mode != RogueNativeGridMode.Convars)
+                LogWarning("GridPower", "'Override Power Plant Requirement' only applies in Convars mode (Fixed mode never needs the power plant).");
+
+            LogInformation("GridPower", "Native grid policy applied :: " + _gridPower.GetNativeGridStatus());
+        }
+
+        private bool CanOperateStreetlights()
         {
             return _serverReady &&
                    _config != null &&
@@ -1989,24 +1100,6 @@ namespace Oxide.Plugins
                    _config.StreetLights.Enabled &&
                    _gridPower != null;
         }
-
-        #endregion
-
-        #region RogueRust Services
-
-        // Rogue.GridPower owns:
-        // - static world streetlight discovery
-        // - deterministic density selection
-        // - cinematic light creation/recovery
-        // - owned-entity cleanup
-        // - backend diagnostics
-        //
-        // This plugin owns policy:
-        // - enable/disable
-        // - day/night schedule
-        // - density/seed configuration
-        // - administrator commands
-        // - player-facing GameTips
 
         #endregion
 
@@ -2030,10 +1123,7 @@ namespace Oxide.Plugins
             if (!_config.Notifications.ShowGameTips)
                 return;
 
-            string message = streetlightsOn
-                ? _config.Notifications.NightMessage
-                : _config.Notifications.DawnMessage;
-
+            string message = streetlightsOn ? _config.Notifications.NightMessage : _config.Notifications.DawnMessage;
             if (string.IsNullOrWhiteSpace(message))
                 return;
 
@@ -2041,16 +1131,12 @@ namespace Oxide.Plugins
 
             foreach (BasePlayer player in BasePlayer.activePlayerList)
             {
-                if (player == null || !player.IsConnected)
-                    continue;
-
-                player.SendConsoleCommand("gametip.showgametip", message);
+                if (player != null && player.IsConnected)
+                    player.SendConsoleCommand("gametip.showgametip", message);
             }
 
             _gameTipVisible = true;
-            _gameTipTimer = timer.Once(
-                _config.Notifications.DurationSeconds,
-                HideOwnedGameTip);
+            _gameTipTimer = timer.Once(_config.Notifications.DurationSeconds, HideOwnedGameTip);
         }
 
         private void HideOwnedGameTip()
@@ -2063,29 +1149,12 @@ namespace Oxide.Plugins
 
             foreach (BasePlayer player in BasePlayer.activePlayerList)
             {
-                if (player == null || !player.IsConnected)
-                    continue;
-
-                player.SendConsoleCommand("gametip.hidegametip");
+                if (player != null && player.IsConnected)
+                    player.SendConsoleCommand("gametip.hidegametip");
             }
 
             _gameTipVisible = false;
         }
-
-        #endregion
-
-        #region Data
-
-        // v1.3.0 has no persistent plugin-owned data.
-        // Future GridPower state should use data/RogueRust/RogueRustGridPower/...
-
-        #endregion
-
-        #region Performance
-
-        // Expensive world discovery is cached in RogueRust's GridPower backend.
-        // This plugin only polls world time at the configured low-frequency interval.
-        // Refresh is intentionally separate and defaults to ten minutes.
 
         #endregion
 
@@ -2117,11 +1186,69 @@ namespace Oxide.Plugins
             return hour >= turnOn || hour < turnOff;
         }
 
-        private static float ClampHour(float value)
+        private static bool IsWired(IOEntity io)
         {
-            if (value < 0f) return 0f;
-            if (value > 23.99f) return 23.99f;
-            return value;
+            return HasConnection(io.inputs) || HasConnection(io.outputs);
+        }
+
+        private static bool HasConnection(IOEntity.IOSlot[] slots)
+        {
+            if (slots == null)
+                return false;
+
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i] != null && slots[i].IsConnected())
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void DrawDebugMarker(BasePlayer player, UnityEngine.Vector3 position, UnityEngine.Color color, string label, float duration)
+        {
+            UnityEngine.Vector3 marker = position + UnityEngine.Vector3.up * 2f;
+            player.SendConsoleCommand("ddraw.sphere", duration, color, marker, 0.45f);
+            player.SendConsoleCommand("ddraw.text", duration, color, marker + UnityEngine.Vector3.up * 0.75f, label);
+        }
+
+        private static string BuildTransformPath(UnityEngine.Transform transform)
+        {
+            if (transform == null)
+                return "<null>";
+
+            List<string> parts = new List<string>();
+            UnityEngine.Transform current = transform;
+            int guard = 0;
+            while (current != null && guard++ < 16)
+            {
+                parts.Add(current.name ?? "<unnamed>");
+                current = current.parent;
+            }
+
+            parts.Reverse();
+            return string.Join("/", parts.ToArray());
+        }
+
+        private static string GetComponentTypeList(UnityEngine.GameObject gameObject)
+        {
+            if (gameObject == null)
+                return "<none>";
+
+            UnityEngine.Component[] components = gameObject.GetComponents<UnityEngine.Component>();
+            List<string> names = new List<string>();
+            for (int i = 0; i < components.Length; i++)
+            {
+                UnityEngine.Component component = components[i];
+                if (component == null)
+                    continue;
+
+                string name = component.GetType().Name;
+                if (!names.Contains(name))
+                    names.Add(name);
+            }
+
+            return names.Count > 0 ? string.Join(",", names.ToArray()) : "<none>";
         }
 
         #endregion
@@ -2138,24 +1265,13 @@ namespace Oxide.Plugins
 
             _refreshTimer?.Destroy();
             _refreshTimer = null;
-
-            _playerGridTimer?.Destroy();
-            _playerGridTimer = null;
         }
 
         private void Unload()
         {
-            if (_config != null &&
-                _config.Developer != null &&
-                DiagnosticsEnabled)
-            {
-                LogInformation("Lifecycle",
-                    "Unloading. ServerReady=" + _serverReady +
-                    ", LastDesiredState=" +
-                    (_lastDesiredState.HasValue
-                        ? (_lastDesiredState.Value ? "ON" : "OFF")
-                        : "Unknown") + ".");
-            }
+            DiagnosticLog("Lifecycle",
+                "Unloading. ServerReady=" + _serverReady + ", LastDesiredState=" +
+                (_lastDesiredState.HasValue ? (_lastDesiredState.Value ? "ON" : "OFF") : "Unknown") + ".");
 
             _serverReady = false;
             _commandQueueTimer?.Destroy();
@@ -2163,18 +1279,18 @@ namespace Oxide.Plugins
             DestroyTimers();
             HideOwnedGameTip();
 
-            // Rogue-owned player-grid access points are non-saving runtime entities.
-            RogueGridPowerPlayerService.Shutdown();
-
-            // Controlled test entities are deliberately non-persistent and must never
-            // survive a plugin reload/unload.
-            RogueGridPowerControlledTest.Shutdown();
+            // Return Rust's native grid to its own behaviour (restores convars, disables the
+            // fixed-output override). Native access points and their wiring are untouched.
+            if (_gridPower != null && _nativeGridApplied)
+            {
+                try { _gridPower.ConfigureNativeGrid(new RogueNativeGridOptions { Mode = RogueNativeGridMode.Vanilla }); }
+                catch (Exception ex) { PrintError("Failed to restore native grid behaviour: " + ex.Message); }
+                _nativeGridApplied = false;
+            }
 
             if (_gridPower != null)
                 _gridPower.GridStateChanged -= OnGridStateChanged;
 
-            _ladderPoleCache.Clear();
-            _ladderPoleCacheUtc = DateTime.MinValue;
             _lastDesiredState = null;
         }
 

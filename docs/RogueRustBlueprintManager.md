@@ -2,7 +2,7 @@
 
 > RogueRust-powered blueprint management with legacy permission and command compatibility.
 
-**Version:** `2.1.0`  
+**Version:** `2.1.1`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -96,7 +96,7 @@ When advanced mode is enabled, missing item entries are generated from current R
   "Advanced Blueprint Settings": {
     "Blueprint Management Options": {}
   },
-  "Version (DO NOT CHANGE)": "2.1.0"
+  "Version (DO NOT CHANGE)": "2.1.1"
 }
 ```
 

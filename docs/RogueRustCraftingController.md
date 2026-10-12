@@ -2,7 +2,7 @@
 
 > RogueRust-powered crafting control with legacy configuration and permission compatibility.
 
-**Version:** `2.1.0`  
+**Version:** `2.1.1`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -33,6 +33,15 @@
 - Configured bonus tiers create `roguerustcraftingcontroller.<suffix>` permissions dynamically.
 
 ## Commands
+
+| Command | Description |
+| --- | --- |
+| `/craftrate [multiplier]` | View or set the global crafting rate. |
+| `/crafttime <item> [seconds|default]` | View or set an item's craft time. |
+| `/blockitem <item>` | Block an item from crafting and research. |
+| `/unblockitem <item>` | Unblock an item for crafting and research. |
+| `/benchlvl <item> <0-3>` | Set an item's workbench requirement. |
+| `/setcraftskin <item> <skinId>` | Set the default crafting skin for an item. |
 
 The source provides administrative controls for blocking/unblocking items, changing item craft time, workbench level, default skin and the global crafting multiplier. Built-in language usage strings include `/crafttime item.shortname timetocraft`, `/blockitem item.shortname`, `/unblockitem item.shortname` and `/benchlvl item.shortname workbenchlvl`.
 
@@ -109,7 +118,7 @@ Missing current Rust items are added automatically using live blueprint defaults
     "Craft items with random skins if not already skinned": false
   },
   "Advanced Crafting Options": {},
-  "Version (DO NOT CHANGE)": "2.1.0"
+  "Version (DO NOT CHANGE)": "2.1.1"
 }
 ```
 
@@ -122,7 +131,7 @@ The current implementation does not require a separate persistent player databas
 
 ## Migration
 
-`CraftingController.json` is copied to the RogueRust plugin filename when appropriate. Older flat configuration is converted into the grouped v2.1.0 layout.
+`CraftingController.json` is copied to the RogueRust plugin filename when appropriate. Older flat configuration is converted into the grouped v2.1.1 layout.
 
 ## Performance notes
 

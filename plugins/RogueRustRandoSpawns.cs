@@ -10,12 +10,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.1")]
+    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.2")]
     [Description("RogueRust-powered random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.")]
     public sealed class RogueRustRandoSpawns : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.1";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 1);
+        private const string PluginVersion = "2.1.2";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 2);
         [PluginReference]
         private Plugin ZoneManager;
 
@@ -309,32 +309,39 @@ namespace Oxide.Plugins
             if (IsPositionInBlockedZone(position))
                 return false;
 
-            IReadOnlyCollection<RogueWorldEntity> nearby = World.FindEntities(
-                position,
-                Mathf.Max(0f, _config.Generation.DistanceFromBuildings),
-                null,
-                Mathf.Max(8, _config.Generation.MaximumNearbyEntityResults));
-
-            if (nearby == null || nearby.Count == 0)
+            float radius = Mathf.Max(0f, _config.Generation.DistanceFromBuildings);
+            if (radius <= 0f)
                 return true;
 
-            foreach (RogueWorldEntity entity in nearby)
+            // Physics overlap on the construction/deployable layers instead of World.FindEntities, which
+            // walks every server entity (100k+ on a wiped-in map) once per candidate. It also can no longer
+            // miss a base because unrelated nearby entities filled the result limit first.
+            List<BaseEntity> nearby = Facepunch.Pool.Get<List<BaseEntity>>();
+            try
             {
-                if (entity == null)
-                    continue;
+                Vis.Entities(position, radius, nearby, NearbyBuildingMask, QueryTriggerInteraction.Ignore);
+                for (int i = 0; i < nearby.Count; i++)
+                {
+                    BaseEntity native = nearby[i];
+                    if (native == null || native.IsDestroyed || native is BasePlayer)
+                        continue;
 
-                BaseEntity native = entity.Native as BaseEntity;
-                if (native == null || native is BasePlayer)
-                    continue;
-
-                // Building blocks and player-owned deployables should invalidate a spawn,
-                // while ambient world entities (trees, ores, animals, dropped items, etc.) should not.
-                if (native is BuildingBlock || native.OwnerID != 0UL)
-                    return false;
+                    // Building blocks and player-owned deployables should invalidate a spawn,
+                    // while ambient world entities (trees, ores, animals, dropped items, etc.) should not.
+                    if (native is BuildingBlock || native.OwnerID != 0UL)
+                        return false;
+                }
+            }
+            finally
+            {
+                Facepunch.Pool.FreeUnmanaged(ref nearby);
             }
 
             return true;
         }
+
+        // Rust layers 8 (Deployed) and 21 (Construction) - building blocks, doors, boxes, TCs, beds, etc.
+        private const int NearbyBuildingMask = (1 << 8) | (1 << 21);
 
         private List<TerrainBiome.Enum> GetEligibleBiomes(bool ignorePlayerRestriction)
         {
@@ -494,6 +501,8 @@ namespace Oxide.Plugins
         protected override void LoadConfig()
         {
             base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
             try
             {
                 _config = Config.ReadObject<Configuration>() ?? Configuration.CreateDefault();
@@ -674,7 +683,7 @@ namespace Oxide.Plugins
         {
             public uint WorldSeed;
             public uint WorldSize;
-            public string PluginVersion = "2.1.1";
+            public string PluginVersion = "2.1.2";
             public Dictionary<string, List<CachedVector>> Biomes = new Dictionary<string, List<CachedVector>>(StringComparer.OrdinalIgnoreCase);
         }
 
@@ -753,7 +762,7 @@ namespace Oxide.Plugins
             {
                 WorldSeed = global::World.Seed,
                 WorldSize = global::World.Size,
-                PluginVersion = "2.1.1"
+                PluginVersion = "2.1.2"
             };
 
             foreach (KeyValuePair<TerrainBiome.Enum, List<Vector3>> entry in _spawnPoints)
@@ -819,7 +828,6 @@ namespace Oxide.Plugins
                 ? Directory.GetDirectories(langRoot)
                 : new string[0];
 
-            bool foundAny = false;
             for (int i = 0; i < languages.Length; i++)
             {
                 string language = Path.GetFileName(languages[i]);
@@ -854,7 +862,6 @@ namespace Oxide.Plugins
                     if (catalog != null)
                     {
                         _messages[language] = catalog;
-                        foundAny = true;
                     }
                 }
                 catch (Exception exception)

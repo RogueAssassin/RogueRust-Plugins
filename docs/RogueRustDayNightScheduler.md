@@ -1,6 +1,6 @@
 # RogueRust Day/Night Scheduler
 
-**Version:** `3.1.1`  
+**Version:** `3.1.2`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  

@@ -2,7 +2,7 @@
 
 > RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics and player-facing grid events.
 
-**Version:** `1.9.2`  
+**Version:** `2.0.2`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -28,7 +28,21 @@
 
 ## Commands
 
-The current source exposes GridPower administrative commands for status, refresh/reapply, player-grid status, infrastructure scan, debug markers, power probing/inspection/testing/removal and climb/infrastructure inspection. These commands are intentionally diagnostic/admin-facing and use the `rrgrid` command family in the current implementation.
+All commands require `roguerustgridpower.admin` and also answer to a `gridpower.*` alias (for example `gridpower.status`).
+
+| Command | Description |
+| --- | --- |
+| `rrgrid.help` | Shows the administration and diagnostic commands. |
+| `rrgrid.status` | Shows streetlight and native grid status. |
+| `rrgrid.apply` | Reapplies configuration: streetlight density and streaming, the current world-time streetlight state and the native grid output policy. |
+| `rrgrid.refresh` | Rebuilds the streetlight references and reapplies the current state. |
+| `rrgrid.grid` | Shows the public-grid state and your grid cell. |
+| `rrgrid.native` | Shows Rust native power-grid access points, wiring and the active output policy. |
+| `rrgrid.native.refresh` | Re-indexes native access points and re-pushes the output policy in frame-budgeted batches. |
+| `rrgrid.native.inspect` | Inspects the nearest native access point: saving flag, wired slots, current energy and maximum output. |
+| `rrgrid.native.poles [apply]` | Shows native pole transformer fitting. `apply` re-runs it, filling poles that are missing one. |
+| `rrgrid.debug` | Draws temporary admin-only markers for access points and streetlight fixtures within 200 m. |
+| `rrgrid.target` | Inspects the world object under your cursor without modifying it. Alias: `rrgrid.cursor`. |
 
 ## Configuration
 
@@ -131,7 +145,7 @@ Configuration file: `config/RogueRustGridPower.json`
     "Refresh Street Light Cache Minutes": 10.0
   },
   "Developer Settings": { "Log Diagnostics": false },
-  "Version (DO NOT CHANGE)": "1.9.2"
+  "Version (DO NOT CHANGE)": "2.0.2"
 }
 ```
 

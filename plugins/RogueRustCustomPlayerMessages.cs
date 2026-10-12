@@ -11,7 +11,7 @@ using Oxide.Ext.RogueRust.SDK;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomPlayerMessages", "RogueAssassin", "3.1.0")]
+    [Info("CustomPlayerMessages", "RogueAssassin", "3.1.1")]
     [Description("Custom connect/disconnect messages and public player-list commands powered by RogueRust.")]
     public sealed class RogueRustCustomPlayerMessages : RogueRustPlugin
     {
@@ -27,9 +27,9 @@ namespace Oxide.Plugins
         private const string DefaultLanguage = "en";
         private const string DefaultCountryLookupUrl = "http://ip-api.com/json/{0}?fields=status,message,country,countryCode";
 
-        private const string PluginVersion = "3.1.0";
+        private const string PluginVersion = "3.1.1";
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 0);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 1);
 
         private Configuration _config;
         private CountryCacheStore _cacheStore;
@@ -135,6 +135,8 @@ namespace Oxide.Plugins
         protected override void LoadConfig()
         {
             base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
             try
             {
                 Dictionary<string, object> raw = Config.ReadObject<Dictionary<string, object>>();
@@ -535,6 +537,15 @@ namespace Oxide.Plugins
             _cacheDirty = false;
         }
 
+        // Debounced saves during play write on a worker thread (RogueRust 4.4.60+).
+        private void SaveCountryCacheInBackground()
+        {
+            if (_cacheStore == null || !_cacheDirty)
+                return;
+            SaveDataInBackground(DataKey, _cacheStore);
+            _cacheDirty = false;
+        }
+
         private void CleanupCountryCache(bool saveIfChanged)
         {
             if (_cacheStore == null || _cacheStore.Entries == null)
@@ -587,7 +598,7 @@ namespace Oxide.Plugins
             if (saveIfChanged)
                 SaveCountryCache();
             else
-                Debounce("country-cache-save", TimeSpan.FromSeconds(2), SaveCountryCache);
+                Debounce("country-cache-save", TimeSpan.FromSeconds(2), SaveCountryCacheInBackground);
         }
 
         private void LoadLanguageFiles()

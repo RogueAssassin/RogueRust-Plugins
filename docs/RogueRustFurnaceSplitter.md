@@ -2,7 +2,7 @@
 
 > Optimized RogueRust furnace splitting with automatic fuel management, configurable stack distribution, ETA display and responsive UI.
 
-**Version:** `2.1.0`  
+**Version:** `2.1.3`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)

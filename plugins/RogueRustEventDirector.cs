@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustEventDirector", "RogueAssassin", "1.2.1")]
+[Info("RogueRustEventDirector", "RogueAssassin", "1.3.2")]
 [Description("Performance-focused world event scheduling and CH47 crate direction powered by RogueRust.")]
 public sealed class RogueRustEventDirector : RogueRustPlugin
 {
@@ -18,9 +18,9 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     [RoguePermission]
     private const string AdminPermission = "roguerusteventdirector.admin";
 
-    private const string PluginVersion = "1.2.1";
+    private const string PluginVersion = "1.3.2";
 
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 2, 1);
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 3, 2);
 
     private const string CargoPlanePrefab = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
     private const string PatrolHelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
@@ -33,6 +33,12 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     private DateTime _lastManagedSpawnUtc = DateTime.MinValue;
     private readonly Dictionary<RogueWorldEventType, int> _lastGameTipIndexes = new();
 
+    private int _blockedVanillaEvents;
+    private BradleySpawner? _heldSpawner;
+    private static readonly System.Reflection.FieldInfo? PendingRespawnField = typeof(BradleySpawner).GetField(
+        "pendingRespawn",
+        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+
     private PluginConfig _config = new();
     private ScheduleState _state = new();
 
@@ -41,7 +47,13 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         LogInformation("Lifecycle",
         $"{Name} {PluginVersion} initialized. " +
         $"Config={Name}.json; Data=RogueRust/RogueRustEventDirector/; Lang=None");
+        // JSON.NET normally populates pre-initialized collections. GameTip message lists have
+        // built-in defaults, so Populate would append the saved JSON messages to those defaults on
+        // every load. Replace collection instances instead, matching the RogueRust config standard.
+        // RogueRust config service handles deserialization; avoid unsafe Init-time Oxide settings access.
         _config = LoadConfiguration(ConfigKey, () => new PluginConfig()) ?? new PluginConfig();
+        VersionNumber loadedVersion = _config.Version;
+        MigrateConfiguration(loadedVersion);
         NormalizeConfiguration();
         SaveConfiguration(ConfigKey, _config);
 
@@ -61,6 +73,7 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     private void OnServerInitialized()
     {
         EnsureSchedules();
+        LogInformation("Events", "Vanilla spawns disabled for: " + DescribeDisabledVanilla() + ".");
 
         foreach (RogueWorldEventEntity tracked in WorldEvents.GetActive(RogueWorldEventType.Chinook))
         {
@@ -78,20 +91,22 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
 
     private void Unload()
     {
+        ReleaseVanillaBradley();
         SaveState();
         _scheduledChinooks.Clear();
         _chinookDropAttempts.Clear();
     }
 
-    private void OnEntitySpawned(BaseNetworkable entity)
+    // Typed hook signatures: Oxide only invokes these for Chinooks instead of every entity on the server.
+    private void OnEntitySpawned(CH47HelicopterAIController chinook)
     {
-        if (entity is CH47HelicopterAIController chinook)
+        if (chinook != null)
             ScheduleChinookDrop(chinook);
     }
 
-    private void OnEntityKill(BaseNetworkable entity)
+    private void OnEntityKill(CH47HelicopterAIController entity)
     {
-        if (entity?.net != null)
+        if (entity?.net != null && _scheduledChinooks.Count + _chinookDropAttempts.Count > 0)
         {
             ulong id = entity.net.ID.Value;
             _scheduledChinooks.Remove(id);
@@ -105,23 +120,19 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         if (path.Length == 0)
             return null;
 
-        if (_config.PatrolHelicopter.DisableVanillaSpawns &&
-            path.IndexOf("patrol", StringComparison.OrdinalIgnoreCase) >= 0)
-            return true;
+        // Match the exact prefab each vanilla event spawns. A loose word match ("ship", "plane") could
+        // also swallow an unrelated event added by a later game update.
+        EventSettings? settings =
+            IsPrefab(path, PatrolHelicopterPrefab) ? _config.PatrolHelicopter :
+            IsPrefab(path, CargoShipPrefab) ? _config.CargoShip :
+            IsPrefab(path, CargoPlanePrefab) ? _config.CargoPlane :
+            IsPrefab(path, ChinookPrefab) ? _config.Chinook : null;
 
-        if (_config.CargoShip.DisableVanillaSpawns &&
-            path.IndexOf("ship", StringComparison.OrdinalIgnoreCase) >= 0)
-            return true;
+        if (settings == null || !settings.DisableVanillaSpawns)
+            return null;
 
-        if (_config.CargoPlane.DisableVanillaSpawns &&
-            path.IndexOf("plane", StringComparison.OrdinalIgnoreCase) >= 0)
-            return true;
-
-        if (_config.Chinook.DisableVanillaSpawns &&
-            path.IndexOf("ch47", StringComparison.OrdinalIgnoreCase) >= 0)
-            return true;
-
-        return null;
+        _blockedVanillaEvents++;
+        return true;
     }
 
     private object? CanHelicopterDropCrate(CH47HelicopterAIController chinook)
@@ -134,9 +145,55 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         return false;
     }
 
+    private string DescribeDisabledVanilla()
+    {
+        List<string> disabled = new();
+        if (_config.CargoPlane.DisableVanillaSpawns) disabled.Add("Cargo Plane");
+        if (_config.PatrolHelicopter.DisableVanillaSpawns) disabled.Add("Patrol Helicopter");
+        if (_config.Bradley.DisableVanillaSpawns) disabled.Add("Bradley");
+        if (_config.Chinook.DisableVanillaSpawns) disabled.Add("CH47");
+        if (_config.CargoShip.DisableVanillaSpawns) disabled.Add("Cargo Ship");
+        return disabled.Count == 0 ? "none" : string.Join(", ", disabled);
+    }
+
+    private static bool IsPrefab(string path, string prefab) =>
+        string.Equals(path, prefab, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(System.IO.Path.GetFileName(path), System.IO.Path.GetFileName(prefab), StringComparison.OrdinalIgnoreCase);
+
+    // The Launch Site Bradley is not a triggered event: its spawner re-arms itself whenever the APC
+    // is gone. While vanilla spawns are disabled the spawner is kept in its "respawn already pending"
+    // state with nothing scheduled, so only this plugin's schedule can bring the Bradley back.
+    private void HoldVanillaBradley()
+    {
+        if (!_config.Bradley.DisableVanillaSpawns || PendingRespawnField == null)
+        {
+            if (_heldSpawner != null) ReleaseVanillaBradley();
+            return;
+        }
+
+        BradleySpawner? spawner = BradleySpawner.singleton;
+        if (spawner == null)
+            return;
+
+        _heldSpawner = spawner;
+        if (spawner.IsInvoking(nameof(BradleySpawner.DoRespawn)))
+            spawner.CancelInvoke(nameof(BradleySpawner.DoRespawn));
+        if (!(bool)PendingRespawnField.GetValue(spawner))
+            PendingRespawnField.SetValue(spawner, true);
+    }
+
+    private void ReleaseVanillaBradley()
+    {
+        BradleySpawner? spawner = _heldSpawner;
+        _heldSpawner = null;
+        if (spawner != null && PendingRespawnField != null)
+            PendingRespawnField.SetValue(spawner, false);
+    }
+
     private void SchedulerTick()
     {
         DateTime now = DateTime.UtcNow;
+        HoldVanillaBradley();
 
         ProcessEvent(
             RogueWorldEventType.CargoPlane,
@@ -210,15 +267,44 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
             return;
         }
 
-        if (WorldEvents.IsAtOrAboveLimit(type, settings.MaximumConcurrent))
+        // Bradley is a special case: this plugin controls Rust's native Launch Site BradleySpawner,
+        // not arbitrary/custom Bradley APCs. Do not use the generic RogueRust Bradley count to decide
+        // whether the Launch Site Bradley may spawn because other plugins/maps can create BradleyAPCs.
+        // Instead, ask the live world specifically whether a Bradley is operating at Launch Site.
+        if (type == RogueWorldEventType.Bradley)
+        {
+            if (IsLaunchSiteBradleyActive())
+            {
+                nextUtc = now.AddSeconds(Math.Max(30, _config.Scheduler.ConcurrencyRetrySeconds));
+                SaveStateDebounced();
+                return;
+            }
+
+            // The native spawner is the only supported Bradley spawn path. If Launch Site/its spawner
+            // is unavailable (for example on a map without Launch Site), quietly retry instead of
+            // reporting a generic event spawn failure every retry interval.
+            if (BradleySpawner.singleton == null)
+            {
+                nextUtc = now.AddSeconds(Math.Max(30, _config.Scheduler.ConcurrencyRetrySeconds));
+                SaveStateDebounced();
+                return;
+            }
+        }
+        else if (WorldEvents.IsAtOrAboveLimit(type, settings.MaximumConcurrent))
         {
             nextUtc = now.AddSeconds(Math.Max(30, _config.Scheduler.ConcurrencyRetrySeconds));
             SaveStateDebounced();
             return;
         }
 
-        int availableSlots = Math.Max(0, settings.MaximumConcurrent - WorldEvents.CountActive(type));
-        int requested = NextInt(settings.MinimumSpawnCount, settings.MaximumSpawnCount);
+        // Launch Site only supports one native Bradley. Its availability is determined above from
+        // the actual world entity rather than the generic world-event tracker.
+        int availableSlots = type == RogueWorldEventType.Bradley
+            ? 1
+            : Math.Max(0, settings.MaximumConcurrent - WorldEvents.CountActive(type));
+        int requested = type == RogueWorldEventType.Bradley
+            ? 1
+            : NextInt(settings.MinimumSpawnCount, settings.MaximumSpawnCount);
         int amount = Math.Min(requested, availableSlots);
         int spawned = 0;
 
@@ -273,11 +359,74 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
 
     private bool SpawnBradley()
     {
-        if (BradleySpawner.singleton == null)
+        BradleySpawner? spawner = BradleySpawner.singleton;
+        if (spawner == null)
             return false;
 
-        BradleySpawner.singleton.SpawnBradley();
+        // A Bradley appearing between the scheduler pre-check and this method is not a failure.
+        // The requested state (one Launch Site Bradley alive) is already satisfied.
+        if (IsLaunchSiteBradleyActive())
+            return true;
+
+        spawner.SpawnBradley();
+
+        // SpawnBradley() does not provide a useful success result. Verify on the next frame that the
+        // native Launch Site APC exists instead of blindly treating the request as a successful spawn.
+        // Returning true here records the accepted spawn request; subsequent scheduling is still guarded
+        // by IsLaunchSiteBradleyActive(), so a second Launch Site Bradley can never be requested while
+        // the first one is alive.
         return true;
+    }
+
+    private bool IsLaunchSiteBradleyActive()
+    {
+        BradleySpawner? spawner = BradleySpawner.singleton;
+        // RogueRust already tracks every live BradleyAPC by network id; reading that index avoids a
+        // full Unity object scan (FindObjectsOfType) each time the Bradley schedule comes due/retries.
+        List<BradleyAPC> bradleys = new List<BradleyAPC>();
+        foreach (RogueWorldEventEntity tracked in WorldEvents.GetActive(RogueWorldEventType.Bradley))
+        {
+            if (tracked.NativeEntity is BradleyAPC apc)
+                bradleys.Add(apc);
+        }
+        if (bradleys.Count == 0)
+            return false;
+
+        Vector3 spawnerPosition = spawner != null ? spawner.transform.position : Vector3.zero;
+        bool hasSpawnerPosition = spawner != null;
+        const float launchSiteRadius = 1800f;
+        float launchSiteRadiusSquared = launchSiteRadius * launchSiteRadius;
+
+        foreach (BradleyAPC bradley in bradleys)
+        {
+            if (bradley == null || bradley.IsDestroyed || !bradley.gameObject.activeInHierarchy)
+                continue;
+
+            // Primary check: BradleySpawner.singleton is Rust's vanilla Launch Site spawner. A live
+            // Bradley on/around that spawner's patrol area is therefore the Bradley this plugin owns.
+            // This avoids allowing unrelated road/custom-event Bradleys elsewhere on the map to block it.
+            if (hasSpawnerPosition &&
+                (bradley.transform.position - spawnerPosition).sqrMagnitude <= launchSiteRadiusSquared)
+                return true;
+
+            // Fallback for maps/builds where the spawner transform is not centred on the patrol path.
+            // Associate the APC with Launch Site through RogueRust's monument service.
+            RogueMonumentInfo? monument = Rogue.Monuments.FindNearest(bradley.transform.position, launchSiteRadius);
+            if (monument == null)
+                continue;
+
+            string name = string.IsNullOrWhiteSpace(monument.DisplayName)
+                ? monument.Name
+                : monument.DisplayName;
+
+            if (!string.IsNullOrWhiteSpace(name) &&
+                (name.IndexOf("launch site", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 name.IndexOf("launch_site", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 name.IndexOf("launchsite", StringComparison.OrdinalIgnoreCase) >= 0))
+                return true;
+        }
+
+        return false;
     }
 
     private bool SpawnChinook()
@@ -310,11 +459,14 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         if (Rogue.Terrain.TryGetWaterHeight(position, out float waterHeight))
             position.y = waterHeight;
 
-        BaseEntity? entity = GameManager.server.CreateEntity(CargoShipPrefab, position);
-        if (entity == null)
+        CargoShip? ship = GameManager.server.CreateEntity(CargoShipPrefab, position) as CargoShip;
+        if (ship == null)
             return false;
 
-        entity.Spawn();
+        // Rust's native Cargo Ship event performs triggered-event initialization before Spawn().
+        // This initializes event-specific behaviour, including the normal map/event presentation.
+        ship.TriggeredEventSpawn();
+        ship.Spawn();
         ShowRandomGameTip(RogueWorldEventType.CargoShip, _config.GameTips.CargoShip);
         return true;
     }
@@ -560,6 +712,43 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
             return min + (_random.NextDouble() * (max - min));
     }
 
+    private void MigrateConfiguration(VersionNumber loadedVersion)
+    {
+        // The GameTip repair below belongs to the 1.3.0 upgrade. Running it on every later version
+        // would put back default messages an administrator has since removed.
+        if (loadedVersion >= new VersionNumber(1, 3, 0))
+            return;
+
+        // v1.3.0 repairs the old JSON.NET list-population duplication and expands the built-in
+        // announcement pools. Existing administrator messages are preserved; new defaults are
+        // appended once during migration rather than being forced back on every plugin reload.
+        _config.GameTips ??= new GameTipConfiguration();
+        MergeGameTipDefaults(_config.GameTips.CargoPlane, GameTipConfiguration.CreateCargoPlaneDefaults());
+        MergeGameTipDefaults(_config.GameTips.PatrolHelicopter, GameTipConfiguration.CreatePatrolHelicopterDefaults());
+        MergeGameTipDefaults(_config.GameTips.Chinook, GameTipConfiguration.CreateChinookDefaults());
+        MergeGameTipDefaults(_config.GameTips.CargoShip, GameTipConfiguration.CreateCargoShipDefaults());
+
+        LogInformation("Configuration",
+            "Configuration migrated from v" + loadedVersion + " to v" + CurrentVersion +
+            "; administrator values were preserved, duplicate GameTips removed, and new defaults added.");
+    }
+
+    private static void MergeGameTipDefaults(GameTipSettings? current, GameTipSettings defaults)
+    {
+        if (current == null)
+            return;
+
+        current.Messages ??= new List<string>();
+        NormalizeGameTips(current);
+
+        HashSet<string> seen = new(current.Messages, StringComparer.Ordinal);
+        foreach (string message in defaults.Messages)
+        {
+            if (!string.IsNullOrWhiteSpace(message) && seen.Add(message))
+                current.Messages.Add(message);
+        }
+    }
+
     private void NormalizeConfiguration()
     {
         _config ??= new PluginConfig();
@@ -588,6 +777,15 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
             _config.Scheduler.InitialMaximumSpawnDelaySeconds);
         _config.Scheduler.InitialEventStaggerSeconds = Math.Max(0, _config.Scheduler.InitialEventStaggerSeconds);
         _config.GameTips.DisplaySeconds = Math.Max(1d, _config.GameTips.DisplaySeconds);
+        _config.GameTips.CargoPlane ??= GameTipConfiguration.CreateCargoPlaneDefaults();
+        _config.GameTips.PatrolHelicopter ??= GameTipConfiguration.CreatePatrolHelicopterDefaults();
+        _config.GameTips.Chinook ??= GameTipConfiguration.CreateChinookDefaults();
+        _config.GameTips.CargoShip ??= GameTipConfiguration.CreateCargoShipDefaults();
+
+        NormalizeGameTips(_config.GameTips.CargoPlane);
+        NormalizeGameTips(_config.GameTips.PatrolHelicopter);
+        NormalizeGameTips(_config.GameTips.Chinook);
+        NormalizeGameTips(_config.GameTips.CargoShip);
 
         _config.Chinook.DropDirector ??= new DropDirectorSettings();
         DropDirectorSettings drop = _config.Chinook.DropDirector;
@@ -599,6 +797,27 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         drop.MonumentRadius = Math.Max(0f, drop.MonumentRadius);
         drop.MaximumAttempts = Math.Max(1, drop.MaximumAttempts);
         drop.Monuments ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void NormalizeGameTips(GameTipSettings settings)
+    {
+        settings.Messages ??= new List<string>();
+
+        // Repair configs produced by older versions and keep administrator-added messages.
+        // Ordinal comparison is intentional: differently-capitalized/custom messages remain distinct.
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        int write = 0;
+        for (int read = 0; read < settings.Messages.Count; read++)
+        {
+            string message = settings.Messages[read]?.Trim() ?? string.Empty;
+            if (message.Length == 0 || !seen.Add(message))
+                continue;
+
+            settings.Messages[write++] = message;
+        }
+
+        if (write < settings.Messages.Count)
+            settings.Messages.RemoveRange(write, settings.Messages.Count - write);
     }
 
     private static void NormalizeEvent(EventSettings settings)
@@ -643,7 +862,8 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
             $"Bradley={EventStatus(RogueWorldEventType.Bradley, _config.Bradley, _state.BradleyUtc)} | " +
             $"CH47={EventStatus(RogueWorldEventType.Chinook, _config.Chinook, _state.ChinookUtc)} | " +
             $"Ship={EventStatus(RogueWorldEventType.CargoShip, _config.CargoShip, _state.CargoShipUtc)} | " +
-            $"Crates={WorldEvents.CountActive(RogueWorldEventType.HackableCrate)}");
+            $"Crates={WorldEvents.CountActive(RogueWorldEventType.HackableCrate)} | " +
+            $"Vanilla disabled: {DescribeDisabledVanilla()} ({_blockedVanillaEvents} blocked since load)");
     }
 
     private string EventStatus(RogueWorldEventType type, EventSettings settings, DateTime nextUtc)
@@ -1158,7 +1378,18 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         public string Prefix = "<color=#f2a900>[EVENT]</color>";
 
         [JsonProperty("Cargo Plane")]
-        public GameTipSettings CargoPlane = new()
+        public GameTipSettings CargoPlane = CreateCargoPlaneDefaults();
+
+        [JsonProperty("Patrol Helicopter")]
+        public GameTipSettings PatrolHelicopter = CreatePatrolHelicopterDefaults();
+
+        [JsonProperty("CH47 Chinook")]
+        public GameTipSettings Chinook = CreateChinookDefaults();
+
+        [JsonProperty("Cargo Ship")]
+        public GameTipSettings CargoShip = CreateCargoShipDefaults();
+
+        public static GameTipSettings CreateCargoPlaneDefaults() => new()
         {
             Messages = new List<string>
             {
@@ -1173,12 +1404,59 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
                 "Incoming supplies! May the fastest grub win.",
                 "Cargo plane spotted. Prepare for twenty minutes of bushes pretending to be empty.",
                 "The loot gods have opened the cargo hatch.",
-                "Airdrop inbound — because your inventory wasn't stressful enough already."
+                "Airdrop inbound — because your inventory wasn't stressful enough already.",
+                "Cargo plane inbound — every roof camper just looked up at the same time.",
+                "Air delivery detected. Customer signature may require an AK.",
+                "The island has received express shipping. Delivery insurance was declined.",
+                "Incoming care package — care not included.",
+                "Cargo plane overhead. Your carefully planned farming route has been cancelled.",
+                "Supplies inbound — cue the synchronized sprint toward gunfire.",
+                "The sky is dropping loot again. Surely everyone will share.",
+                "Cargo plane approaching — inventory space is now a competitive advantage.",
+                "Air mail has arrived, addressed to whoever survives.",
+                "Incoming airdrop — bushes across the island are accepting new tenants.",
+                "Cargo plane spotted. Rock owners are suddenly feeling ambitious.",
+                "The server's largest dinner bell is flying overhead.",
+                "Supplies inbound. Remember: smoke means loot, loot means company.",
+                "Cargo plane incoming — diplomacy expires when the crate lands.",
+                "Airborne loot detected. Common sense has left the server.",
+                "Cargo plane overhead — someone is already camping the landing zone.",
+                "The sky vending machine is dispensing one very contested purchase.",
+                "Airdrop inbound — your neighbour has definitely heard it too.",
+                "Cargo plane approaching. Prepare your best 'I was here first' argument.",
+                "Incoming supplies — brought to you by reckless optimism.",
+                "Air delivery on the way. Refunds are unavailable after death.",
+                "Cargo plane spotted — the island's cardio session begins now.",
+                "A crate is taking the scenic route from 10,000 feet.",
+                "Incoming airdrop. The grass is about to become suspiciously full of players.",
+                "Cargo plane overhead — everybody suddenly remembers where their binoculars are.",
+                "Supplies inbound. Please queue politely behind the man with the M249.",
+                "Air freight incoming — contents may include loot, bullets, and regret.",
+                "Cargo plane detected. The nearest horse is about to have a very bad afternoon.",
+                "The sky has loot. The ground has campers. Choose wisely.",
+                "Airdrop inbound — because peaceful resource gathering was getting boring.",
+                "Cargo plane approaching. Expect spontaneous alliances lasting up to seven seconds.",
+                "Incoming supplies — parachute included, survival not guaranteed.",
+                "Air drop detected. Somewhere a clan leader just yelled 'everyone online!'",
+                "Cargo plane overhead — your base door can wait.",
+                "The island's most dangerous delivery service is back.",
+                "Supplies incoming. Please keep your weapon raised until the transaction is complete.",
+                "Airdrop inbound — one crate, forty opinions about who owns it.",
+                "Cargo plane spotted. The beach nakeds have discovered purpose.",
+                "Air delivery incoming — loot first, consequences immediately afterward.",
+                "Cargo plane inbound. That distant gunfire is about to become local.",
+                "The sky is making poor financial decisions again.",
+                "Incoming airdrop — sponsored by bad positioning.",
+                "Cargo plane approaching. Your empty inventory is now a tactical plan.",
+                "Supplies inbound — may your parachute land closer than your enemies.",
+                "Air mail incoming. Recipient: whoever has the better recoil control.",
+                "Cargo plane overhead — the island is about to demonstrate supply and demand.",
+                "Airdrop inbound. Silence will resume sometime after the last magazine is empty.",
+                "Incoming cargo plane — free crate, premium chaos."
             }
         };
 
-        [JsonProperty("Patrol Helicopter")]
-        public GameTipSettings PatrolHelicopter = new()
+        public static GameTipSettings CreatePatrolHelicopterDefaults() => new()
         {
             Messages = new List<string>
             {
@@ -1193,12 +1471,59 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
                 "Patrol helicopter spotted. Naked players: enjoy your temporary diplomatic immunity.",
                 "The sky is angry, armed, and circling your base.",
                 "Patrol heli has entered the chat. Roof campers are typing nervously.",
-                "Incoming patrol helicopter — now is an excellent time to remember where you left the meds."
+                "Incoming patrol helicopter — now is an excellent time to remember where you left the meds.",
+                "Patrol heli inbound — armed roof enthusiasts, this message is specifically for you.",
+                "Rotor noise detected. The island's airborne tax collector has arrived.",
+                "Patrol helicopter approaching — please declare all visible weapons.",
+                "The angry ceiling fan is back and it brought rockets.",
+                "Heli inbound. Your roof has been selected for a complimentary durability test.",
+                "Patrol helicopter spotted — hazmat fashion is suddenly very practical.",
+                "Incoming heli. Put the gun away or prepare to negotiate loudly.",
+                "The sky police are here. They have rejected your appeal.",
+                "Patrol helicopter inbound — windows are now considered optional building parts.",
+                "Rotor blades overhead. Somebody is about to donate a kit to the ground.",
+                "Heli spotted — the safest weapon is currently the one in your inventory.",
+                "Patrol helicopter approaching. Roof access temporarily discouraged.",
+                "The island's loudest security guard has started its shift.",
+                "Heli inbound — if you can hear the rockets, the inspection has begun.",
+                "Patrol helicopter detected. That minicopter trip can probably wait.",
+                "Incoming heli — armed players have been upgraded to priority customers.",
+                "The flying raid alarm has arrived.",
+                "Patrol helicopter overhead. Your compound walls suddenly feel decorative.",
+                "Heli inbound — scientists outsourced customer service to missiles.",
+                "Rotor blades approaching. Please remain calm and absolutely not on the roof.",
+                "Patrol helicopter spotted — every SAM site just became emotionally invested.",
+                "Incoming heli. Somewhere, a player is loading HV rockets with confidence.",
+                "The sky has chosen violence again.",
+                "Patrol helicopter inbound — your shooting floor is now a suggestion.",
+                "Heli detected. The island-wide game of 'hide the AK' begins now.",
+                "Patrol helicopter approaching — free napalm available while supplies last.",
+                "Rotor noise overhead. Insurance claims open after the fire goes out.",
+                "Heli inbound — it saw your weapon and took that personally.",
+                "Patrol helicopter spotted. Time to discover whether that bunker roof was worth it.",
+                "Incoming heli — the airspace has become aggressively unfriendly.",
+                "The angry flying blender requests that you stop moving.",
+                "Patrol helicopter overhead — tactical crouching intensifies.",
+                "Heli inbound. Your neighbour is definitely hoping it chooses you.",
+                "Rotor blades detected — rockets may arrive before this message disappears.",
+                "Patrol helicopter approaching. The roof-camping department is closing early.",
+                "Incoming heli — please store all confidence in a secure container.",
+                "The sky boss has spawned. Optional objective: survive.",
+                "Patrol helicopter spotted — somebody's compound is about to become a landmark.",
+                "Heli inbound. That metal facemask suddenly looks like a beacon.",
+                "Rotor blades overhead — the island has entered temporary no-fun airspace.",
+                "Patrol helicopter approaching. Your base now has an aviation problem.",
+                "Incoming heli — if you're naked, congratulations on your strategic genius.",
+                "The patrol helicopter is back to remind everyone that roofs have consequences.",
+                "Heli spotted — explosive renovations may begin without notice.",
+                "Patrol helicopter inbound. Please extinguish all hopes of a quiet farm run.",
+                "Rotor noise detected. The local wildlife has filed a noise complaint.",
+                "Incoming heli — one flying machine, several hundred questionable decisions.",
+                "Patrol helicopter overhead. Good luck to everyone who forgot to close the garage doors."
             }
         };
 
-        [JsonProperty("CH47 Chinook")]
-        public GameTipSettings Chinook = new()
+        public static GameTipSettings CreateChinookDefaults() => new()
         {
             Messages = new List<string>
             {
@@ -1213,12 +1538,59 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
                 "The Chinook is carrying a crate. Your neighbours are carrying grudges.",
                 "Incoming CH47! Nothing brings the server together like loot worth fighting over.",
                 "Chinook overhead — scientists are delivering today's community disagreement.",
-                "The flying loot bus has arrived. Please form an orderly firefight."
+                "The flying loot bus has arrived. Please form an orderly firefight.",
+                "CH47 inbound — the scientists have scheduled another mandatory PvP meeting.",
+                "Heavy rotors detected. Someone is about to call a locked crate 'theirs'.",
+                "Chinook approaching — monument parking is expected to be terrible.",
+                "CH47 overhead. The crate has not landed and arguments have already begun.",
+                "The flying loot bus is back, and nobody bought a return ticket.",
+                "Chinook inbound — please keep all betrayal inside the monument.",
+                "Heavy rotors approaching. Bring cards, fuses, ammo, and trust issues.",
+                "CH47 spotted — one crate will soon employ half the server.",
+                "Incoming Chinook. Scientists are delivering premium-grade bad decisions.",
+                "The big helicopter has arrived with today's scheduled chaos.",
+                "CH47 inbound — somewhere, a DB grub is already choosing a bush.",
+                "Heavy rotors overhead. Monument occupancy is about to exceed recommended limits.",
+                "Chinook spotted — the crate is locked, but the violence is open immediately.",
+                "Incoming CH47. Your peaceful monument run has been rescheduled.",
+                "The flying loot bus is making a stop. Exact departure time: after enough gunfire.",
+                "CH47 approaching — everyone suddenly remembers they need that monument.",
+                "Heavy rotors detected. The scientists have brought a group project nobody asked for.",
+                "Chinook inbound — hacking timer sold separately.",
+                "The big helicopter is here. Please maintain six bullets of social distance.",
+                "CH47 spotted — valuable cargo and absolutely zero queue discipline.",
+                "Incoming Chinook. Expect scientists, campers, counters, and one very brave naked.",
+                "Heavy rotors overhead — the island's attention span has moved to one location.",
+                "CH47 inbound. The crate will be locked; the area will not be.",
+                "The flying loot bus approaches — next stop: poor judgement.",
+                "Chinook spotted. Your neighbours have suddenly stopped farming.",
+                "Incoming CH47 — a monument is about to become a networking event with guns.",
+                "Heavy rotors detected. Please prepare your favourite excuse for losing a kit.",
+                "CH47 overhead — the scientists are hosting an open house.",
+                "Chinook inbound. The crate comes with a complimentary crowd.",
+                "The big helicopter is approaching — all roads now lead to trouble.",
+                "Incoming CH47. Someone will definitely say 'it's clear' when it isn't.",
+                "Heavy rotors overhead — locked loot, unlocked aggression.",
+                "Chinook spotted. The island has selected today's busiest grid.",
+                "CH47 inbound — bring enough ammo to make new friends from a distance.",
+                "The flying loot bus has arrived with a crate full of server-wide motivation.",
+                "Incoming Chinook. Camping positions are available on a first-come basis.",
+                "Heavy rotors approaching — the monument's property value just collapsed.",
+                "CH47 spotted. Scientists recommend against touching their delivery.",
+                "Chinook inbound — one crate, several clans, flawless conflict resolution.",
+                "The big helicopter is here. Your recycler trip can wait.",
+                "Incoming CH47 — please do not feed the scientists.",
+                "Heavy rotors overhead. The loot is locked because apparently this wasn't difficult enough.",
+                "Chinook approaching. Expect a sudden increase in crouching noises.",
+                "CH47 inbound — the monument has enabled hard mode.",
+                "The flying loot bus is back. Tickets cost one kit each.",
+                "Incoming Chinook. The crate will land wherever your enemies are closest.",
+                "Heavy rotors detected — today's community event is competitive waiting.",
+                "CH47 overhead. Scientists have delivered a box and approximately thirty problems."
             }
         };
 
-        [JsonProperty("Cargo Ship")]
-        public GameTipSettings CargoShip = new()
+        public static GameTipSettings CreateCargoShipDefaults() => new()
         {
             Messages = new List<string>
             {
@@ -1233,7 +1605,55 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
                 "Something valuable is offshore. Naturally, half the server is already on the way.",
                 "Cargo Ship inbound — the scientists have reserved the upper deck for violence.",
                 "The floating loot fortress is back. Swimming there is technically an option.",
-                "Cargo Ship spotted! Your peaceful fishing trip has been cancelled."
+                "Cargo Ship spotted! Your peaceful fishing trip has been cancelled.",
+                "Cargo Ship inbound — every RHIB on the island just gained a purpose.",
+                "The floating loot fortress has entered local waters. Hospitality remains terrible.",
+                "Cargo Ship spotted — scientists are offering ocean views and automatic gunfire.",
+                "Movement offshore. The server's least relaxing cruise has begun.",
+                "Cargo Ship inbound — life jackets optional, ammunition recommended.",
+                "The ocean has produced a monument that refuses to stay still.",
+                "Cargo Ship spotted. Somewhere, a tugboat captain just became ambitious.",
+                "All aboard — today's cruise package includes locked crates and betrayal.",
+                "Cargo Ship approaching. Please arrive thirty minutes early for boarding and counter-raids.",
+                "The floating PvP convention is accepting walk-ins, swimmers, and poor planners.",
+                "Cargo Ship inbound — sunscreen will not protect you from scientists.",
+                "Movement offshore. Fishing rods may now be exchanged for assault rifles.",
+                "Cargo Ship spotted — the upper deck has a strict no-peace policy.",
+                "The ocean's loudest loot box is back.",
+                "Cargo Ship inbound. Check fuel, check ammo, forget to check escape plan.",
+                "Floating loot detected — sharks are somehow not the main concern.",
+                "Cargo Ship approaching. The coast is about to experience rush hour.",
+                "All aboard the S.S. Questionable Decision.",
+                "Cargo Ship spotted — bring meds for the bullets and snacks for the respawn timer.",
+                "Movement offshore. The scientists have launched another hostile cruise.",
+                "Cargo Ship inbound — the boarding queue is armed and extremely impatient.",
+                "The floating fortress is back. Your boat insurance does not cover this.",
+                "Cargo Ship spotted. Expect maritime law to be replaced by roof-camping rules.",
+                "Incoming Cargo Ship — low grade fuel prices are about to spike.",
+                "The ocean has delivered three decks of reasons to lose your kit.",
+                "Cargo Ship approaching. Swimming is free; regretting it is also free.",
+                "All aboard — cabins unavailable, counters guaranteed.",
+                "Cargo Ship spotted — somebody is already claiming they control it.",
+                "Movement offshore. The island's navy consists entirely of players with SARs.",
+                "Cargo Ship inbound — bring a boat you are emotionally prepared to lose.",
+                "The floating loot fortress has arrived. Quiet hours are cancelled.",
+                "Cargo Ship spotted. The nearest beach is about to become a parking lot.",
+                "Incoming ship — scientists request that all visitors remain directly in their sights.",
+                "The ocean event is live. Expect boats, bullets, and one person swimming from grid Z1.",
+                "Cargo Ship approaching — your peaceful base organization can wait.",
+                "All aboard the floating argument over who tagged the scientist first.",
+                "Cargo Ship spotted — maritime PvP has entered peak season.",
+                "Movement offshore. Someone forgot fuel and will discover this halfway there.",
+                "Cargo Ship inbound — the captain has turned off the seatbelt sign and common sense.",
+                "The floating fortress returns. Boarding passes are printed on respawn screens.",
+                "Cargo Ship spotted. Oil rigs are enjoying a rare moment of peace.",
+                "Incoming ship — your minicopter pilot suddenly thinks landing on it is easy.",
+                "The ocean has spawned a loot piñata guarded by people with rifles.",
+                "Cargo Ship approaching. Prepare for nautical crouch-walking.",
+                "All aboard — departure is immediate, survival is flexible.",
+                "Cargo Ship spotted. The coastline has begun making engine noises.",
+                "Movement offshore — one ship, many counters, no refunds.",
+                "Cargo Ship inbound. Welcome to the only cruise where everyone brings their own gun."
             }
         };
     }

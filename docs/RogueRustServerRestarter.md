@@ -2,7 +2,7 @@
 
 > Schedules safe server restarts with RogueRust runtime protection, chat, game-tip and GUI warnings.
 
-**Version:** `2.1.0`  
+**Version:** `2.1.1`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -90,7 +90,7 @@ Reason colours default to `M_DEFAULT`, `M_1` and `M_2` entries.
   "Permission Settings": {
     "Automatically Grant Use/Admin Permissions to Built-In Admin Group": true
   },
-  "Version (DO NOT CHANGE)": "2.1.0"
+  "Version (DO NOT CHANGE)": "2.1.1"
 }
 ```
 

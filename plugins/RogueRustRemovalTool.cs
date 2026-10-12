@@ -12,11 +12,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.1")]
+    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.2")]
     [Description("RogueRust-native building and deployable removal tool.")]
     public sealed class RogueRustRemovalTool : RogueRustPlugin
     {
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 1);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 2);
         private const string UiName = "RogueRustRemovalTool.Hud";
         private const string UiRoot = "RogueRustRemovalTool.UI.Root";
         private const string UiSession = "RogueRustRemovalTool.UI.Session";
@@ -366,6 +366,8 @@ namespace Oxide.Plugins
         protected override void LoadConfig()
         {
             base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
             try
             {
                 _config = Config.ReadObject<Configuration>() ?? new Configuration();
@@ -480,7 +482,14 @@ namespace Oxide.Plugins
                 DestroyRemovalUi(player);
 
             BuildEntityCatalog();
-            if (_config.Access.EntityAgeLimitSeconds > 0f)
+            if (_config.Access.EntityAgeLimitSeconds <= 0f)
+            {
+                // Age tracking is the only consumer of these two server-wide hooks; with the
+                // limit disabled (default) the plugin no longer runs on every spawn and kill.
+                Unsubscribe(nameof(OnEntitySpawned));
+                Unsubscribe(nameof(OnEntityKill));
+            }
+            else
             {
                 foreach (BaseNetworkable networkable in BaseNetworkable.serverEntities)
                 {
@@ -527,9 +536,8 @@ namespace Oxide.Plugins
 
         private void OnEntityKill(BaseNetworkable networkable)
         {
-            BaseEntity entity = networkable as BaseEntity;
-            if (entity?.net != null)
-                _spawnedAt.Remove(entity.net.ID.Value);
+            if (networkable?.net != null && _spawnedAt.Count > 0)
+                _spawnedAt.Remove(networkable.net.ID.Value);
         }
 
         private void OnPlayerDisconnected(BasePlayer player)
@@ -662,8 +670,17 @@ namespace Oxide.Plugins
                 return;
             }
 
+            // Per-session timestamp instead of Throttle("ui:" + id, ...): this runs every tick for each
+            // player holding a session, and the old form allocated a key string and closure each time.
             if (_config.Ui.Enabled)
-                Throttle("ui:" + player.userID, TimeSpan.FromMilliseconds(100), () => ShowSessionUi(player));
+            {
+                float realtime = Time.realtimeSinceStartup;
+                if (realtime >= session.NextUiAt)
+                {
+                    session.NextUiAt = realtime + 0.1f;
+                    ShowSessionUi(player);
+                }
+            }
 
             if (!input.WasJustPressed(BUTTON.FIRE_PRIMARY)) return;
 
@@ -1603,7 +1620,7 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
-                LogWarning("Economics adapter failed safely: " + ex.Message);
+                LogWarning("Integrations", "Economics adapter failed safely: " + ex.Message);
                 return 0d;
             }
         }
@@ -1619,7 +1636,7 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
-                LogWarning("ServerRewards adapter failed safely: " + ex.Message);
+                LogWarning("Integrations", "ServerRewards adapter failed safely: " + ex.Message);
                 return 0;
             }
         }
@@ -1664,8 +1681,19 @@ namespace Oxide.Plugins
                      (session.Mode == RemovalMode.Structure || session.Mode == RemovalMode.All || session.Mode == RemovalMode.External))
             {
                 allowed = true;
-                List<BaseEntity> preview = CollectBulkEntities(target, session.Mode);
-                int discoveredCount = preview.Count;
+                // The HUD refreshes up to 10x/second; walking every decay entity of a large base each time
+                // was the most expensive part of an active bulk session. Reuse the count for a short window
+                // while the player keeps looking at the same building piece.
+                ulong previewId = target.net != null ? target.net.ID.Value : 0UL;
+                float previewNow = Time.realtimeSinceStartup;
+                if (session.PreviewTargetId != previewId || session.PreviewMode != session.Mode || previewNow >= session.PreviewValidUntil)
+                {
+                    session.PreviewTargetId = previewId;
+                    session.PreviewMode = session.Mode;
+                    session.PreviewCount = CollectBulkEntities(target, session.Mode).Count;
+                    session.PreviewValidUntil = previewNow + 1f;
+                }
+                int discoveredCount = session.PreviewCount;
                 int count = discoveredCount;
                 bool capped = _config.Bulk.MaximumEntitiesPerOperation > 0 &&
                               discoveredCount > _config.Bulk.MaximumEntitiesPerOperation;
@@ -1979,6 +2007,11 @@ namespace Oxide.Plugins
             public int DurationSeconds;
             public double LastRemovalAt;
             public int Removed;
+            public float NextUiAt;
+            public ulong PreviewTargetId;
+            public RemovalMode PreviewMode;
+            public int PreviewCount;
+            public float PreviewValidUntil;
         }
 
         private sealed class CostEntry { public ItemDefinition Definition; public int Amount; }

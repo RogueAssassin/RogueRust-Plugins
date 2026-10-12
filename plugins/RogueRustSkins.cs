@@ -17,12 +17,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustSkins", "RogueRust", "2.1.2")]
+    [Info("RogueRustSkins", "RogueRust", "2.3.1")]
     [Description("Performance-first Skinner-style native Rust skin browser powered by RogueRust services.")]
     public sealed class RogueRustSkins : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.2";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 2);
+        private const string PluginVersion = "2.3.1";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 1);
         [RoguePermission]
         private const string PermissionUse = "roguerustskins.use";
         [RoguePermission]
@@ -58,6 +58,8 @@ namespace Oxide.Plugins
         private const string UiRoot = "RRS.NativePager";
         private const string UiHeader = "RRS.SkinnerHeader";
         private const string UiOptions = "RRS.SkinnerOptions";
+        private const string UiContext = "RRS.ContextMenu";
+        private const string UiBuilding = "RRS.BuildingMenu";
         private const int SprayCanItemId = -596876839;
 
         private readonly Dictionary<int, SkinBucket> _skinsByItem = new Dictionary<int, SkinBucket>();
@@ -263,6 +265,8 @@ namespace Oxide.Plugins
         protected override void LoadConfig()
         {
             base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
             try
             {
                 MigrateConfigSectionNames();
@@ -336,6 +340,7 @@ namespace Oxide.Plugins
             public Dictionary<int, List<ulong>> Recent = new Dictionary<int, List<ulong>>();
             public Dictionary<int, HashSet<ulong>> Favourites = new Dictionary<int, HashSet<ulong>>();
             public long LastOnlineUtc;
+            public Dictionary<int, ulong> BuildingSkins = new Dictionary<int, ulong>();
             public Dictionary<int, ulong>[] Sets =
             {
                 new Dictionary<int, ulong>(), new Dictionary<int, ulong>(), new Dictionary<int, ulong>()
@@ -350,22 +355,6 @@ namespace Oxide.Plugins
             public string Name = string.Empty;
             public long ImportedUtc;
         }
-
-        private sealed class SteamPublishedResponse { public SteamPublishedInner response; }
-        private sealed class SteamPublishedInner { public List<SteamPublishedFile> publishedfiledetails; }
-        private sealed class SteamPublishedFile
-        {
-            public int result;
-            public string publishedfileid;
-            public string title;
-            public List<SteamTag> tags;
-        }
-        private sealed class SteamTag { public string tag; }
-
-        private sealed class SteamCollectionResponse { public SteamCollectionInner response; }
-        private sealed class SteamCollectionInner { public List<SteamCollectionDetail> collectiondetails; }
-        private sealed class SteamCollectionDetail { public string publishedfileid; public List<SteamCollectionChild> children; }
-        private sealed class SteamCollectionChild { public string publishedfileid; public int sortorder; public int filetype; }
 
         private sealed class SkinRequestData
         {
@@ -403,10 +392,14 @@ namespace Oxide.Plugins
 
         private void Init()
         {
+            // OnPlayerInput runs for every connected player every server tick. It is only needed while
+            // someone is actually holding a spray can, so it is subscribed on demand (see OnActiveItemChanged).
+            Unsubscribe(nameof(OnPlayerInput));
             LogInformation("Lifecycle",
             $"{Name} {PluginVersion} initialized. " +
             $"Config={Name}.json; Data=RogueRust/RogueRustSkins/; Lang=None");
             cmd.AddChatCommand("skin", this, nameof(CommandSkin));
+            cmd.AddChatCommand("skins", this, nameof(CommandSkins));
             cmd.AddChatCommand("s", this, nameof(CommandSkin));
             cmd.AddChatCommand("skinitem", this, nameof(CommandSkinItem));
             cmd.AddChatCommand("si", this, nameof(CommandSkinItem));
@@ -434,6 +427,8 @@ namespace Oxide.Plugins
             cmd.AddConsoleCommand("rrs.view", this, nameof(CommandView));
             cmd.AddConsoleCommand("rrs.set", this, nameof(CommandSetUi));
             cmd.AddConsoleCommand("rrs.option", this, nameof(CommandOptionUi));
+            cmd.AddConsoleCommand("rrs.context", this, nameof(CommandContextUi));
+            cmd.AddConsoleCommand("rrs.building", this, nameof(CommandBuildingUi));
             cmd.AddChatCommand("skincollection", this, nameof(CommandSkinCollection));
             cmd.AddChatCommand("skinsets", this, nameof(CommandSkinSets));
         }
@@ -456,6 +451,7 @@ namespace Oxide.Plugins
                 LoadPlayerData();
                 LoadRequestData();
                 LoadImportedWorkshopData();
+                MigrateImportedWorkshopToRogueAssets();
                 CleanupInactivePlayerData();
                 _limitedEntity = new BaseEntity { _limitedNetworking = true };
 
@@ -856,6 +852,222 @@ namespace Oxide.Plugins
             return null;
         }
 
+        private void CommandSkins(BasePlayer player, string command, string[] args)
+        {
+            if (!HasFeature(player, PermissionUse)) return;
+            if (args != null && args.Length > 0)
+            {
+                string mode = args[0].ToString().ToLowerInvariant();
+                if (mode == "item") { CommandSkin(player, command, new string[0]); return; }
+                if (mode == "entity" || mode == "deployable")
+                {
+                    string[] deployArgs = args.Length > 1 ? args.Skip(1).ToArray() : new string[0];
+                    CommandSkinItem(player, command, deployArgs);
+                    return;
+                }
+                if (mode == "base" || mode == "building") { ShowBuildingMenu(player); return; }
+                if (mode == "container") { CommandSkinContainer(player, command, new string[0]); return; }
+                if (mode == "sets") { CommandSkinSets(player, command, new string[0]); return; }
+                if (mode == "inventory") { CommandSkinInventory(player, command, new string[0]); return; }
+            }
+            ShowContextMenu(player);
+        }
+
+        private void ShowContextMenu(BasePlayer player)
+        {
+            if (player == null || !player.IsConnected) return;
+            CuiHelper.DestroyUi(player, UiContext);
+            CuiHelper.DestroyUi(player, UiBuilding);
+
+            string targetText = "No contextual target";
+            RaycastHit hit;
+            if (Physics.Raycast(player.eyes.HeadRay(), out hit, _config.Automation.SprayCanRange))
+            {
+                BaseCombatEntity entity = hit.GetEntity() as BaseCombatEntity;
+                ItemDefinition def = GetEntityItemDefinition(entity);
+                if (entity != null)
+                    targetText = def != null ? "Target: " + (def.shortname ?? entity.ShortPrefabName) : "Target: " + entity.ShortPrefabName;
+            }
+
+            PlayerSkinData data = GetPlayerData(player);
+            CuiElementContainer ui = new CuiElementContainer();
+            string root = ui.Add(new CuiPanel
+            {
+                CursorEnabled = true,
+                Image = { Color = "0.055 0.06 0.07 0.97" },
+                RectTransform = { AnchorMin = "0.27 0.20", AnchorMax = "0.73 0.80" }
+            }, "Overlay", UiContext);
+
+            ui.Add(new CuiLabel
+            {
+                Text = { Text = "ROGUERUST SKINS", FontSize = 22, Align = TextAnchor.MiddleLeft, Color = "0.94 0.94 0.94 1" },
+                RectTransform = { AnchorMin = "0.04 0.88", AnchorMax = "0.78 0.97" }
+            }, root);
+            ui.Add(new CuiLabel
+            {
+                Text = { Text = targetText + "   |   Active set: " + data.SelectedSet, FontSize = 12, Align = TextAnchor.MiddleLeft, Color = "0.68 0.72 0.76 1" },
+                RectTransform = { AnchorMin = "0.04 0.81", AnchorMax = "0.90 0.88" }
+            }, root);
+            ui.Add(new CuiButton
+            {
+                Button = { Color = "0.55 0.16 0.16 1", Command = "rrs.context close" },
+                Text = { Text = "X", FontSize = 16, Align = TextAnchor.MiddleCenter },
+                RectTransform = { AnchorMin = "0.92 0.90", AnchorMax = "0.97 0.96" }
+            }, root);
+
+            AddContextButton(ui, root, "Held Item", "Browse skins for the item in your hands", "rrs.context item", "0.04 0.60", "0.31 0.76");
+            AddContextButton(ui, root, "Target", "Apply active set to the deployable you are looking at", "rrs.context entity", "0.365 0.60", "0.635 0.76");
+            AddContextButton(ui, root, "Browse Target", "Choose a different skin for the targeted deployable", "rrs.context entitybrowse", "0.69 0.60", "0.96 0.76");
+            AddContextButton(ui, root, "Inventory", "Apply the active set to your inventory", "rrs.context inventory", "0.04 0.36", "0.31 0.52");
+            AddContextButton(ui, root, "Base", "Structures, deployables and whole-base actions", "rrs.context base", "0.365 0.36", "0.635 0.52");
+            AddContextButton(ui, root, "Sets", "Manage the active skin set", "rrs.context sets", "0.69 0.36", "0.96 0.52");
+
+            ui.Add(new CuiLabel
+            {
+                Text = { Text = "Primary command: /skins. Target applies your active set immediately; Browse Target opens skin selection.", FontSize = 11, Align = TextAnchor.MiddleCenter, Color = "0.58 0.62 0.66 1" },
+                RectTransform = { AnchorMin = "0.04 0.05", AnchorMax = "0.96 0.15" }
+            }, root);
+            CuiHelper.AddUi(player, ui);
+        }
+
+        private static void AddContextButton(CuiElementContainer ui, string parent, string title, string subtitle, string command, string anchorMin, string anchorMax)
+        {
+            string panel = ui.Add(new CuiButton
+            {
+                Button = { Color = "0.12 0.14 0.16 1", Command = command },
+                Text = { Text = title + "\n<size=10><color=#AEB5BC>" + subtitle + "</color></size>", FontSize = 15, Align = TextAnchor.MiddleCenter, Color = "0.93 0.93 0.93 1" },
+                RectTransform = { AnchorMin = anchorMin, AnchorMax = anchorMax }
+            }, parent);
+        }
+
+        private void CommandContextUi(ConsoleSystem.Arg arg)
+        {
+            BasePlayer player = arg.Player();
+            if (player == null || !permission.UserHasPermission(player.UserIDString, PermissionUse)) return;
+            string action = arg.Args != null && arg.Args.Length > 0 ? arg.Args[0].ToString().ToLowerInvariant() : string.Empty;
+            CuiHelper.DestroyUi(player, UiContext);
+            CuiHelper.DestroyUi(player, UiBuilding);
+            switch (action)
+            {
+                case "item": CommandSkin(player, "skins", new string[0]); break;
+                case "entity": CommandSkinItem(player, "skins", new string[0]); break;
+                case "entitybrowse": CommandSkinItem(player, "skins", new[] { "browse" }); break;
+                case "base": ShowBuildingMenu(player); break;
+                case "inventory": CommandSkinInventory(player, "skins", new string[0]); break;
+                case "container": CommandSkinContainer(player, "skins", new string[0]); break;
+                case "sets": CommandSkinSets(player, "skins", new string[0]); break;
+                case "favourites": CommandSkinFavourite(player, "skins", new string[0]); break;
+                case "recent": CommandSkinRecent(player, "skins", new string[0]); break;
+                case "all": CommandSkinAll(player, "skins", new string[0]); break;
+                case "close": break;
+                default: ShowContextMenu(player); break;
+            }
+        }
+
+        private void ShowBuildingMenu(BasePlayer player)
+        {
+            if (player == null || !player.IsConnected || _rogue == null) return;
+            if (!HasFeature(player, PermissionBase)) return;
+            if (!player.IsBuildingAuthed() && !permission.UserHasPermission(player.UserIDString, PermissionBypassAuth))
+            {
+                SendReply(player, "You must have building authorization to manage this base.");
+                return;
+            }
+
+            CuiHelper.DestroyUi(player, UiBuilding);
+            PlayerSkinData data = GetPlayerData(player);
+            CuiElementContainer ui = new CuiElementContainer();
+            string root = ui.Add(new CuiPanel
+            {
+                CursorEnabled = true,
+                Image = { Color = "0.055 0.06 0.07 0.98" },
+                RectTransform = { AnchorMin = "0.20 0.14", AnchorMax = "0.80 0.86" }
+            }, "Overlay", UiBuilding);
+
+            ui.Add(new CuiLabel
+            {
+                Text = { Text = "BASE SKINS", FontSize = 22, Align = TextAnchor.MiddleLeft, Color = "0.94 0.94 0.94 1" },
+                RectTransform = { AnchorMin = "0.04 0.90", AnchorMax = "0.70 0.97" }
+            }, root);
+            ui.Add(new CuiButton
+            {
+                Button = { Color = "0.55 0.16 0.16 1", Command = "rrs.building close" },
+                Text = { Text = "X", FontSize = 16, Align = TextAnchor.MiddleCenter },
+                RectTransform = { AnchorMin = "0.93 0.91", AnchorMax = "0.97 0.96" }
+            }, root);
+
+            AddBuildingGradeRow(ui, root, data, BuildingGrade.Enum.Wood, "WOOD", "0.76 0.86");
+            AddBuildingGradeRow(ui, root, data, BuildingGrade.Enum.Stone, "STONE", "0.60 0.70");
+            AddBuildingGradeRow(ui, root, data, BuildingGrade.Enum.Metal, "METAL", "0.44 0.54");
+            AddBuildingGradeRow(ui, root, data, BuildingGrade.Enum.TopTier, "ARMORED", "0.28 0.38");
+
+            AddContextButton(ui, root, "Structures", "Apply selected grade skins to this authorized building", "rrs.building structures", "0.04 0.08", "0.31 0.20");
+            AddContextButton(ui, root, "Deployables", "Apply active item set to base deployables", "rrs.building deployables", "0.365 0.08", "0.635 0.20");
+            AddContextButton(ui, root, "Whole Base", "Apply structures and deployables", "rrs.building all", "0.69 0.08", "0.96 0.20");
+            CuiHelper.AddUi(player, ui);
+        }
+
+        private void AddBuildingGradeRow(CuiElementContainer ui, string parent, PlayerSkinData data, BuildingGrade.Enum grade, string label, string y)
+        {
+            string[] bounds = y.Split(' ');
+            float minY = float.Parse(bounds[0], CultureInfo.InvariantCulture);
+            float maxY = float.Parse(bounds[1], CultureInfo.InvariantCulture);
+            ui.Add(new CuiLabel
+            {
+                Text = { Text = label, FontSize = 13, Align = TextAnchor.MiddleLeft, Color = "0.72 0.76 0.80 1" },
+                RectTransform = { AnchorMin = "0.04 " + minY.ToString(CultureInfo.InvariantCulture), AnchorMax = "0.16 " + maxY.ToString(CultureInfo.InvariantCulture) }
+            }, parent);
+
+            IReadOnlyList<RogueBuildingSkinEntry> skins = _rogue.Skins.GetBuildingSkins((int)grade);
+            ulong selected = 0;
+            data.BuildingSkins.TryGetValue((int)grade, out selected);
+            int count = Math.Max(1, skins.Count);
+            float startX = 0.17f;
+            float width = 0.79f / count;
+            for (int i = 0; i < skins.Count; i++)
+            {
+                RogueBuildingSkinEntry skin = skins[i];
+                float x1 = startX + width * i;
+                float x2 = startX + width * (i + 1) - 0.006f;
+                bool active = selected == skin.SkinId;
+                ui.Add(new CuiButton
+                {
+                    Button = { Color = active ? "0.20 0.45 0.28 1" : "0.12 0.14 0.16 1", Command = "rrs.building select " + ((int)grade) + " " + skin.SkinId },
+                    Text = { Text = skin.Name, FontSize = 11, Align = TextAnchor.MiddleCenter, Color = "0.94 0.94 0.94 1" },
+                    RectTransform = { AnchorMin = x1.ToString(CultureInfo.InvariantCulture) + " " + minY.ToString(CultureInfo.InvariantCulture), AnchorMax = x2.ToString(CultureInfo.InvariantCulture) + " " + maxY.ToString(CultureInfo.InvariantCulture) }
+                }, parent);
+            }
+        }
+
+        private void CommandBuildingUi(ConsoleSystem.Arg arg)
+        {
+            BasePlayer player = arg.Player();
+            if (player == null || !permission.UserHasPermission(player.UserIDString, PermissionUse)) return;
+            string action = arg.Args != null && arg.Args.Length > 0 ? arg.Args[0].ToString() : string.Empty;
+            if (string.Equals(action, "close", StringComparison.OrdinalIgnoreCase)) { CuiHelper.DestroyUi(player, UiBuilding); return; }
+            if (string.Equals(action, "select", StringComparison.OrdinalIgnoreCase) && arg.Args.Length >= 3)
+            {
+                int grade;
+                ulong skinId;
+                if (int.TryParse(arg.Args[1].ToString(), out grade) && ulong.TryParse(arg.Args[2].ToString(), out skinId))
+                {
+                    IReadOnlyList<RogueBuildingSkinEntry> available = _rogue.Skins.GetBuildingSkins(grade);
+                    if (available.Any(x => x.SkinId == skinId))
+                    {
+                        GetPlayerData(player).BuildingSkins[grade] = skinId;
+                        MarkPlayerDataDirty();
+                    }
+                }
+                ShowBuildingMenu(player);
+                return;
+            }
+            CuiHelper.DestroyUi(player, UiBuilding);
+            if (string.Equals(action, "structures", StringComparison.OrdinalIgnoreCase)) { ApplyBuildingStructures(player); return; }
+            if (string.Equals(action, "deployables", StringComparison.OrdinalIgnoreCase)) { ApplyBuildingDeployables(player, true); return; }
+            if (string.Equals(action, "all", StringComparison.OrdinalIgnoreCase)) { ApplyBuildingStructures(player); ApplyBuildingDeployables(player, false); return; }
+            ShowBuildingMenu(player);
+        }
+
         private void CommandSkinItem(BasePlayer player, string command, string[] args)
         {
             if (!HasFeature(player, PermissionItems)) return;
@@ -864,20 +1076,63 @@ namespace Oxide.Plugins
                 SendReply(player, "You need building authorization to skin this deployable.");
                 return;
             }
-            RaycastHit hit;
-            if (!Physics.Raycast(player.eyes.HeadRay(), out hit, _config.Automation.SprayCanRange))
+
+            BaseCombatEntity entity;
+            ItemDefinition def;
+            if (!TryGetLookTarget(player, out entity, out def))
             {
                 SendReply(player, "Look at a skinnable deployable.");
                 return;
             }
-            BaseCombatEntity entity = hit.GetEntity() as BaseCombatEntity;
-            ItemDefinition def = GetEntityItemDefinition(entity);
-            if (entity == null || def == null)
+
+            bool browse = args != null && args.Length > 0 &&
+                string.Equals(args[0].ToString(), "browse", StringComparison.OrdinalIgnoreCase);
+            if (browse)
             {
-                SendReply(player, "No skinnable deployable found.");
+                OpenDeployableBrowser(player, entity, def);
                 return;
             }
-            OpenDeployableBrowser(player, entity, def);
+
+            if (!ApplySelectedSetToDeployable(player, entity, def))
+                SendReply(player, "Your active skin set has no usable skin for this deployable. Use /skins deployable browse to choose one.");
+        }
+
+        private bool TryGetLookTarget(BasePlayer player, out BaseCombatEntity entity, out ItemDefinition def)
+        {
+            entity = null;
+            def = null;
+            if (player == null) return false;
+            RaycastHit hit;
+            if (!Physics.Raycast(player.eyes.HeadRay(), out hit, _config.Automation.SprayCanRange)) return false;
+            entity = hit.GetEntity() as BaseCombatEntity;
+            if (entity == null || entity.IsDestroyed) return false;
+            def = GetEntityItemDefinition(entity);
+            return def != null;
+        }
+
+        private bool ApplySelectedSetToDeployable(BasePlayer player, BaseCombatEntity entity, ItemDefinition def)
+        {
+            if (player == null || entity == null || entity.IsDestroyed || def == null) return false;
+            ItemDefinition canonical = def.isRedirectOf ?? def;
+            Dictionary<int, ulong> set = GetSelectedSet(player);
+            ulong skinId;
+            if (!set.TryGetValue(canonical.itemid, out skinId)) return false;
+
+            SkinEntry entry = null;
+            if (skinId != 0)
+            {
+                if (!_skinById.TryGetValue(skinId, out entry) || entry == null) return false;
+                if (IsBlacklisted(canonical.itemid, skinId) || !CanPlayerUseSkin(player, entry)) return false;
+            }
+
+            BrowserState state = new BrowserState
+            {
+                Player = player,
+                TargetEntity = entity,
+                ItemId = canonical.itemid
+            };
+            ApplySkinToDeployable(state, skinId);
+            return true;
         }
 
         private void OpenDeployableBrowser(BasePlayer player, BaseCombatEntity entity, ItemDefinition def)
@@ -975,6 +1230,8 @@ namespace Oxide.Plugins
         private void DrawPager(BasePlayer player, RogueSkinSession session)
         {
             CuiHelper.DestroyUi(player, UiRoot);
+            CuiHelper.DestroyUi(player, UiContext);
+            CuiHelper.DestroyUi(player, UiBuilding);
             if (session.PageCount <= 1) return;
 
             CuiElementContainer ui = new CuiElementContainer();
@@ -2022,95 +2279,80 @@ namespace Oxide.Plugins
             SendReply(player, string.Join(" | ", parts));
         }
 
-        private void CommandSkinCollection(BasePlayer player, string command, string[] args)
+        private async void CommandSkinCollection(BasePlayer player, string command, string[] args)
         {
             if (!HasFeature(player, PermissionCollection) || !_config.Requests.EnableCollectionImports) return;
             ulong collectionId;
             if (args == null || args.Length != 1 || !ulong.TryParse(args[0], out collectionId) || collectionId == 0)
             { SendReply(player, "Usage: /skincollection <collectionID>"); return; }
             if (_workshopJobs.Contains(collectionId)) { SendReply(player, "That collection is already being processed."); return; }
+            if (_rogue?.Workshop == null || !_rogue.Workshop.IsReady) { SendReply(player, "RogueRust Workshop service is not ready."); return; }
+
             _workshopJobs.Add(collectionId);
-            string body = "collectioncount=1&publishedfileids[0]=" + collectionId.ToString(CultureInfo.InvariantCulture);
-            webrequest.Enqueue("https://api.steampowered.com/ISteamRemoteStorage/GetCollectionDetails/v1/", body, (code, response) =>
+            try
             {
-                _workshopJobs.Remove(collectionId);
-                if (code != 200 || string.IsNullOrWhiteSpace(response))
-                { if (player != null && player.IsConnected) SendReply(player, "Steam collection request failed (HTTP " + code + ")."); return; }
-                try
+                RogueWorkshopCollectionResult result = await _rogue.Workshop.ResolveCollectionAsync(collectionId);
+                if (!result.Success)
                 {
-                    SteamCollectionResponse parsed = JsonConvert.DeserializeObject<SteamCollectionResponse>(response);
-                    List<ulong> ids = new List<ulong>();
-                    if (parsed?.response?.collectiondetails != null)
-                        foreach (SteamCollectionDetail detail in parsed.response.collectiondetails)
-                            if (detail?.children != null)
-                                foreach (SteamCollectionChild child in detail.children)
-                                {
-                                    ulong id;
-                                    if (child != null && ulong.TryParse(child.publishedfileid, out id) && id != 0) ids.Add(id);
-                                }
-                    ids = ids.Distinct().ToList();
-                    if (ids.Count == 0) { if (player != null && player.IsConnected) SendReply(player, "No Workshop items were found in that collection."); return; }
-                    if (!_config.Requests.CollectionIds.Contains(collectionId)) { _config.Requests.CollectionIds.Add(collectionId); SaveConfig(); }
-                    QueueWorkshopImport(player, ids, true);
+                    if (player != null && player.IsConnected) SendReply(player, result.Error);
+                    return;
                 }
-                catch (Exception ex) { PrintError("Collection import parse failed: " + ex.Message); }
-            }, this, Oxide.Core.Libraries.RequestMethod.POST, new Dictionary<string, string> { ["Content-Type"] = "application/x-www-form-urlencoded" }, _config.Requests.TimeoutSeconds);
+                if (result.WorkshopIds.Count == 0)
+                {
+                    if (player != null && player.IsConnected) SendReply(player, "No Workshop items were found in that collection.");
+                    return;
+                }
+                if (!_config.Requests.CollectionIds.Contains(collectionId)) { _config.Requests.CollectionIds.Add(collectionId); SaveConfig(); }
+                ImportResolvedWorkshop(result.Resolution.Items, out int imported, out int failed);
+                FinishWorkshopImport(player, 0, imported, failed + result.Resolution.MissingIds.Count, true);
+            }
+            catch (Exception ex)
+            {
+                PrintError("Collection import failed: " + ex.Message);
+                if (player != null && player.IsConnected) SendReply(player, "Workshop collection import failed.");
+            }
+            finally { _workshopJobs.Remove(collectionId); }
         }
 
-        private void QueueWorkshopImport(BasePlayer requester, List<ulong> ids, bool collection)
+        private async void QueueWorkshopImport(BasePlayer requester, List<ulong> ids, bool collection)
         {
             if (ids == null || ids.Count == 0) return;
+            if (_rogue?.Workshop == null || !_rogue.Workshop.IsReady)
+            {
+                if (requester != null && requester.IsConnected) SendReply(requester, "RogueRust Workshop service is not ready.");
+                return;
+            }
             List<ulong> unique = ids.Where(x => x != 0 && !_workshopJobs.Contains(x)).Distinct().ToList();
             if (unique.Count == 0) return;
-            int batchSize = Mathf.Clamp(_config.Requests.BatchSize, 1, 100);
-            int pending = unique.Count;
-            int imported = 0;
-            int failed = 0;
-
-            for (int start = 0; start < unique.Count; start += batchSize)
+            foreach (ulong id in unique) _workshopJobs.Add(id);
+            try
             {
-                List<ulong> batch = unique.Skip(start).Take(batchSize).ToList();
-                foreach (ulong id in batch) _workshopJobs.Add(id);
-                StringBuilder form = new StringBuilder("itemcount=").Append(batch.Count);
-                for (int i = 0; i < batch.Count; i++) form.Append("&publishedfileids[").Append(i).Append("]=").Append(batch[i]);
-                webrequest.Enqueue("https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/", form.ToString(), (code, response) =>
-                {
-                    foreach (ulong id in batch) _workshopJobs.Remove(id);
-                    if (code != 200 || string.IsNullOrWhiteSpace(response))
-                    {
-                        failed += batch.Count; pending -= batch.Count;
-                        FinishWorkshopImport(requester, pending, imported, failed, collection);
-                        return;
-                    }
-                    try
-                    {
-                        SteamPublishedResponse parsed = JsonConvert.DeserializeObject<SteamPublishedResponse>(response);
-                        int handled = 0;
-                        if (parsed?.response?.publishedfiledetails != null)
-                        {
-                            foreach (SteamPublishedFile file in parsed.response.publishedfiledetails)
-                            {
-                                handled++;
-                                ImportedWorkshopSkin skin;
-                                if (TryMapWorkshopFile(file, out skin))
-                                {
-                                    _importedWorkshop[skin.SkinId] = skin;
-                                    _config.General.BlacklistedSkins.Remove(skin.SkinId);
-                                    imported++;
-                                }
-                                else failed++;
-                            }
-                        }
-                        failed += Math.Max(0, batch.Count - handled);
-                    }
-                    catch (Exception ex)
-                    {
-                        failed += batch.Count;
-                        PrintError("Workshop import parse failed: " + ex.Message);
-                    }
-                    pending -= batch.Count;
-                    FinishWorkshopImport(requester, pending, imported, failed, collection);
-                }, this, Oxide.Core.Libraries.RequestMethod.POST, new Dictionary<string, string> { ["Content-Type"] = "application/x-www-form-urlencoded" }, _config.Requests.TimeoutSeconds);
+                RogueWorkshopResolveResult result = await _rogue.Workshop.ResolveAsync(unique);
+                ImportResolvedWorkshop(result.Items, out int imported, out int failed);
+                failed += result.MissingIds.Count;
+                if (!string.IsNullOrWhiteSpace(result.Error)) PrintWarning(result.Error);
+                FinishWorkshopImport(requester, 0, imported, failed, collection);
+            }
+            catch (Exception ex)
+            {
+                PrintError("Workshop import failed: " + ex.Message);
+                FinishWorkshopImport(requester, 0, 0, unique.Count, collection);
+            }
+            finally { foreach (ulong id in unique) _workshopJobs.Remove(id); }
+        }
+
+        private void ImportResolvedWorkshop(IReadOnlyList<RogueWorkshopAssetRecord> records, out int imported, out int failed)
+        {
+            imported = 0;
+            failed = 0;
+            if (records == null) return;
+            foreach (RogueWorkshopAssetRecord record in records)
+            {
+                ImportedWorkshopSkin skin;
+                if (!TryMapWorkshopAsset(record, out skin)) { failed++; continue; }
+                _importedWorkshop[skin.SkinId] = skin;
+                _config.General.BlacklistedSkins.Remove(skin.SkinId);
+                imported++;
             }
         }
 
@@ -2121,44 +2363,41 @@ namespace Oxide.Plugins
             SaveConfig();
             RefreshLiveCatalogue(collection ? "workshop-collection-import" : "workshop-import");
             if (requester != null && requester.IsConnected)
-                SendReply(requester, "Workshop import complete: " + imported + " imported, " + failed + " skipped/failed.");
+                SendReply(requester, "Workshop import complete: " + imported + " imported, " + failed + " unsupported/skipped/failed.");
         }
 
-        private bool TryMapWorkshopFile(SteamPublishedFile file, out ImportedWorkshopSkin imported)
+        private void MigrateImportedWorkshopToRogueAssets()
+        {
+            if (_rogue?.Assets == null || !_rogue.Assets.IsReady || _importedWorkshop.Count == 0) return;
+            foreach (ImportedWorkshopSkin skin in _importedWorkshop.Values)
+            {
+                if (skin == null || skin.SkinId == 0) continue;
+                _rogue.Assets.UpsertWorkshop(new RogueWorkshopAssetRecord
+                {
+                    WorkshopId = skin.SkinId,
+                    Title = skin.Name ?? string.Empty,
+                    ItemShortname = skin.Shortname ?? string.Empty,
+                    LastVerifiedUtc = skin.ImportedUtc
+                });
+            }
+        }
+
+        private bool TryMapWorkshopAsset(RogueWorkshopAssetRecord record, out ImportedWorkshopSkin imported)
         {
             imported = null;
-            ulong id;
-            if (file == null || file.result != 1 || !ulong.TryParse(file.publishedfileid, out id) || id == 0) return false;
-            ItemDefinition def = ResolveWorkshopItem(file.tags);
+            if (record == null || record.WorkshopId == 0 || string.IsNullOrWhiteSpace(record.ItemShortname)) return false;
+            ItemDefinition def = ItemManager.FindItemDefinition(record.ItemShortname);
             if (def == null) return false;
             ItemDefinition canonical = def.isRedirectOf ?? def;
             imported = new ImportedWorkshopSkin
             {
-                SkinId = id,
+                SkinId = record.WorkshopId,
                 ItemId = canonical.itemid,
                 Shortname = canonical.shortname,
-                Name = string.IsNullOrWhiteSpace(file.title) ? id.ToString(CultureInfo.InvariantCulture) : file.title,
-                ImportedUtc = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                Name = string.IsNullOrWhiteSpace(record.Title) ? record.WorkshopId.ToString(CultureInfo.InvariantCulture) : record.Title,
+                ImportedUtc = record.LastVerifiedUtc > 0 ? record.LastVerifiedUtc : DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             };
             return true;
-        }
-
-        private ItemDefinition ResolveWorkshopItem(List<SteamTag> tags)
-        {
-            if (tags == null) return null;
-            foreach (SteamTag tag in tags)
-            {
-                if (tag == null || string.IsNullOrWhiteSpace(tag.tag)) continue;
-                string normalized = new string(tag.tag.Where(char.IsLetterOrDigit).Select(c => char.ToLowerInvariant(c)).ToArray());
-                foreach (ItemDefinition def in ItemManager.GetItemDefinitions())
-                {
-                    if (def == null || def.isRedirectOf != null) continue;
-                    string display = new string((def.displayName?.english ?? string.Empty).Where(char.IsLetterOrDigit).Select(c => char.ToLowerInvariant(c)).ToArray());
-                    string shortname = new string((def.shortname ?? string.Empty).Where(char.IsLetterOrDigit).Select(c => char.ToLowerInvariant(c)).ToArray());
-                    if (normalized == display || normalized == shortname) return def;
-                }
-            }
-            return null;
         }
 
         private void LoadImportedWorkshopData()
@@ -2342,7 +2581,7 @@ namespace Oxide.Plugins
 
         private void CommandSkinBase(BasePlayer player, string command, string[] args)
         {
-            if (!HasFeature(player, PermissionBase) || !CheckCooldown(player, "base", _config.Cooldowns.Base)) return;
+            if (!HasFeature(player, PermissionBase)) return;
             ApplyBuildingSkins(player, false);
         }
 
@@ -2353,28 +2592,66 @@ namespace Oxide.Plugins
             ApplyBuildingSkins(player, true);
         }
 
-        private void ApplyBuildingSkins(BasePlayer player, bool includeInventoryMessage)
+        private BuildingManager.Building GetAuthorizedBuilding(BasePlayer player)
         {
-            if (!player.IsBuildingAuthed() && !permission.UserHasPermission(player.UserIDString, PermissionBypassAuth))
-            { SendReply(player, "You must have building authorization to use this command."); return; }
+            if (player == null) return null;
+            if (!player.IsBuildingAuthed() && !permission.UserHasPermission(player.UserIDString, PermissionBypassAuth)) return null;
             BuildingPrivlidge privilege = player.GetBuildingPrivilege();
-            BuildingManager.Building building = privilege?.GetBuilding();
+            return privilege != null ? privilege.GetBuilding() : null;
+        }
+
+        private void ApplyBuildingStructures(BasePlayer player)
+        {
+            if (!HasFeature(player, PermissionBase) || !CheckCooldown(player, "base-structures", _config.Cooldowns.Base)) return;
+            BuildingManager.Building building = GetAuthorizedBuilding(player);
             if (building == null) { SendReply(player, "No authorized building was found."); return; }
+            PlayerSkinData data = GetPlayerData(player);
+            BuildingBlock[] blocks = building.decayEntities.OfType<BuildingBlock>().Take(_config.Performance.MaxBulkOperations).ToArray();
+            int changed = 0;
+            int skippedDamaged = 0;
+            _rogue.Workloads.Batch(CacheOwner, "building-structures:" + player.userID, blocks.Length,
+                _config.Performance.BulkBatchSize, TimeSpan.Zero,
+                index =>
+                {
+                    if (player == null || !player.IsConnected) return false;
+                    BuildingBlock block = blocks[index];
+                    if (block == null || block.IsDestroyed) return true;
+                    if (block.SecondsSinceAttacked < 30f) { skippedDamaged++; return true; }
+                    ulong skinId;
+                    if (!data.BuildingSkins.TryGetValue((int)block.grade, out skinId)) skinId = 0;
+                    IReadOnlyList<RogueBuildingSkinEntry> available = _rogue.Skins.GetBuildingSkins((int)block.grade);
+                    if (!available.Any(x => x.SkinId == skinId)) return true;
+                    if (block.skinID == skinId) return true;
+                    block.skinID = skinId;
+                    block.ChangeGradeAndSkin(block.grade, skinId, true, true);
+                    block.SendNetworkUpdateImmediate();
+                    changed++;
+                    return true;
+                },
+                () =>
+                {
+                    if (player != null && player.IsConnected)
+                        SendReply(player, "Updated " + changed + " building block(s)." + (skippedDamaged > 0 ? " Skipped " + skippedDamaged + " recently damaged block(s)." : string.Empty));
+                });
+        }
+
+        private void ApplyBuildingDeployables(BasePlayer player, bool sendMessage)
+        {
+            if (!HasFeature(player, PermissionBase)) return;
+            BuildingManager.Building building = GetAuthorizedBuilding(player);
+            if (building == null) { if (sendMessage) SendReply(player, "No authorized building was found."); return; }
             Dictionary<int, ulong> skins = GetSelectedSet(player);
             DecayEntity[] entities = building.decayEntities.Take(_config.Performance.MaxBulkOperations).ToArray();
             int changed = 0;
-            _rogue.Workloads.Batch(
-                CacheOwner,
-                "building:" + player.userID,
-                entities.Length,
-                _config.Performance.BulkBatchSize,
-                TimeSpan.Zero,
+            _rogue.Workloads.Batch(CacheOwner, "building-deployables:" + player.userID, entities.Length,
+                _config.Performance.BulkBatchSize, TimeSpan.Zero,
                 index =>
                 {
                     if (player == null || !player.IsConnected) return false;
                     BaseCombatEntity entity = entities[index] as BaseCombatEntity;
-                    ItemDefinition def = entity != null && !entity.IsDestroyed ? entity.pickup.itemTarget : null;
-                    if (entity == null || def == null) return true;
+                    if (entity == null || entity.IsDestroyed || entity is BuildingBlock) return true;
+                    ItemDefinition def = GetEntityItemDefinition(entity);
+                    if (def == null) return true;
                     int itemId = (def.isRedirectOf ?? def).itemid;
                     ulong skinId;
                     if (!skins.TryGetValue(itemId, out skinId)) return true;
@@ -2386,11 +2663,13 @@ namespace Oxide.Plugins
                     changed++;
                     return true;
                 },
-                () =>
-                {
-                    if (player != null && player.IsConnected)
-                        SendReply(player, $"Applied skin set {GetPlayerData(player).SelectedSet} to {changed} deployable(s) in the authorized building.");
-                });
+                () => { if (sendMessage && player != null && player.IsConnected) SendReply(player, "Updated " + changed + " base deployable(s)."); });
+        }
+
+        private void ApplyBuildingSkins(BasePlayer player, bool includeInventoryMessage)
+        {
+            ApplyBuildingStructures(player);
+            ApplyBuildingDeployables(player, !includeInventoryMessage);
         }
 
         private bool ApplySetSkin(BasePlayer targetPlayer, Item item, Dictionary<int, ulong> set, BasePlayer skinOwner = null)
@@ -2417,8 +2696,13 @@ namespace Oxide.Plugins
         {
             BasePlayer player = container?.playerOwner;
             if (player == null || item?.info == null || !_config.Automation.EnableAutoSkinning) return;
-            PlayerSkinData data = GetPlayerData(player);
-            if (!data.AutoSkin) return;
+            PlayerSkinData data;
+            if (!_playerData.TryGetValue(player.userID, out data) || data == null || !data.AutoSkin) return;
+            // Cheap pre-check before queueing work: this hook fires for every new stack gathered, looted
+            // or moved into a player inventory. Only queue when the active set has a different skin for it.
+            Dictionary<int, ulong> set = GetSelectedSet(player);
+            ulong wanted;
+            if (set == null || !set.TryGetValue((item.info.isRedirectOf ?? item.info).itemid, out wanted) || wanted == item.skin) return;
             NextTick(() => { if (item != null && item.parent != null) ApplySetSkin(player, item, GetSelectedSet(player)); });
         }
 
@@ -2427,6 +2711,18 @@ namespace Oxide.Plugins
             if (player == null || !_config.Automation.EnableSprayCanOverride) return;
             if (newItem?.info?.itemid == SprayCanItemId) _sprayHeld.Add(player.userID);
             else _sprayHeld.Remove(player.userID);
+            UpdateSprayInputSubscription();
+        }
+
+        private bool _sprayInputSubscribed;
+
+        private void UpdateSprayInputSubscription()
+        {
+            bool wanted = _sprayHeld.Count != 0;
+            if (wanted == _sprayInputSubscribed) return;
+            _sprayInputSubscribed = wanted;
+            if (wanted) Subscribe(nameof(OnPlayerInput));
+            else Unsubscribe(nameof(OnPlayerInput));
         }
 
         private readonly Dictionary<ulong, float> _sprayInputTimes = new Dictionary<ulong, float>();
@@ -2440,7 +2736,7 @@ namespace Oxide.Plugins
             if (_sprayInputTimes.TryGetValue(player.userID, out last) && now - last < _config.Automation.SprayCanCooldownSeconds) return;
             _sprayInputTimes[player.userID] = now;
             if (!permission.UserHasPermission(player.UserIDString, PermissionItems)) return;
-            CommandSkinItem(player, "spraycan", Array.Empty<string>());
+            CommandSkinItem(player, "spraycan", new[] { "browse" });
         }
 
         private void OnPlayerLootEnd(PlayerLoot loot)
@@ -2462,6 +2758,8 @@ namespace Oxide.Plugins
         {
             if (player == null) return;
             CuiHelper.DestroyUi(player, UiRoot);
+            CuiHelper.DestroyUi(player, UiContext);
+            CuiHelper.DestroyUi(player, UiBuilding);
             CuiHelper.DestroyUi(player, UiHeader);
             CuiHelper.DestroyUi(player, UiOptions);
         }
@@ -2470,6 +2768,7 @@ namespace Oxide.Plugins
             if (player == null) return;
             _sprayHeld.Remove(player.userID);
             _sprayInputTimes.Remove(player.userID);
+            UpdateSprayInputSubscription();
             CloseBrowser(player.userID, false);
         }
 

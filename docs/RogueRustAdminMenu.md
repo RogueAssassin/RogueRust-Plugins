@@ -2,7 +2,7 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
 
-**Version:** `2.5.0`  
+**Version:** `2.5.3`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -45,6 +45,13 @@ Designed for Rust servers running **Oxide** or **Carbon** with the RogueRust ext
 - `roguerustadminmenu.players.kill` — kill actions.
 - `roguerustadminmenu.players.strip` — strip inventory actions.
 - `roguerustadminmenu.players.teleport` — teleport actions.
+- `roguerustadminmenu.players.inventory` — view and manage player inventories.
+- `roguerustadminmenu.players.spectate` — spectate players.
+- `roguerustadminmenu.players.notes` — moderation notes.
+- `roguerustadminmenu.players.bulk` — bulk player actions.
+- `roguerustadminmenu.commands` — the admin command page.
+- `roguerustadminmenu.audit` — audit history.
+- `roguerustadminmenu.diagnostics` — diagnostics page.
 - `roguerustadminmenu.vanish` — AdminVanishUncharted.
 - `roguerustadminmenu.vehicles` — vehicle administration/spawning.
 
@@ -143,7 +150,7 @@ The `UI Theme` object contains the full F1-style colour palette and can be custo
   },
   "Integrations": { "Log Menu Actions To Discord Webhook (webhook URL)": "" },
   "Data Settings": { "Recent Players Purge Time (days)": 7 },
-  "Version (DO NOT CHANGE)": "2.5.0"
+  "Version (DO NOT CHANGE)": "2.5.3"
 }
 ```
 

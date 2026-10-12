@@ -2,7 +2,7 @@
 
 > RogueRust death notification engine based on the Death Notes concept, with native GUI output, per-player controls and optional notification integrations.
 
-**Version:** `2.2.1`  
+**Version:** `2.5.3`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -11,7 +11,11 @@
 
 ## Recent Changes
 
-- Configuration section ordering standardized to the RogueRust family convention.
+- **2.5.3:** restored the default display names for killers and victims (animals, NPCs, traps, turrets, locks, vehicles) and about 85 weapon and vehicle aliases. They ship in the RogueRust DLL (4.4.62 or newer) and are written to `killer-data` for editing.
+- Traps, turrets and locks are named from their entity class again (`Auto Turret`, `Shotgun Trap`) instead of a raw prefab name.
+- Held weapons are resolved from the running server's item list, so a new gun or tool is named correctly without a plugin update.
+- `/dn off` and team-only mode now also apply to Patrol Helicopter and Bradley tag messages.
+- `RoamingNPC` entities are classified as custom NPCs.
 
 ## Features
 
@@ -38,13 +42,16 @@ Neither is required when using native GUI/chat/console output.
 - `roguerustdeathnotes.cantsee` — prevents the player from receiving notices.
 - `roguerustdeathnotes.suppress` — suppresses messages involving the player.
 - `roguerustdeathnotes.seeteamonly` — restricts notices to team-related events.
+
+> **Do not grant every permission to a group.** `cantsee`, `suppress` and `seeteamonly` switch notices *off*. A group that holds all four permissions (for example an `admin` group granted everything) sees no death notes at all, and deaths involving its members are hidden from everyone.
+
 - Additional display permissions configured for Patrol Helicopter, Bradley or individual death messages are registered dynamically when they use the `roguerustdeathnotes.*` namespace.
 
 ## Commands
 
 ### `/dn`
 
-Player-facing death-notification controls. Availability is controlled by `Can Player Use /dn Command` in configuration. The command manages the player's enabled/team-only preference state.
+Player-facing death-notification controls: `/dn [on|off|toggle|teamonly|teamoff|meters|feet|yards]`. With no argument it toggles notices. Distance units are a per-player choice. Availability is controlled by `Can Player Use /dn Command` in configuration.
 
 ## Configuration
 
