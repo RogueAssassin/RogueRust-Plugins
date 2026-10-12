@@ -2,18 +2,20 @@
 
 > A malfunctioning patrol helicopter flies in and crashes. The crash site is marked on the map, guarded, and reported until it is looted or expires.
 
-**Version:** `1.0.0`  
+**Version:** `1.0.1`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.62 or newer
 
 [Plugin source](../plugins/RogueRustHeliCrash.cs) · [Back to plugin catalogue](../README.md)
 
-> **Preview.** This is the first release and it has not yet completed a full in-game test cycle. Try it on a test server first and report anything odd.
+## Recent Changes
+
+- **1.0.1:** a crash site now needs dry land for 70 m in every direction. The helicopter spins before it explodes and throws its crates outwards, so a site on the shoreline could put the loot in the sea.
 
 ## Features
 
-- **Site selection** — a random point on land, away from water, cliffs, monuments, the map edge and player buildings, or one of your own custom locations with a random offset.
+- **Site selection** — a random point on land with dry ground all round, away from water, cliffs, monuments, the map edge and player buildings, or one of your own custom locations with a random offset.
 - **Fly-in** — a patrol helicopter appears about 1,000 m out and flies to the site. By default it cannot be damaged and does not attack on the way.
 - **Crash** — near the site it goes through the game's own shot-down sequence: spin, explosion, burning crates.
 - **Crash site** — marked, guarded and reported until every crate is looted or the site expires.

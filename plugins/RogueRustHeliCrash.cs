@@ -10,14 +10,14 @@ using UnityEngine;
 using UnityEngine.AI;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.0")]
+    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.1")]
     [Description("A malfunctioning patrol helicopter flies in and crashes. The crash site is marked on the map, guarded, and reported until it is looted or expires.")]
     public sealed class RogueRustHeliCrash : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerusthelicrash.admin";
-        private const string PluginVersion = "1.0.0";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 0);
+        private const string PluginVersion = "1.0.1";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 1);
 
         private const string HelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
         private const string HackableCratePrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
@@ -36,6 +36,7 @@ namespace Oxide.Plugins
         private const float CrashSpinTimeout = 45f;
         private const float CrateClaimRadius = 150f;
         private const float CrateClaimGrace = 10f;
+        private const float ShoreBuffer = 70f;
 
         private enum Phase { Idle, Flying, Crashing, Site }
 
@@ -694,6 +695,16 @@ namespace Oxide.Plugins
 
             int topology;
             if (World.TryGetTopology(site, out topology) && (topology & BlockedTopology) != 0) return false;
+
+            // The helicopter spins for a few seconds before it explodes and its crates are thrown
+            // outwards, so the wreck can end up tens of metres from the chosen point. Require dry
+            // land all the way round, or a site on the shoreline puts the loot in the sea.
+            for (int i = 0; i < 8; i++)
+            {
+                float angle = i * Mathf.PI * 0.25f;
+                Vector3 around = Grounded(site + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * ShoreBuffer);
+                if (IsUnderwater(around)) return false;
+            }
             if (TerrainMeta.HeightMap.GetSlope(site) > _config.Site.MaximumSlope) return false;
 
             float monumentDistance = _config.Site.AvoidMonuments;

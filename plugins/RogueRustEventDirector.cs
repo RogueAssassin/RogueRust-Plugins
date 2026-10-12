@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustEventDirector", "RogueAssassin", "1.3.2")]
+[Info("RogueRustEventDirector", "RogueAssassin", "1.4.0")]
 [Description("Performance-focused world event scheduling and CH47 crate direction powered by RogueRust.")]
 public sealed class RogueRustEventDirector : RogueRustPlugin
 {
@@ -18,9 +18,9 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     [RoguePermission]
     private const string AdminPermission = "roguerusteventdirector.admin";
 
-    private const string PluginVersion = "1.3.2";
+    private const string PluginVersion = "1.4.0";
 
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 3, 2);
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 0);
 
     private const string CargoPlanePrefab = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
     private const string PatrolHelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
@@ -75,6 +75,11 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         EnsureSchedules();
         LogInformation("Events", "Vanilla spawns disabled for: " + DescribeDisabledVanilla() + ".");
 
+        // Mark a Bradley that was already out when the plugin loaded.
+        foreach (RogueWorldEventEntity tracked in WorldEvents.GetActive(RogueWorldEventType.Bradley))
+            if (tracked.NativeEntity is BradleyAPC bradley)
+                AddMarker(bradley, _config.Markers.Bradley);
+
         foreach (RogueWorldEventEntity tracked in WorldEvents.GetActive(RogueWorldEventType.Chinook))
         {
             if (tracked.NativeEntity is CH47HelicopterAIController chinook)
@@ -92,6 +97,7 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     private void Unload()
     {
         ReleaseVanillaBradley();
+        RemoveAllMarkers();
         SaveState();
         _scheduledChinooks.Clear();
         _chinookDropAttempts.Clear();
@@ -194,6 +200,7 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     {
         DateTime now = DateTime.UtcNow;
         HoldVanillaBradley();
+        UpdateMarkers();
 
         ProcessEvent(
             RogueWorldEventType.CargoPlane,
@@ -341,7 +348,14 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         if (entity == null)
             return false;
 
+        // Left alone, the plane picks its own drop point, which can be on the shoreline or in a lake.
+        // Give it a checked spot on dry, reasonably flat land before it works out its flight path.
+        if (_config.Placement.DirectAirdropsToLand && entity is CargoPlane plane && TryPickLandPosition(out Vector3 drop))
+            plane.InitDropPosition(drop);
+
         entity.Spawn();
+        if (entity.net != null)
+            _managedPlanes.Add(entity.net.ID.Value);
         ShowRandomGameTip(RogueWorldEventType.CargoPlane, _config.GameTips.CargoPlane);
         return true;
     }
@@ -577,13 +591,20 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         _chinookDropAttempts[id] = attempts;
 
         Vector3 position = chinook.transform.position;
+
+        // The crate lands on whatever is under the helicopter, so the checks are made on the ground
+        // below it. (Testing the helicopter itself always passed: it flies far above the sea.)
+        bool onLand = !drop.AvoidWater || IsDryGround(position, drop.WaterClearance);
         bool valid =
-            (!drop.AvoidWater || Rogue.Terrain.IsAboveWater(position, drop.WaterClearance)) &&
+            onLand &&
+            IsBuildableGround(position) &&
             (!drop.AvoidMonuments || IsAllowedMonumentPosition(position, drop)) &&
             !IsNearHackableCrate(position, drop.MinimumCrateSpacing);
 
+        // The fallback relaxes the placement preferences, never the water rule: a crate on the sea
+        // bed is not a usable drop. If the helicopter never crosses land it leaves with its crate.
         bool maxAttemptsReached = attempts >= Math.Max(1, drop.MaximumAttempts);
-        if (valid || (maxAttemptsReached && drop.FallbackDropAfterMaximumAttempts))
+        if (valid || (maxAttemptsReached && drop.FallbackDropAfterMaximumAttempts && onLand))
         {
             chinook.DropCrate();
 
@@ -644,6 +665,186 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
 
         return false;
     }
+
+    #region Placement
+
+    private const int WaterTopology =
+        TerrainTopology.OCEAN | TerrainTopology.OFFSHORE | TerrainTopology.LAKE | TerrainTopology.RIVER;
+
+    // True when the ground at this map position is above the water line and not sea, lake or river bed.
+    private bool IsDryGround(Vector3 position, float clearance)
+    {
+        if (!Rogue.Terrain.TryGetHeight(position, out float ground))
+            return false;
+        if (Rogue.Terrain.TryGetWaterHeight(position, out float water) && ground < water + Math.Max(0.25f, clearance))
+            return false;
+        return !World.TryGetTopology(position, out int topology) || (topology & WaterTopology) == 0;
+    }
+
+    // Slope and distance from player buildings, as set under Placement Rules.
+    private bool IsBuildableGround(Vector3 position)
+    {
+        PlacementSettings rules = _config.Placement;
+        if (rules.MaximumSlope > 0f && TerrainMeta.HeightMap != null &&
+            TerrainMeta.HeightMap.GetSlope(position) > rules.MaximumSlope)
+            return false;
+
+        if (rules.AvoidBases <= 0f || !Rogue.Terrain.TryGetHeight(position, out float ground))
+            return true;
+
+        position.y = ground;
+        return !Physics.CheckSphere(position, rules.AvoidBases, Rust.Layers.Mask.Construction, QueryTriggerInteraction.Ignore);
+    }
+
+    private bool TryPickLandPosition(out Vector3 position)
+    {
+        float half = World.WorldSize * 0.5f - Math.Max(50f, _config.Placement.EdgeBuffer);
+        for (int attempt = 0; half > 0f && attempt < 200; attempt++)
+        {
+            position = new Vector3(RandomAxis(half), 0f, RandomAxis(half));
+            if (IsDryGround(position, 0.5f) && IsBuildableGround(position))
+                return true;
+        }
+
+        position = Vector3.zero;
+        return false;
+    }
+
+    #endregion
+
+    #region Map markers
+
+    private const string LabelMarkerPrefab = "assets/prefabs/deployable/vendingmachine/vending_mapmarker.prefab";
+    private const string RadiusMarkerPrefab = "assets/prefabs/tools/map/genericradiusmarker.prefab";
+
+    private sealed class TrackedMarker
+    {
+        public BaseEntity Target = null!;
+        public VendingMachineMapMarker? Label;
+        public MapMarkerGenericRadius? Circle;
+        public Vector3 LastPosition;
+    }
+
+    private readonly List<TrackedMarker> _markers = new();
+    private readonly HashSet<ulong> _managedPlanes = new();
+    private int _markerTick;
+
+    // Cargo ships, patrol helicopters, CH47s and hackable crates create their own map marker when
+    // they spawn. The Bradley and airdrops have none in the game, so they get a labelled marker here.
+    private void OnEntitySpawned(BradleyAPC bradley)
+    {
+        if (bradley != null)
+            AddMarker(bradley, _config.Markers.Bradley);
+    }
+
+    private void OnSupplyDropDropped(SupplyDrop drop, CargoPlane plane)
+    {
+        if (drop == null || plane == null || plane.net == null || !_managedPlanes.Contains(plane.net.ID.Value))
+            return;
+        AddMarker(drop, _config.Markers.Airdrop);
+    }
+
+    private void OnEntityKill(CargoPlane plane)
+    {
+        if (plane?.net != null)
+            _managedPlanes.Remove(plane.net.ID.Value);
+    }
+
+    private void AddMarker(BaseEntity target, MarkerSettings settings)
+    {
+        if (settings == null || !settings.Enabled || target == null || target.IsDestroyed)
+            return;
+        foreach (TrackedMarker existing in _markers)
+            if (ReferenceEquals(existing.Target, target))
+                return;
+
+        Vector3 position = target.transform.position;
+        TrackedMarker marker = new() { Target = target, LastPosition = position };
+
+        if (settings.CircleSize > 0f &&
+            GameManager.server.CreateEntity(RadiusMarkerPrefab, position) is MapMarkerGenericRadius circle)
+        {
+            circle.enableSaving = false;
+            circle.alpha = Mathf.Clamp01(settings.CircleAlpha);
+            circle.radius = Mathf.Clamp(settings.CircleSize, 0.05f, 2.5f);
+            circle.color1 = ParseColour(settings.CircleColour);
+            circle.color2 = Color.black;
+            circle.Spawn();
+            circle.SendUpdate();
+            marker.Circle = circle;
+        }
+
+        if (GameManager.server.CreateEntity(LabelMarkerPrefab, position) is VendingMachineMapMarker label)
+        {
+            label.enableSaving = false;
+            label.markerShopName = string.IsNullOrWhiteSpace(settings.Label) ? target.ShortPrefabName : settings.Label;
+            label.Spawn();
+            marker.Label = label;
+        }
+
+        _markers.Add(marker);
+    }
+
+    // Called from the scheduler tick. Markers follow their target and are removed with it.
+    private void UpdateMarkers()
+    {
+        if (_markers.Count == 0 || ++_markerTick % 3 != 0)
+            return;
+
+        for (int i = _markers.Count - 1; i >= 0; i--)
+        {
+            TrackedMarker marker = _markers[i];
+            if (marker.Target == null || marker.Target.IsDestroyed)
+            {
+                KillMarker(marker);
+                _markers.RemoveAt(i);
+                continue;
+            }
+
+            Vector3 position = marker.Target.transform.position;
+            if ((position - marker.LastPosition).sqrMagnitude < 4f)
+                continue;
+            marker.LastPosition = position;
+
+            if (marker.Label != null && !marker.Label.IsDestroyed)
+            {
+                marker.Label.transform.position = position;
+                marker.Label.SendNetworkUpdate();
+            }
+            if (marker.Circle != null && !marker.Circle.IsDestroyed)
+            {
+                marker.Circle.transform.position = position;
+                marker.Circle.SendNetworkUpdate();
+                marker.Circle.SendUpdate();
+            }
+        }
+    }
+
+    private static void KillMarker(TrackedMarker marker)
+    {
+        if (marker.Label != null && !marker.Label.IsDestroyed) marker.Label.Kill();
+        if (marker.Circle != null && !marker.Circle.IsDestroyed) marker.Circle.Kill();
+    }
+
+    private void RemoveAllMarkers()
+    {
+        foreach (TrackedMarker marker in _markers)
+            KillMarker(marker);
+        _markers.Clear();
+    }
+
+    private static Color ParseColour(string value)
+    {
+        string[] parts = (value ?? string.Empty).Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 3 &&
+            float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) &&
+            float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float g) &&
+            float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float b))
+            return new Color(Mathf.Clamp01(r), Mathf.Clamp01(g), Mathf.Clamp01(b));
+        return Color.red;
+    }
+
+    #endregion
 
     private void EnsureSchedules()
     {
@@ -759,6 +960,13 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         _config.Bradley ??= EventSettings.BradleyDefault();
         _config.Chinook ??= new ChinookSettings();
         _config.CargoShip ??= EventSettings.CargoShipDefault();
+        _config.Placement ??= new PlacementSettings();
+        _config.Placement.MaximumSlope = Mathf.Clamp(_config.Placement.MaximumSlope, 0f, 60f);
+        _config.Placement.AvoidBases = Mathf.Clamp(_config.Placement.AvoidBases, 0f, 300f);
+        _config.Placement.EdgeBuffer = Mathf.Clamp(_config.Placement.EdgeBuffer, 50f, 1500f);
+        _config.Markers ??= new MarkerConfiguration();
+        _config.Markers.Bradley ??= new MarkerSettings { Label = "Bradley APC" };
+        _config.Markers.Airdrop ??= new MarkerSettings { Label = "Airdrop", CircleColour = "0.2 0.7 1" };
         _config.GameTips ??= new GameTipConfiguration();
 
         NormalizeEvent(_config.CargoPlane);
@@ -1209,11 +1417,59 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         [JsonProperty("Cargo Ship", Order = 60)]
         public EventSettings CargoShip = EventSettings.CargoShipDefault();
 
+        [JsonProperty("Placement Rules", Order = 62)]
+        public PlacementSettings Placement = new();
+
+        [JsonProperty("Map Markers", Order = 64)]
+        public MarkerConfiguration Markers = new();
+
         [JsonProperty("GameTip Announcements", Order = 70)]
         public GameTipConfiguration GameTips = new();
 
         [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]
         public VersionNumber Version = CurrentVersion;
+    }
+
+    public sealed class PlacementSettings
+    {
+        [JsonProperty("Direct Managed Airdrops To Dry Land")]
+        public bool DirectAirdropsToLand = true;
+
+        [JsonProperty("Steepest Ground Allowed For Airdrops And CH47 Crates (Degrees, 0 = Any)")]
+        public float MaximumSlope = 30f;
+
+        [JsonProperty("Keep Airdrops And CH47 Crates This Far From Player Buildings (Metres, 0 = Off)")]
+        public float AvoidBases = 40f;
+
+        [JsonProperty("Keep Airdrops This Far From The Map Edge (Metres)")]
+        public float EdgeBuffer = 250f;
+    }
+
+    public sealed class MarkerConfiguration
+    {
+        [JsonProperty("Bradley APC")]
+        public MarkerSettings Bradley = new() { Label = "Bradley APC", CircleColour = "1 0.2 0.1" };
+
+        [JsonProperty("Managed Airdrop")]
+        public MarkerSettings Airdrop = new() { Label = "Airdrop", CircleColour = "0.2 0.7 1" };
+    }
+
+    public sealed class MarkerSettings
+    {
+        [JsonProperty("Enabled")]
+        public bool Enabled = true;
+
+        [JsonProperty("Label")]
+        public string Label = string.Empty;
+
+        [JsonProperty("Circle Size (0 = No Circle, Up To 2.5)")]
+        public float CircleSize = 0.3f;
+
+        [JsonProperty("Circle Opacity (0 - 1)")]
+        public float CircleAlpha = 0.4f;
+
+        [JsonProperty("Circle Colour (Red Green Blue, Each 0-1)")]
+        public string CircleColour = "1 0.2 0.1";
     }
 
     public sealed class SchedulerSettings

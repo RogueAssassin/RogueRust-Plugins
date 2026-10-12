@@ -1,6 +1,6 @@
 # RogueRust Event Director
 
-**Version:** `1.3.2`  
+**Version:** `1.4.0`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -16,11 +16,21 @@ Performance-focused world-event scheduling and CH47 crate direction powered by R
 - Randomized minimum/maximum intervals and spawn counts
 - Per-event concurrency limits, global spacing between managed events, and dedicated retry handling for spawn failures
 - Persistent next-run schedule state
-- CH47 crate drop director with retry timing, crate spacing, water checks, optional monument avoidance, maximum-attempt handling and configurable fallback drops
+- CH47 crate drop director with retry timing, crate spacing, dry-land checks, optional monument avoidance, maximum-attempt handling and configurable fallback drops
 - Admin status, spawn and reschedule commands
 - Randomized player GameTip announcements for Cargo Plane, Patrol Helicopter, CH47 and Cargo Ship spawns
 - Persistent last-spawn timestamps alongside next-run schedules
 - RogueRust world-event tracking integration
+- Managed airdrops directed to dry land, with slope and player-building rules
+- Map markers for the Bradley and for managed airdrops
+
+## Recent Changes
+
+- **1.4.0:** CH47 crates are kept off the water. `Avoid Water` used to test the helicopter's own position, which is always far above the sea, so crates could be dropped over open ocean. It now tests the ground underneath.
+- The fallback drop after the maximum attempts still relaxes the monument, spacing, slope and building rules, but it no longer drops over water.
+- Managed airdrops are given a checked drop point on dry land before the plane takes off.
+- New **Placement Rules**: steepest ground, distance from player buildings, and distance from the map edge.
+- New **Map Markers**: the Bradley and managed airdrops get a labelled marker and coloured circle, because the game has no marker of its own for either.
 
 ## Disabling vanilla spawns
 
@@ -67,9 +77,6 @@ Generates a fresh next-run time for one managed event, or for every enabled even
 |patrol|bradley|chinook|ship>`
 Immediately requests the selected managed event. Aliases accepted by the command include `heli`, `tank`, `ch47`, `cargo`.
 
-### `rred.reschedule`
-Generates fresh next-run times for all managed event schedules and saves them immediately.
-
 ## Configuration
 
 ### Scheduler Settings
@@ -104,13 +111,36 @@ Cargo Plane, Patrol Helicopter, Bradley APC and Cargo Ship use the same base set
 - **Minimum Retry Seconds** — default `40`.
 - **Maximum Retry Seconds** — default `60`.
 - **Maximum Attempts** — maximum number of directed drop placement attempts before fallback/abort handling. Default `30`.
-- **Fallback Drop After Maximum Attempts** — when enabled, forces a drop after exhausting placement attempts rather than abandoning the drop.
+- **Fallback Drop After Maximum Attempts** — when enabled, drops after exhausting placement attempts, ignoring the monument, spacing, slope and building rules but still requiring dry land. If the helicopter never crosses land it leaves with its crate.
 - **Minimum Crate Spacing** — default `300` metres.
-- **Avoid Water** — default `true`.
+- **Avoid Water** — default `true`. Tests the ground under the helicopter. This rule is never relaxed by the fallback drop.
 - **Water Clearance** — default `0.25`.
 - **Avoid Monuments** — default `false`.
 - **Monument Radius** — default `140` metres.
 - **Monuments** — optional per-monument enable/disable map.
+
+### Placement Rules
+
+Apply to managed airdrops and to CH47 crates.
+
+- **Direct Managed Airdrops To Dry Land** — default `true`. The plugin picks a drop point above the water line that is not sea, lake or river bed, and hands it to the cargo plane. Vanilla airdrops and supply signals are not changed.
+- **Steepest Ground Allowed For Airdrops And CH47 Crates (Degrees, 0 = Any)** — default `30`.
+- **Keep Airdrops And CH47 Crates This Far From Player Buildings (Metres, 0 = Off)** — default `40`.
+- **Keep Airdrops This Far From The Map Edge (Metres)** — default `250`.
+
+### Map Markers
+
+Cargo ships, patrol helicopters, CH47s and hackable crates create their own map marker when they spawn, including the ones this plugin spawns. The Bradley and airdrops have none in the game, so the plugin adds one.
+
+`Bradley APC` and `Managed Airdrop` each have:
+
+- **Enabled** — default `true`.
+- **Label** — shown when the marker is hovered. Defaults `Bradley APC` and `Airdrop`.
+- **Circle Size (0 = No Circle, Up To 2.5)** — default `0.3`.
+- **Circle Opacity (0 - 1)** — default `0.4`.
+- **Circle Colour (Red Green Blue, Each 0-1)** — red for the Bradley, blue for airdrops.
+
+The Bradley marker follows every Bradley on the map, including ones spawned by other plugins, and is removed when it is destroyed. The airdrop marker is added to drops from this plugin's own cargo planes and is removed when the drop is looted.
 
 ### GameTip Announcements
 
@@ -187,7 +217,7 @@ Cargo Plane, Patrol Helicopter, Bradley APC and Cargo Ship use the same base set
     "Maximum Spawn Count": 1,
     "Maximum Concurrent": 1
   },
-  "Version (DO NOT CHANGE)": "1.3.2"
+  "Version (DO NOT CHANGE)": "1.4.0"
 }
 ```
 
