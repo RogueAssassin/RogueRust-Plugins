@@ -2,7 +2,7 @@
 
 > Configures Rust's turret interference ConVars through a small RogueRust administration plugin.
 
-**Version:** `2.1.2`  
+**Version:** `2.1.3`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)

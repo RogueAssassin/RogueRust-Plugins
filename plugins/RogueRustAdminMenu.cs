@@ -22,12 +22,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.0")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.3")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.0";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 0);
+    private const string PluginVersion = "2.5.3";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 3);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -339,21 +339,30 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         DestroyUi(player, CursorRoot);
     }
 
-    private void OnPermissionRegistered(string name, Plugin owner) => UpdatePermissionList();
+    // Every plugin registers several permissions while the server boots or a plugin reloads; rebuilding
+    // the sorted permission tree once per registration repeated the same work hundreds of times.
+    // Coalesce into a single rebuild on the next tick.
+    private void OnPermissionRegistered(string name, Plugin owner) => QueuePermissionListUpdate();
+
+    private void QueuePermissionListUpdate() =>
+        CoalesceNextTick("adminmenu-permission-tree", UpdatePermissionList);
+
     private void OnPluginLoaded(Plugin plugin)
     {
         _pluginInfoCacheDirty = true;
-        UpdatePermissionList();
+        QueuePermissionListUpdate();
         Adapters.Refresh();
     }
 
     private void OnPluginUnloaded(Plugin plugin)
     {
         _pluginInfoCacheDirty = true;
-        UpdatePermissionList();
+        QueuePermissionListUpdate();
         Adapters.Refresh();
     }
-    private void OnServerSave() => SaveRecentPlayers();
+    // Periodic saves write on a worker thread (RogueRust 4.4.60+); Unload below still saves
+    // synchronously so nothing is left queued when the plugin goes away.
+    private void OnServerSave() => SaveRecentPlayers(background: true);
 
     private void Unload()
     {
@@ -603,6 +612,8 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     protected override void LoadConfig()
     {
         base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
         bool migratedLegacy = false;
         string loadedVersion = "unknown";
         try
@@ -1018,10 +1029,11 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         PurgeRecentPlayers();
     }
 
-    private void SaveRecentPlayers()
+    private void SaveRecentPlayers(bool background = false)
     {
         if (!_recentPlayersDirty) return;
-        SaveData(RecentPlayersDataKey, _recentPlayers);
+        if (background) SaveDataInBackground(RecentPlayersDataKey, _recentPlayers);
+        else SaveData(RecentPlayersDataKey, _recentPlayers);
         _recentPlayersDirty = false;
     }
 
@@ -2354,6 +2366,11 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     private object? OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
     {
+        // Runs for every damage event on the server; nothing below applies unless someone currently
+        // has teleport protection or vanish god mode.
+        if (_teleportProtectionUntil.Count == 0 && _vanishGodMode.Count == 0)
+            return null;
+
         if (info != null && _config.Teleport.BreakProtectionOnAttack)
         {
             BasePlayer attacker = info.InitiatorPlayer;
@@ -3907,7 +3924,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         Delay(TimeSpan.FromSeconds(2), () =>
         {
             _auditSaveQueued = false;
-            SaveData(AuditHistoryDataKey, _auditHistory);
+            SaveDataInBackground(AuditHistoryDataKey, _auditHistory);
         }, "adminmenu-audit-save");
     }
 

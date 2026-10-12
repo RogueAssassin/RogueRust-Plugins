@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("DayNightScheduler", "RogueAssassin", "3.1.1")]
+    [Info("DayNightScheduler", "RogueAssassin", "3.1.2")]
     [Description("RogueRust-powered day/night duration scheduling, cycle skipping, and protected time controls.")]
     public sealed class RogueRustDayNightScheduler : RogueRustPlugin
     {
@@ -21,9 +21,9 @@ namespace Oxide.Plugins
         private const string DefaultLanguage = "en";
         private const string InitRetryWorkload = "tod-initialize";
 
-        private const string PluginVersion = "3.1.1";
+        private const string PluginVersion = "3.1.2";
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 1);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 2);
 
         private ConfigData _config;
         private TOD_Sky _sky;
@@ -122,6 +122,8 @@ namespace Oxide.Plugins
         protected override void LoadConfig()
         {
             base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
             try
             {
                 Dictionary<string, object> raw = Config.ReadObject<Dictionary<string, object>>();

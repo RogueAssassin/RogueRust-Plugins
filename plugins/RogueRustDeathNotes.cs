@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("RogueRustDeathNotes", "RogueAssassin", "2.2.1")]
+	[Info("RogueRustDeathNotes", "RogueAssassin", "2.5.3")]
 	[Description("RogueRustDeathNotes - RogueRust death notification engine, based on the original Death Notes concept, with integrated native GUI output and per-player controls.")]
 	public sealed class RogueRustDeathNotes : RogueRustPlugin
 	{
@@ -41,9 +41,9 @@ namespace Oxide.Plugins
         [RoguePermission]
         private const string TeamOnlyPermission = "roguerustdeathnotes.seeteamonly";
 
-		private const string PluginVersion = "2.2.1";
+		private const string PluginVersion = "2.5.3";
 
-		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 1);
+		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 3);
 
 		private static RogueRustDeathNotes _instance;
 
@@ -70,66 +70,10 @@ namespace Oxide.Plugins
         {
             public bool Enabled = true;
             public bool TeamOnly;
+            // Empty means use the server default, preserving existing saved preferences.
+            public string DistanceUnit = "";
         }
 
-		private readonly Dictionary<string, string> _enemyPrefabs = new()
-		{
-			["spikes.floor"] = "Wooden Floor Spike Cluster",
-			["spikes_static"] = "Wooden Floor Spike Cluster",
-			["barricade.woodwire"] = "Barbed Wooden Barricade",
-			["barricade.metal"] = "Metal Barricade",
-			["wall.external.high.wood"] = "High External Wooden Wall",
-			["wall.external.high.stone"] = "High External Stone Wall",
-			["gates.external.high.stone"] = "High External Stone Gate",
-			["campfire"] = "Campfire",
-			["skull_fire_pit"] = "Skull Fire Pit",
-			["heavyscientist"] = "Heavy Scientist"
-		};
-		private readonly Dictionary<string, string> _weaponPrefabs = new()
-		{
-			["rocket_basic"] = "Rocket",
-			["rocket_hv"] = "High Velocity Rocket",
-			["rocket_fire"] = "Incendiary Rocket",
-			["grenade.f1.deployed"] = "F1 Grenade",
-			["grenade.beancan.deployed"] = "Beancan Grenade",
-			["survey_charge.deployed"] = "Survey Charge",
-			["explosive.satchel.deployed"] = "Satchel Charge",
-			["explosive.timed.deployed"] = "Timed Explosive Charge",
-			["rock.entity"] = "Rock",
-			["longsword.entity"] = "Longsword",
-			["mace.entity"] = "Mace",
-			["spear_stone.entity"] = "Stone Spear",
-			["spear_wooden.entity"] = "Wooden Spear",
-			["machete.weapon"] = "Machete",
-			["knife_bone.entity"] = "Bone Knife",
-			["bone_club.entity"] = "Bone Club",
-			["salvaged_cleaver.entity"] = "Salvaged Cleaver",
-			["salvaged_sword.entity"] = "Salvaged Sword",
-			["candy_cane.entity"] = "Candy Cane Club",
-			["flamethrower.entity"] = "Flame Thrower",
-			["snowball.entity"] = "Snowball",
-			["combat.knife.entity"] = "Combat Knife"
-		};
-		private readonly Dictionary<string, CombatEntityType> _combatEntityTypes = new()
-		{
-			["GunTrap"]  = CombatEntityType.Trap,
-			["FlameTurret"]  = CombatEntityType.Turret,
-			["AutoTurret"]  = CombatEntityType.Turret,
-			["BaseHelicopter"]  = CombatEntityType.Helicopter,
-			["BradleyAPC"]  = CombatEntityType.Bradley,
-			["BasePlayer"]  = CombatEntityType.Player,
-			["NPCMurderer"]  = CombatEntityType.Murderer,
-			["CodeLock"]  = CombatEntityType.Lock,
-			["Scientist"]  = CombatEntityType.Scientist,
-			["ScientistNPC"]  = CombatEntityType.Scientist,
-			["HTNPlayer"]  = CombatEntityType.Scientist,
-			["NPCAutoTurret"]  = CombatEntityType.Sentry,
-			["FireBall"]  = CombatEntityType.Fire,
-			["scarecrow"]  = CombatEntityType.ScarecrowNPC,
-			["ScientistNPCNew"]  = CombatEntityType.Scientist,
-			["tunneldweller"]  = CombatEntityType.TunnelDweller,
-			["underwaterdweller"]  = CombatEntityType.UnderwaterDweller
-		};
 
 		private readonly Regex _colorTagRegex =
 			new Regex(@"<color=.{0,7}>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -149,6 +93,38 @@ namespace Oxide.Plugins
         private readonly Dictionary<string, string> _localWeaponCatalog =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private bool _translationDataDirty;
+
+        // DLL dictionaries, fetched once in Init so the death hook does plain dictionary lookups.
+        private static readonly IReadOnlyDictionary<string, string> NoDefaults = new Dictionary<string, string>();
+        private readonly Dictionary<string, CombatEntityType> _combatTypes =
+            new Dictionary<string, CombatEntityType>(StringComparer.OrdinalIgnoreCase);
+        private IReadOnlyDictionary<string, string> _entityNames = NoDefaults;
+        private IReadOnlyDictionary<string, string> _weaponNames = NoDefaults;
+
+        private static IReadOnlyDictionary<string, string> GetSharedDictionary(string name)
+        {
+            return RogueDictionaryService.Instance.TryGetDefaults(name, out IReadOnlyDictionary<string, string> values)
+                ? values : NoDefaults;
+        }
+
+        private void LoadSharedDictionaries()
+        {
+            _entityNames = GetSharedDictionary("DeathNotesEntities");
+            _weaponNames = GetSharedDictionary("DeathNotesWeapons");
+            _combatTypes.Clear();
+            foreach (KeyValuePair<string, string> pair in GetSharedDictionary("DeathNotesCombatTypes"))
+                if (Enum.TryParse(pair.Value, true, out CombatEntityType type))
+                    _combatTypes[pair.Key] = type;
+        }
+
+        // Adds the DLL's default display names. A saved entry is only replaced while it still maps a
+        // name to itself, which is what the plugin writes the first time it meets a name.
+        private static void SeedDisplayNames(Dictionary<string, string> target, string dictionaryName)
+        {
+            foreach (KeyValuePair<string, string> pair in GetSharedDictionary(dictionaryName))
+                if (!target.TryGetValue(pair.Key, out string current) || current == pair.Key)
+                    target[pair.Key] = pair.Value;
+        }
 
 
         private void LogOutput(string text)
@@ -202,10 +178,13 @@ namespace Oxide.Plugins
 			_instance = this;
 
 
+            LoadSharedDictionaries();
             LoadPlayerSettings();
             EnsureRogueRustLanguageFile();
             MigrateLegacyConfigKeys();
-			_configuration = Config.ReadObject<PluginConfiguration>();
+			// RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
+            _configuration = Config.ReadObject<PluginConfiguration>();
             if (_configuration == null)
                 _configuration = new PluginConfiguration();
 
@@ -291,7 +270,7 @@ namespace Oxide.Plugins
                 c.Developer.DebugMode = Read("07 - Developer - Debug Mode Enabled","Debug Mode Enabled",c.Developer.DebugMode);
                 c.Version = CurrentVersion;
                 Config.WriteObject(c, true);
-                LogInformation("Configuration", "Migrated RogueRustDeathNotes configuration to the grouped v2.2.1 family layout.");
+                LogInformation("Configuration", "Migrated RogueRustDeathNotes configuration to the grouped v2.2.0 family layout.");
             }
             catch (Exception exception)
             {
@@ -327,6 +306,18 @@ namespace Oxide.Plugins
 
                 _localWeaponCatalog[definition.shortname] = displayName;
                 _localWeaponCatalog[definition.shortname + ".entity"] = displayName;
+            }
+
+            // A weapon's held entity is often named differently from its item (rifle.l96 is held as
+            // l96.entity). Those are the names a HitInfo reports, so map them last: they are exact.
+            foreach (ItemDefinition definition in ItemManager.itemList)
+            {
+                string heldPrefab = definition?.GetComponent<ItemModEntity>()?.entityPrefab?.resourcePath;
+                if (string.IsNullOrEmpty(heldPrefab) ||
+                    !_localWeaponCatalog.TryGetValue(definition.shortname, out string displayName))
+                    continue;
+
+                _localWeaponCatalog[Path.GetFileNameWithoutExtension(heldPrefab)] = displayName;
             }
 
             LogInformation("Definitions",
@@ -378,7 +369,9 @@ namespace Oxide.Plugins
 
 		private void OnEntityTakeDamage(BasePlayer victimEntity, HitInfo hitInfo)
 		{
-			if (victimEntity == null || hitInfo == null)
+			// Only real players are ever looked up in _previousAttack (bleed-out attribution). NPC players
+			// (scientists, dwellers, custom NPCs) were stored too and never removed, so the map grew all wipe.
+			if (victimEntity == null || hitInfo == null || victimEntity.IsNpc)
             	return;
 
             BaseEntity attacker = victimEntity.lastAttacker ?? hitInfo?.Initiator;
@@ -390,12 +383,10 @@ namespace Oxide.Plugins
             {
                 if (attacker != null)
                     currentAttack.Attacker = attacker;
-                
-                if (hitInfo != null)
-                    currentAttack.HitInfo = hitInfo;
 
-                if (victimEntity.lastDamage != null)
-                    currentAttack.DamageType = victimEntity.lastDamage;
+                currentAttack.HitInfo = hitInfo;
+                currentAttack.DamageType = victimEntity.lastDamage;
+                _previousAttack[userId] = currentAttack;
             }
             else
             {
@@ -479,7 +470,8 @@ namespace Oxide.Plugins
 			if (data.KillerEntity != null)
 				data.KillerEntityType = CombatEntityType.Player;
 				
-			string message = PopulateMessageVariables(isPatrolHeli ? _configuration.PatrolHeliTagMessage : _configuration.BradleyTagMessage, data);
+			string tagTemplate = isPatrolHeli ? _configuration.PatrolHeliTagMessage : _configuration.BradleyTagMessage;
+            string message = PopulateMessageVariables(tagTemplate, data);
 
 			object hookResult = false;
 			try
@@ -504,7 +496,8 @@ namespace Oxide.Plugins
 				if ((_configuration.RequirePermission &&
 				     !Rogue.Permissions.Has(player.UserIDString, CanSeePermission)) ||
 				    Rogue.Permissions.Has(player.UserIDString, CantSeePermission) ||
-                    (Rogue.Permissions.Has(player.UserIDString, TeamOnlyPermission) && !ArePlayersOnSameTeam(player, data)))
+                    !IsPlayerNoticeEnabled(player) ||
+                    ((Rogue.Permissions.Has(player.UserIDString, TeamOnlyPermission) || IsPlayerTeamOnly(player)) && !ArePlayersOnSameTeam(player, data)))
 					continue;
 
                 if (isPatrolHeli ? !PlayersPassesPermsCheck(player.UserIDString, _configuration.PatrolHeliDisplayPerms) : !PlayersPassesPermsCheck(player.UserIDString, _configuration.BradleyDisplayPerms))
@@ -514,23 +507,24 @@ namespace Oxide.Plugins
 				    player.Distance(data.VictimEntity) > _configuration.MessageRadius)
 					continue;
 
-				if (isPatrolHeli ? _configuration.ShowPatrolHeliTagsInChat : _configuration.ShowBradleyTagsInChat)
+                string recipientMessage = FormatPlayerNotice(tagTemplate, data, player, message);
+                if (isPatrolHeli ? _configuration.ShowPatrolHeliTagsInChat : _configuration.ShowBradleyTagsInChat)
 				{
 					Player.Reply(
 						player,
-						_configuration.ChatFormat.Replace("{message}", message),
-						NativeChatAvatarSteamId
+						_configuration.ChatFormat.Replace("{message}", recipientMessage),
+						GetChatAvatarId()
 					);
 				}
 
                     if (_configuration.OutputModules.EnableNativeGui)
-                        ShowNativeGui(player, GetNativeGuiMessage(message));
+                        ShowNativeGui(player, GetNativeGuiMessage(recipientMessage));
 					
 				if ((isPatrolHeli ? _configuration.ShowPatrolHeliTagsInNotify : _configuration.ShowBradleyTagsInNotify) && Notify != null)
-					Notify.Call("SendNotify", player, _configuration.NotifyMessageType, _configuration.ChatFormat.Replace("{message}", message));
+					Notify.Call("SendNotify", player, _configuration.NotifyMessageType, _configuration.ChatFormat.Replace("{message}", recipientMessage));
 					
 				if ((isPatrolHeli ? _configuration.ShowPatrolHeliTagsInUINotify : _configuration.ShowBradleyTagsInUINotify) && UINotify != null)
-					UINotify.Call("SendNotify", player, _configuration.UINotifyMessageType, _configuration.ChatFormat.Replace("{message}", message));
+					UINotify.Call("SendNotify", player, _configuration.UINotifyMessageType, _configuration.ChatFormat.Replace("{message}", recipientMessage));
 			}
 		}
 		
@@ -546,8 +540,37 @@ namespace Oxide.Plugins
 			_bradleyApcTagTracker.Remove(entity.net.ID.Value);
 		}
 		
+		// Remove any pending bleed-out attribution when a player entity is destroyed without a death event.
+		private void OnEntityKill(BasePlayer player)
+		{
+			if (player != null && _previousAttack.Count != 0)
+				_previousAttack.Remove(player.userID);
+		}
+
+		private static bool CouldRepairVictimType(string shortPrefabName)
+		{
+			if (string.IsNullOrEmpty(shortPrefabName)) return false;
+			return shortPrefabName.IndexOf("dweller", StringComparison.OrdinalIgnoreCase) >= 0 ||
+			       shortPrefabName.IndexOf("bradleyapc", StringComparison.OrdinalIgnoreCase) >= 0 ||
+			       shortPrefabName.IndexOf("shark", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   shortPrefabName.IndexOf("npcvendorturretmodified", StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+
 		private void OnEntityDeath(BaseCombatEntity victimEntity, HitInfo hitInfo)
 		{
+			// OnEntityDeath fires for every building block, deployable, barrel and animal on the server.
+			// Classify the victim first and leave before any allocation/profiling for entity types that
+			// never produce a notice (same result as the later "Ignore deaths of other entities" check).
+			if (victimEntity == null || victimEntity.gameObject == null)
+				return;
+			CombatEntityType preVictimType = GetCombatEntityType(victimEntity);
+			if (preVictimType == CombatEntityType.Other && !CouldRepairVictimType(victimEntity.ShortPrefabName))
+			{
+				if (victimEntity is BasePlayer deadPlayer)
+					_previousAttack.Remove(deadPlayer.userID);
+				return;
+			}
+
             using (Measure("RogueRustDeathNotes", "OnEntityDeath"))
             {
 			//There is no victim information for some reason.
@@ -591,7 +614,7 @@ namespace Oxide.Plugins
 			{
 				VictimEntity = victimEntity,
 				KillerEntity = victimEntity.lastAttacker ?? hitInfo?.Initiator,
-				VictimEntityType = GetCombatEntityType(victimEntity),
+				VictimEntityType = preVictimType,
 				KillerEntityType = GetCombatEntityType(victimEntity.lastAttacker),
 				DamageType = victimEntity.lastDamage,
 				HitInfo = hitInfo
@@ -603,8 +626,8 @@ namespace Oxide.Plugins
 			// Handle inconsistencies/exceptions
 			HandleInconsistencies(ref data);
 
-            if (data.VictimEntityType == CombatEntityType.Player)
-                _previousAttack.Remove(data.VictimEntity.ToPlayer().userID);
+            if (victimEntity is BasePlayer victimPlayer)
+                _previousAttack.Remove(victimPlayer.userID);
             
 			if (_configuration.DebugMode)
 			{
@@ -644,11 +667,8 @@ namespace Oxide.Plugins
             PluginConfiguration.DeathMessage deathMessage = GetDeathMessage(data);
 
 			// Populate the variables in the message
-			string message = PopulateMessageVariables(
-				// Find the best matching death message for this death
-				GetDeathMessageString(deathMessage),
-				data
-			);
+            string deathTemplate = GetDeathMessageString(deathMessage);
+            string message = PopulateMessageVariables(deathTemplate, data);
 
 			if ((message == null) || (deathMessage == null))
 				return;
@@ -694,23 +714,25 @@ namespace Oxide.Plugins
 						player.Distance(data.VictimEntity) > _configuration.MessageRadius)
 						continue;
 
-					if (deathMessage.ShowKillsInChat == true)
+					string recipientMessage = FormatPlayerNotice(deathTemplate, data, player, message);
+
+                    if (deathMessage.ShowKillsInChat == true)
 					{
 						Player.Reply(
 							player,
-							_configuration.ChatFormat.Replace("{message}", message),
-							NativeChatAvatarSteamId
+							_configuration.ChatFormat.Replace("{message}", recipientMessage),
+							GetChatAvatarId()
 						);
 					}
 
                     if (_configuration.OutputModules.EnableNativeGui)
-                        ShowNativeGui(player, GetNativeGuiMessage(message));
+                        ShowNativeGui(player, GetNativeGuiMessage(recipientMessage));
 					
 					if ((deathMessage.ShowKillsInNotify == true) && Notify != null)
-						Notify.Call("SendNotify", player, _configuration.NotifyMessageType, _configuration.ChatFormat.Replace("{message}", message));
+						Notify.Call("SendNotify", player, _configuration.NotifyMessageType, _configuration.ChatFormat.Replace("{message}", recipientMessage));
 
 					if ((deathMessage.ShowKillsInUINotify == true) && UINotify != null)
-						UINotify.Call("SendNotify", player, _configuration.UINotifyMessageType, _configuration.ChatFormat.Replace("{message}", message));
+						UINotify.Call("SendNotify", player, _configuration.UINotifyMessageType, _configuration.ChatFormat.Replace("{message}", recipientMessage));
 				}
 			}
             }
@@ -741,6 +763,10 @@ namespace Oxide.Plugins
 				{
 					data.VictimEntityType = CombatEntityType.Shark;
 				}
+                else if (victimPrefabName.Contains("npcvendorturretmodified"))
+                {
+                    data.VictimEntityType = CombatEntityType.TravellingVendor;
+                }
 			}
 
 			if (data.KillerEntity != null)
@@ -791,6 +817,10 @@ namespace Oxide.Plugins
 				{
 					data.KillerEntityType = CombatEntityType.Train;
 				}
+                else if (killerPrefabName.Contains("npcvendorturretmodified"))
+                {
+                    data.KillerEntityType = CombatEntityType.TravellingVendor;
+                }
 
 			}
 		}
@@ -858,7 +888,7 @@ namespace Oxide.Plugins
             else return null;
         }
 
-		private string PopulateMessageVariables(string message, DeathData data)
+		private string PopulateMessageVariables(string message, DeathData data, string units = null)
 		{
 			if (string.IsNullOrEmpty(message))
 				return null;
@@ -866,8 +896,8 @@ namespace Oxide.Plugins
 			var replacements = new Dictionary<string, string>
 			{
 				["victim"] = GetCustomizedEntityName(data.VictimEntity, data.VictimEntityType),
-                ["position"] = GetPositionString(data.HitInfo.HitPositionWorld),
-                ["mapgrid"] = MapHelper.GridToString(MapHelper.PositionToGrid(data.HitInfo.HitPositionWorld))
+                ["position"] = GetPositionString(data.HitInfo != null ? data.HitInfo.HitPositionWorld : data.VictimEntity.transform.position),
+                ["mapgrid"] = MapHelper.GridToString(MapHelper.PositionToGrid(data.HitInfo != null ? data.HitInfo.HitPositionWorld : data.VictimEntity.transform.position))
 			};
 
 			if (data.KillerEntityType != CombatEntityType.None)
@@ -878,7 +908,7 @@ namespace Oxide.Plugins
 				if (data.KillerEntity != null)
 				{
 					var distance = data.KillerEntity.Distance(data.VictimEntity);
-					replacements.Add("distance", GetDistance(distance, _configuration.UseMetricDistance));
+					replacements.Add("distance", GetDistance(distance, units ?? (_configuration.UseMetricDistance ? "meters" : "yards")));
 				}
 
 				if ((data.KillerEntityType == CombatEntityType.Player) || (data.KillerEntityType == CombatEntityType.CustomNPC) || (data.KillerEntityType == CombatEntityType.Drone))
@@ -930,6 +960,13 @@ namespace Oxide.Plugins
 
 		#region Entity Identification
 
+        // All static classification aliases are owned by the DLL, not duplicated in plugin source.
+        private bool TryGetSharedCombatType(string key, out CombatEntityType type)
+        {
+            type = CombatEntityType.None;
+            return !string.IsNullOrEmpty(key) && _combatTypes.TryGetValue(key, out type);
+        }
+
 		private CombatEntityType GetCombatEntityType(BaseEntity entity)
 		{
 			
@@ -937,18 +974,20 @@ namespace Oxide.Plugins
 				return CombatEntityType.None;
 			
 			string entityTypeName = entity.GetType().Name;
-			if (entityTypeName != "ScientistNPC" && _combatEntityTypes.TryGetValue( entityTypeName, out var entityType ))
+			if (entityTypeName != "ScientistNPC" && TryGetSharedCombatType(entityTypeName, out var entityType))
 				return entityType;
 
-			if (_combatEntityTypes.TryGetValue( entity.ShortPrefabName, out var type ))
+			if (TryGetSharedCombatType(entity.ShortPrefabName, out var type))
 				return type;
 
 			//For those plugins that do not correctly type ZombieNPCs as Zombies.
 			if (entityTypeName.StartsWith("Zombie"))
 				return CombatEntityType.ZombieNPC;
 			
-            //For a plugin that defined a CustomPet entity name, we redefine it as a CustonNPC.
-			if (entityTypeName.StartsWith("CustomPet"))
+            //For plugins that define CustomPet, CourierNPC or RoamingNPC entities, we redefine them as a CustomNPC.
+			if (entityTypeName.StartsWith("CustomPet", StringComparison.Ordinal) ||
+			    entityTypeName.StartsWith("CourierNPC", StringComparison.OrdinalIgnoreCase) ||
+			    entityTypeName.StartsWith("RoamingNPC", StringComparison.OrdinalIgnoreCase))
 				return CombatEntityType.CustomNPC;
 
  			switch (entity)
@@ -967,7 +1006,18 @@ namespace Oxide.Plugins
 				case PatrolHelicopter:
 					return CombatEntityType.Helicopter;
 				
-				case BaseAnimalNPC:
+				case Bear:
+                case PolarBear:
+                case Stag:
+                case Boar:
+                case Chicken:
+                case Cow:
+                case Sheep:
+                case Squirrel:
+                case Frog:
+                case Rabbit:
+                case SeaTurtle:
+                case BaseAnimalNPC:
 				case Wolf2:
 				case Panther:
 				case Tiger:
@@ -1120,7 +1170,7 @@ namespace Oxide.Plugins
 						return name;
 					}
 
-					if (!_enemyPrefabs.ContainsKey(entity.ShortPrefabName))
+					if (!_entityNames.ContainsKey(entity.ShortPrefabName))
 					{
 						return combatEntityType.ToString();
 					}
@@ -1194,7 +1244,10 @@ namespace Oxide.Plugins
                     return "Tugboat";
 
                 case CombatEntityType.CargoShip:
-                    return "CargoShip";
+                    return "Cargo Ship";
+
+                case CombatEntityType.TravellingVendor:
+                    return "Travelling Vendor";
 
                 case CombatEntityType.CustomNPC:
                     if (entity != null && entity is BasePlayer)
@@ -1202,8 +1255,14 @@ namespace Oxide.Plugins
                     else return "CustomNPC";
 			}
 
-			if (_enemyPrefabs.TryGetValue( entity.ShortPrefabName, out string entityName ))
+			if (_entityNames.TryGetValue(entity.ShortPrefabName, out string entityName))
 				return entityName;
+
+			// The class name identifies traps, turrets, locks and animals (AutoTurret, GunTrap, SnakeHazard)
+			// better than their prefab does, and it is what the default names are keyed by.
+			string typeName = HumanizePascalCase(entity.GetType().Name);
+			if (_configuration.Translations.Names.ContainsKey(typeName))
+				return typeName;
 
 			return GetFriendlyRuntimeName(entity);
 		}
@@ -1219,9 +1278,11 @@ namespace Oxide.Plugins
                 string normalized = prefab
                     .Replace(".entity", string.Empty)
                     .Replace(".deployed", string.Empty)
+                    .Replace("_deployed", string.Empty)
                     .Replace("_", " ")
                     .Replace(".", " ");
-                string friendly = HumanizePascalCase(normalized);
+                // Prefab names are lower case; "sam site turret" reads better as "Sam Site Turret".
+                string friendly = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(normalized.Trim());
                 if (!string.IsNullOrWhiteSpace(friendly))
                     return friendly;
             }
@@ -1271,7 +1332,8 @@ namespace Oxide.Plugins
 			BatteringRam = 37,
             Tugboat = 38,
             CargoShip = 39,
-            CustomNPC = 40
+            CustomNPC = 40,
+            TravellingVendor = 41
 		}
 
 		#endregion
@@ -1446,7 +1508,7 @@ namespace Oxide.Plugins
 
 			if (prefab != null)
 			{
-				if (_weaponPrefabs.TryGetValue(prefab, out string weaponName))
+				if (_weaponNames.TryGetValue(prefab, out string weaponName))
 					return weaponName;
 
                 if (_localWeaponCatalog.TryGetValue(prefab, out string localWeaponName))
@@ -1459,7 +1521,7 @@ namespace Oxide.Plugins
                     return localWeaponName;
 
                 normalizedPrefab = normalizedPrefab.Replace("_", " ").Replace(".", " ");
-				return HumanizePascalCase(normalizedPrefab);
+				return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(normalizedPrefab.Trim());
 			}
 			
 			//Added by Terceran 20250215. Ballistas are a special case because they are considered a vehicle and
@@ -1856,8 +1918,8 @@ namespace Oxide.Plugins
 
         [RogueCommand("dn",
             Aliases = new[] { "dnt", "roguerust.deathnotes" },
-            Description = "Toggles Death Notes visibility or team-only mode.",
-            Usage = "/dn [on|off|toggle|teamonly|teamoff]", Category = "DeathNotes",
+            Description = "Controls Death Notes visibility, team mode, and distance units.",
+            Usage = "/dn [on|off|toggle|teamonly|teamoff|meters|feet|yards]", Category = "DeathNotes",
             CooldownSeconds = 0.5, AllowConsole = false)]
         private RogueCommandResult CmdDeathNotes(RogueCommandContext context)
         {
@@ -1876,9 +1938,11 @@ namespace Oxide.Plugins
                 case "toggle":
                     settings.Enabled = !settings.Enabled;
                     break;
+                case "enable":
                 case "on":
                     settings.Enabled = true;
                     break;
+                case "disable":
                 case "off":
                     settings.Enabled = false;
                     break;
@@ -1889,11 +1953,18 @@ namespace Oxide.Plugins
                 case "teamoff":
                     settings.TeamOnly = false;
                     break;
+                case "meters":
+                case "feet":
+                case "yards":
+                    settings.DistanceUnit = arg;
+                    break;
                 default:
-                    return RogueCommandResult.Fail("Usage: /dn [on|off|toggle|teamonly|teamoff]");
+                    return RogueCommandResult.Fail("Usage: /dn [on|off|toggle|teamonly|teamoff|meters|feet|yards]");
             }
 
             Debounce("deathnotes-player-settings", TimeSpan.FromSeconds(2), SavePlayerSettings);
+            if (arg == "meters" || arg == "feet" || arg == "yards")
+                return RogueCommandResult.Ok("Death Notes distance unit set to " + arg + ".");
             string status = settings.Enabled ? "ENABLED" : "DISABLED";
             string team = settings.TeamOnly ? " (TEAM ONLY)" : string.Empty;
             return RogueCommandResult.Ok("<color=#80D000>Death Notes</color> are <color=#00FF00>" +
@@ -1923,7 +1994,7 @@ namespace Oxide.Plugins
             foreach (string perm in displayPerms)
             {
                 tmpPerm = perm.Trim().ToLower();
-                if (!tmpPerm.StartsWith("deathnotes.") || tmpPerm.Equals("roguerustdeathnotes.cansee") || tmpPerm.Equals("roguerustdeathnotes.cantsee") || tmpPerm.Equals("roguerustdeathnotes.suppress") || tmpPerm.Equals("roguerustdeathnotes.seeteamonly"))
+                if (!tmpPerm.StartsWith("roguerustdeathnotes.") || tmpPerm.Equals("roguerustdeathnotes.cansee") || tmpPerm.Equals("roguerustdeathnotes.cantsee") || tmpPerm.Equals("roguerustdeathnotes.suppress") || tmpPerm.Equals("roguerustdeathnotes.seeteamonly"))
                     continue;
                 
                 if (Rogue.Permissions.Has(playerIDString, tmpPerm))
@@ -1993,7 +2064,8 @@ namespace Oxide.Plugins
 											  killerType == CombatEntityType.HotAirBalloon ||
 											  killerType == CombatEntityType.BatteringRam ||
                                               killerType == CombatEntityType.Tugboat ||
-                                              killerType == CombatEntityType.CargoShip)) ||
+                                              killerType == CombatEntityType.CargoShip ||
+                                              killerType == CombatEntityType.TravellingVendor)) ||
                          					  ((victimType == CombatEntityType.Minicopter ||
 											  victimType == CombatEntityType.ScrapTransportHelicopter ||
 											  victimType == CombatEntityType.AttackHelicopter ||
@@ -2007,7 +2079,8 @@ namespace Oxide.Plugins
                           					  victimType == CombatEntityType.CargoShip ||
                           					  victimType == CombatEntityType.Helicopter ||
 											  victimType == CombatEntityType.Drone ||
-											  victimType == CombatEntityType.Bradley) && (killerType == CombatEntityType.Player)));
+											  victimType == CombatEntityType.Bradley ||
+                                              victimType == CombatEntityType.TravellingVendor) && (killerType == CombatEntityType.Player)));
 		}
 
 		//Primarily for Rustcord interoperability, this indicates whether or not the death was NPC caused, or not.
@@ -2047,13 +2120,35 @@ namespace Oxide.Plugins
             return $"({position.x:F2},{position.y:F2},{position.z:F2})";
         }
 
-		private static string GetDistance(float meters, bool useMetric)
-		{
-			double value = Math.Round(useMetric ? meters : meters * 3.28f, 1);
-			string unit = value == 1 ? "meter" : "meters";
+        private static string GetDistance(float meters, string units)
+        {
+            double factor = units == "feet" ? 3.280839895 : units == "yards" ? 1.093613298 : 1.0;
+            string unit = units == "feet" ? "feet" : units == "yards" ? "yards" : "meters";
+            double value = Math.Round(meters * factor, 1);
+            if (value == 1) unit = unit == "feet" ? "foot" : unit == "yards" ? "yard" : "meter";
+            return value.ToString("0.#", CultureInfo.InvariantCulture) + " " + unit;
+        }
 
-			return $"{value} {unit}";
-		}
+        private ulong GetChatAvatarId()
+        {
+            return _configuration.Formatting.ChatAvatarSteamId == 0 ? NativeChatAvatarSteamId : _configuration.Formatting.ChatAvatarSteamId;
+        }
+
+        private string GetPlayerDistanceUnit(BasePlayer player)
+        {
+            string preference = GetPlayerSettings(player.userID).DistanceUnit;
+            return preference == "meters" || preference == "feet" || preference == "yards"
+                ? preference : (_configuration.UseMetricDistance ? "meters" : "yards");
+        }
+
+        private string FormatPlayerNotice(string template, DeathData data, BasePlayer player, string defaultMessage)
+        {
+            string unit = GetPlayerDistanceUnit(player);
+            string serverUnit = _configuration.UseMetricDistance ? "meters" : "yards";
+            if (unit == serverUnit || string.IsNullOrEmpty(template) || !template.Contains("{distance}"))
+                return defaultMessage;
+            return PopulateMessageVariables(template, data, unit) ?? defaultMessage;
+        }
 
 		private static string ApplyVariableFormat(string text, string variableName)
 		{
@@ -2169,6 +2264,7 @@ namespace Oxide.Plugins
                     ["killer"]="#C4FF00", ["victim"]="#C4FF00", ["weapon"]="#C4FF00", ["attachments"]="#C4FF00",
                     ["distance"]="#C4FF00", ["owner"]="#C4FF00", ["position"]="#C4FF00", ["mapgrid"]="#C4FF00"
                 };
+                [JsonProperty("Chat Avatar Steam ID")] public ulong ChatAvatarSteamId = NativeChatAvatarSteamId;
                 [JsonProperty("Chat Message Format ({message} is replaced by the death notification)")]
                 public string ChatFormat = "<color=#838383>[<color=#80D000>RogueRustDeathNotes</color>] {message}</color>";
             }
@@ -2295,276 +2391,114 @@ namespace Oxide.Plugins
 				Translations.Attachments ??= new Dictionary<string, string>();
 				Translations.Messages ??= new List<DeathMessage>();
 				
-                // Display names are resolved locally from the running Rust server and persisted
-                // to RogueRust/RogueRustDeathNotes/killer-data.json. Keep the plugin source focused
-                // on classification, special cases and death-message behavior.
-
-				var defaultMessage = new DeathMessage("Player", "Player", "Generic", "{victim} died due to damage deflection while attempting to murder {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-				
-				defaultMessage = new DeathMessage("Player", "Player", "Bullet", "{killer} shot {victim} using their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-				
-				defaultMessage = new DeathMessage("Player", "Player", "Arrow", "{victim} was shot by {killer} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Player", "Heat", "{killer} inflamed {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Player", "*", "{killer} killed {victim} using their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Player", "Slash", "{killer} slashed {victim} into pieces with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Animal", "*", "{killer} killed a {victim} using their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Shark", "*", "The waters are a tad safer now that {killer} killed a {victim} using their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Animal", "Bullet", "{killer} shot a {victim} using their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-				
-				defaultMessage = new DeathMessage("Player", "Animal", "Arrow", "{killer} shot a {victim} using their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "ZombieNPC", "*", "{killer} fought off a spooky {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("ZombieNPC", "Player", "*", "{killer} killed {victim} and ate their brains!");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "ZombieNPC", "Bullet", "{killer} shot a {victim} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "ScarecrowNPC", "*", "{killer} fought off a spooky {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("ScarecrowNPC", "Player", "*", "{killer} scared {victim} to death!");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "ScarecrowNPC", "Bullet", "{killer} did some scaring of their own against a {victim} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "GingerbreadNPC", "*", "{killer} fought off a deliciously deadly {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("GingerbreadNPC", "Player", "*", "Death was sweet for {victim}, who was killed by a {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "GingerbreadNPC", "Bullet", "{killer} took a bite out of a deliciously deadly {victim} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Scientist", "*", "{killer} did not want to be a part of the {victim}'s experiments, and did some science of their own with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Scientist", "Bullet", "{killer} did some research of their own against a {victim} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Scientist", "Arrow", "{killer} did some research of their own against a {victim} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "NPCShopKeeper", "*", "{killer} was not interested in {victim}'s inventory, and sold them pain with their {weapon} instead.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("CustomNPC", "Player", "*", "{killer} demonstrated NPC superiority to {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-				
-				defaultMessage = new DeathMessage("Player", "CustomNPC", "*", "{killer} conveyed their opinion of NPCs to {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("NPCShopKeeper", "Player", "*", "{killer} became unhappy enough to end {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-				
-				defaultMessage = new DeathMessage("Player", "HeavyScientist", "*", "{killer} did not want to be a part of the {victim}'s experiments, and did some science of their own with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "HeavyScientist", "Bullet", "{killer} did some research of their own against a {victim} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "HeavyScientist", "Arrow", "{killer} did some research of their own against a {victim} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Bradley", "*", "{killer} blew up the {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("*", "Helicopter", "*", "The {victim} was destroyed. Good riddance.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Helicopter", "*", "The world is a safer place now that {killer} shot down the {victim} with their {weapon}. Good riddance.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("SAM", "Helicopter", "*", "A {killer} brought down {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Cactus", "Player", "*", "{victim} got in a sticky situation with a {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("SAM", "Player", "*", "A {killer} brought down {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Animal", "Player", "*", "{victim} couldn't run away from the {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Shark", "Player", "*", "Baby {killer}, doo-doo, doo-doo, doo-doo ate {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("BeeSwarm", "Player", "*", "A {killer} just reminded {victim} that they are allergic to bee stings.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "BeeSwarm", "*", "{killer} just swatted a {victim} out of existence.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Bradley", "Player", "*", "{victim} was blasted by the {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Helicopter", "Player", "*", "{victim} had no chance against the {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Trap", "Player", "*", "{victim} was reckless and ran into a {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Trap", "Scientist", "*", "{victim} fell victim to {owner}'s well placed {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Trap", "HeavyScientist", "*", "{victim} fell victim to {owner}'s well placed {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Barricade", "Player", "*", "{victim} was impaled by a {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Turret", "Player", "*", "{owner}'s {killer} did its job, killing intruder {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Turret", "Scientist", "*", "{owner}'s {killer} did its job, killing a {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Turret", "HeavyScientist", "*", "{owner}'s {killer} did its job, killing a {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Murderer", "Player", "*", "A {killer} haunted down {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("TunnelDweller", "Player", "*", "{victim} was taken out by a {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "TunnelDweller", "*", "{killer} took out a {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "TunnelDweller", "Bullet", "{killer} took out a {victim} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("UnderwaterDweller", "Player", "*", "{victim} was taken out by an {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "UnderwaterDweller", "*", "{killer} took out an {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "UnderwaterDweller", "Bullet", "{killer} took out a {victim} with their {weapon} over a distance of {distance}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("ExcavatorArm", "Player", "*", "A {killer} excavated {victim} for trace amounts of precious materials. None were found.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Elevator", "Player", "*", "We all have our ups and downs, but {victim} was just squashed by an {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("HotAirBalloon", "Player", "*", "{victim} learned the hard way that a {killer} can come down as well.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("BatteringRam", "Player", "*", "{victim} forgot to dodge the {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Tugboat", "Player", "*", "{victim} forgot that a {killer} is not, in fact, friendly.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("CargoShip", "Player", "*", "{victim} was suddently introduced to industrial tonnage by the {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("CarShredder", "Player", "*", "{victim} was torn to pieces in a {killer}. It turns out they consisted of 40% recyclable materials and 60% regret.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("MagnetCrane", "Player", "*", "{victim} was magnetized and traumatized by a {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Scientist", "Player", "*", "A {killer} shot down {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Scientist", "*", "*", "{killer} shot down a {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("HeavyScientist", "Player", "*", "A {killer} shot down {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("HeavyScientist", "*", "*", "{killer} shot down a {victim}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Sentry", "Player", "*", "{victim} broke the rules in a safezone and was killed by a {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("-", "Player", "Fall", "{victim} fell to their death. Splat!");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("HeatSource", "Player", "*", "{victim} was grilled on a {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Lock", "Player", "*", "{victim} was electrocuted by {owner}'s {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("*", "Player", "Heat", "{victim} burned to death.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("*", "Player", "Hunger", "{victim} forgot to eat and hungers for life.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("*", "Player", "Thirst", "{victim} died of immense thirst.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("*", "Player", "Radiation", "{victim} had a cheery, radioactive glow. Fatal, but cheery nonetheless.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("*", "Player", "Cold", "{victim} turned into an ice statue.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("*", "Player", "Drowned", "As {victim} just found out, breathing underwater is rather difficult.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("*", "Animal", "Drowned", "As the {victim} just found out, breathing underwater is rather difficult.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Player", "Bleeding", "{victim} bled out after being attacked by {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Animal", "Collision", "{killer} ran over a {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Player", "Collision", "{killer} ran over {victim} with their {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Train", "Player", "Collision", "{victim} was stopped in their tracks as they were run over by a {killer}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Minicopter", "Player", "*", "{victim} tragically perished in a {killer} crash.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("ScrapTransportHelicopter", "Player", "*", "{victim} tragically perished in a {killer} crash.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("AttackHelicopter", "Player", "*", "{victim} tragically perished in a {killer} crash.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Drone", "Player", "*", "A {killer} killed {victim} with its {weapon}.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-
-				defaultMessage = new DeathMessage("Player", "Player", "Suicide", "{victim} had enough of life.");
-				if (!Translations.Messages.Contains(defaultMessage)) Translations.Messages.Add(defaultMessage);
-			
+                // Default display names live in the DLL dictionaries; names met at runtime are added as
+                // they appear. Both are saved to RogueRust/RogueRustDeathNotes/killer-data.json for editing.
+                SeedDisplayNames(Translations.Names, "DeathNotesNames");
+                SeedDisplayNames(Translations.Weapons, "DeathNotesWeaponNames");
+                SeedDisplayNames(Translations.Attachments, "DeathNotesAttachments");
+
+				AddDefault("Player", "Player", "Generic", "{victim} died due to damage deflection while attempting to murder {killer}.");
+				AddDefault("Player", "Player", "Bullet", "{killer} shot {victim} using their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "Player", "Arrow", "{victim} was shot by {killer} with their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "Player", "Heat", "{killer} inflamed {victim} with their {weapon}.");
+				AddDefault("Player", "Player", "*", "{killer} killed {victim} using their {weapon}.");
+				AddDefault("Player", "Player", "Slash", "{killer} slashed {victim} into pieces with their {weapon}.");
+				AddDefault("Player", "Animal", "*", "{killer} killed a {victim} using their {weapon}.");
+				AddDefault("Player", "Shark", "*", "The waters are a tad safer now that {killer} killed a {victim} using their {weapon}.");
+				AddDefault("Player", "Animal", "Bullet", "{killer} shot a {victim} using their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "Animal", "Arrow", "{killer} shot a {victim} using their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "ZombieNPC", "*", "{killer} fought off a spooky {victim} with their {weapon}.");
+				AddDefault("ZombieNPC", "Player", "*", "{killer} killed {victim} and ate their brains!");
+				AddDefault("Player", "ZombieNPC", "Bullet", "{killer} shot a {victim} with their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "ScarecrowNPC", "*", "{killer} fought off a spooky {victim} with their {weapon}.");
+				AddDefault("ScarecrowNPC", "Player", "*", "{killer} scared {victim} to death!");
+				AddDefault("Player", "ScarecrowNPC", "Bullet", "{killer} did some scaring of their own against a {victim} with their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "GingerbreadNPC", "*", "{killer} fought off a deliciously deadly {victim} with their {weapon}.");
+				AddDefault("GingerbreadNPC", "Player", "*", "Death was sweet for {victim}, who was killed by a {killer}.");
+				AddDefault("Player", "GingerbreadNPC", "Bullet", "{killer} took a bite out of a deliciously deadly {victim} with their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "Scientist", "*", "{killer} did not want to be a part of the {victim}'s experiments, and did some science of their own with their {weapon}.");
+				AddDefault("Player", "Scientist", "Bullet", "{killer} did some research of their own against a {victim} with their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "Scientist", "Arrow", "{killer} did some research of their own against a {victim} with their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "NPCShopKeeper", "*", "{killer} was not interested in {victim}'s inventory, and sold them pain with their {weapon} instead.");
+				AddDefault("CustomNPC", "Player", "*", "{killer} demonstrated NPC superiority to {victim}.");
+				AddDefault("Player", "CustomNPC", "*", "{killer} conveyed their opinion of NPCs to {victim} with their {weapon}.");
+				AddDefault("NPCShopKeeper", "Player", "*", "{killer} became unhappy enough to end {victim} with their {weapon}.");
+				AddDefault("Player", "HeavyScientist", "*", "{killer} did not want to be a part of the {victim}'s experiments, and did some science of their own with their {weapon}.");
+				AddDefault("Player", "HeavyScientist", "Bullet", "{killer} did some research of their own against a {victim} with their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "HeavyScientist", "Arrow", "{killer} did some research of their own against a {victim} with their {weapon} over a distance of {distance}.");
+				AddDefault("Player", "Bradley", "*", "{killer} blew up the {victim} with their {weapon}.");
+				AddDefault("*", "Helicopter", "*", "The {victim} was destroyed. Good riddance.");
+				AddDefault("Player", "Helicopter", "*", "The world is a safer place now that {killer} shot down the {victim} with their {weapon}. Good riddance.");
+				AddDefault("SAM", "Helicopter", "*", "A {killer} brought down {victim}.");
+				AddDefault("Cactus", "Player", "*", "{victim} got in a sticky situation with a {killer}.");
+				AddDefault("SAM", "Player", "*", "A {killer} brought down {victim}.");
+				AddDefault("Animal", "Player", "*", "{victim} couldn't run away from the {killer}.");
+				AddDefault("Shark", "Player", "*", "Baby {killer}, doo-doo, doo-doo, doo-doo ate {victim}.");
+				AddDefault("BeeSwarm", "Player", "*", "A {killer} just reminded {victim} that they are allergic to bee stings.");
+				AddDefault("Player", "BeeSwarm", "*", "{killer} just swatted a {victim} out of existence.");
+				AddDefault("TravellingVendor", "Player", "*", "{victim} was killed by the {killer}.");
+				AddDefault("Player", "TravellingVendor", "*", "{killer} destroyed the {victim} with their {weapon}.");
+				AddDefault("TravellingVendor", "*", "*", "{killer} vended pain to {victim}.");
+				AddDefault("Bradley", "Player", "*", "{victim} was blasted by the {killer}.");
+				AddDefault("Helicopter", "Player", "*", "{victim} had no chance against the {killer}.");
+				AddDefault("Trap", "Player", "*", "{victim} was reckless and ran into a {killer}.");
+				AddDefault("Trap", "Scientist", "*", "{victim} fell victim to {owner}'s well placed {killer}.");
+				AddDefault("Trap", "HeavyScientist", "*", "{victim} fell victim to {owner}'s well placed {killer}.");
+				AddDefault("Barricade", "Player", "*", "{victim} was impaled by a {killer}.");
+				AddDefault("Turret", "Player", "*", "{owner}'s {killer} did its job, killing intruder {victim}.");
+				AddDefault("Turret", "Scientist", "*", "{owner}'s {killer} did its job, killing a {victim}.");
+				AddDefault("Turret", "HeavyScientist", "*", "{owner}'s {killer} did its job, killing a {victim}.");
+				AddDefault("Murderer", "Player", "*", "A {killer} haunted down {victim}.");
+				AddDefault("TunnelDweller", "Player", "*", "{victim} was taken out by a {killer}.");
+				AddDefault("Player", "TunnelDweller", "*", "{killer} took out a {victim} with their {weapon}.");
+				AddDefault("Player", "TunnelDweller", "Bullet", "{killer} took out a {victim} with their {weapon} over a distance of {distance}.");
+				AddDefault("UnderwaterDweller", "Player", "*", "{victim} was taken out by an {killer}.");
+				AddDefault("Player", "UnderwaterDweller", "*", "{killer} took out an {victim} with their {weapon}.");
+				AddDefault("Player", "UnderwaterDweller", "Bullet", "{killer} took out a {victim} with their {weapon} over a distance of {distance}.");
+				AddDefault("ExcavatorArm", "Player", "*", "A {killer} excavated {victim} for trace amounts of precious materials. None were found.");
+				AddDefault("Elevator", "Player", "*", "We all have our ups and downs, but {victim} was just squashed by an {killer}.");
+				AddDefault("HotAirBalloon", "Player", "*", "{victim} learned the hard way that a {killer} can come down as well.");
+				AddDefault("BatteringRam", "Player", "*", "{victim} forgot to dodge the {killer}.");
+				AddDefault("Tugboat", "Player", "*", "{victim} forgot that a {killer} is not, in fact, friendly.");
+				AddDefault("CargoShip", "Player", "*", "{victim} was suddently introduced to industrial tonnage by the {killer}.");
+				AddDefault("CarShredder", "Player", "*", "{victim} was torn to pieces in a {killer}. It turns out they consisted of 40% recyclable materials and 60% regret.");
+				AddDefault("MagnetCrane", "Player", "*", "{victim} was magnetized and traumatized by a {killer}.");
+				AddDefault("Scientist", "Player", "*", "A {killer} shot down {victim}.");
+				AddDefault("Scientist", "*", "*", "{killer} shot down a {victim}.");
+				AddDefault("HeavyScientist", "Player", "*", "A {killer} shot down {victim}.");
+				AddDefault("HeavyScientist", "*", "*", "{killer} shot down a {victim}.");
+				AddDefault("Sentry", "Player", "*", "{victim} broke the rules in a safezone and was killed by a {killer}.");
+				AddDefault("-", "Player", "Fall", "{victim} fell to their death. Splat!");
+				AddDefault("HeatSource", "Player", "*", "{victim} was grilled on a {killer}.");
+				AddDefault("Lock", "Player", "*", "{victim} was electrocuted by {owner}'s {killer}.");
+				AddDefault("*", "Player", "Heat", "{victim} burned to death.");
+				AddDefault("*", "Player", "Hunger", "{victim} forgot to eat and hungers for life.");
+				AddDefault("*", "Player", "Thirst", "{victim} died of immense thirst.");
+				AddDefault("*", "Player", "Radiation", "{victim} had a cheery, radioactive glow. Fatal, but cheery nonetheless.");
+				AddDefault("*", "Player", "Cold", "{victim} turned into an ice statue.");
+				AddDefault("*", "Player", "Drowned", "As {victim} just found out, breathing underwater is rather difficult.");
+				AddDefault("*", "Animal", "Drowned", "As the {victim} just found out, breathing underwater is rather difficult.");
+				AddDefault("Player", "Player", "Bleeding", "{victim} bled out after being attacked by {killer}.");
+				AddDefault("Player", "Animal", "Collision", "{killer} ran over a {victim} with their {weapon}.");
+				AddDefault("Player", "Player", "Collision", "{killer} ran over {victim} with their {weapon}.");
+				AddDefault("Train", "Player", "Collision", "{victim} was stopped in their tracks as they were run over by a {killer}.");
+				AddDefault("Minicopter", "Player", "*", "{victim} tragically perished in a {killer} crash.");
+				AddDefault("ScrapTransportHelicopter", "Player", "*", "{victim} tragically perished in a {killer} crash.");
+				AddDefault("AttackHelicopter", "Player", "*", "{victim} tragically perished in a {killer} crash.");
+				AddDefault("Drone", "Player", "*", "A {killer} killed {victim} with its {weapon}.");
+				AddDefault("Player", "Player", "Suicide", "{victim} had enough of life.");
 				foreach (var msg in Translations.Messages)
 				{
 					if (msg.Enabled == null)
 						msg.Enabled = true;
 				}
+			}
+
+			// Adds a built-in message unless the saved data already has one for the same killer, victim and damage type.
+			private void AddDefault(string killerType, string victimType, string damageType, string message)
+			{
+				var entry = new DeathMessage(killerType, victimType, damageType, message);
+				if (!Translations.Messages.Contains(entry)) Translations.Messages.Add(entry);
 			}
 
 			public class DeathMessage

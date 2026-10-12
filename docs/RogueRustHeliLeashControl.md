@@ -2,12 +2,17 @@
 
 > Keeps a heavily damaged Patrol Helicopter near its last valid attacker.
 
-**Version:** `2.1.0`  
+**Version:** `2.1.3`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
 [Plugin source](../plugins/RogueRustHeliLeashControl.cs) · [Back to plugin catalogue](../README.md)
+
+## Recent Changes
+
+- **2.1.3:** the leash now engages. Earlier versions tested for the player-flown helicopter type, which the Patrol Helicopter is not, so a damaged helicopter was never tracked. The plugin now uses the Patrol Helicopter type and its dedicated damage hook.
+- A helicopter belonging to a RogueRustHeliCrash event is left alone so it can reach its crash site.
 
 ## Features
 
@@ -67,7 +72,7 @@ Configuration file: `config/RogueRustHeliLeashControl.json`
   "Developer Settings": {
     "Enable Debug Messages in Console": false
   },
-  "Version (DO NOT CHANGE)": "2.1.0"
+  "Version (DO NOT CHANGE)": "2.1.3"
 }
 ```
 

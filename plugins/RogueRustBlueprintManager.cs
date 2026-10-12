@@ -10,13 +10,13 @@ using Oxide.Ext.RogueRust.Plugins;
 using Oxide.Ext.RogueRust.SDK;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.0")]
+    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.1")]
     [Description("RogueRust-powered blueprint management with legacy permission and command compatibility.")]
 
     public sealed class RogueRustBlueprintManager : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.0";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 0);
+        private const string PluginVersion = "2.1.1";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 1);
         private const string LanguageFolder = "RogueRustBlueprintManager";
         private const string LanguageFile = "messages.json";
 
@@ -131,6 +131,8 @@ namespace Oxide.Plugins
         {
             MigrateLegacyConfigFile();
             base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
 
             try
             {

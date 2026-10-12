@@ -11,14 +11,14 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.0")]
+    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.1")]
     [Description("Optimises dedicated Rust fuel containers through cached discovery using native Oxide/Carbon hooks.")]
     public sealed class RogueRustFuelStackOptimizer : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerustfuelstackoptimizer.admin";
-        private const string PluginVersion = "2.1.0";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 0);
+        private const string PluginVersion = "2.1.1";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 1);
 
         private static readonly string[] DefaultFuelItems =
         {
@@ -38,6 +38,9 @@ namespace Oxide.Plugins
         private ConfigData _config;
         private readonly Dictionary<string, TrackedContainer> _containers =
             new Dictionary<string, TrackedContainer>(StringComparer.OrdinalIgnoreCase);
+        // Network id -> container identities, so entity kills are an O(1) lookup instead of a scan of
+        // every tracked container key on every entity kill server-wide.
+        private readonly Dictionary<ulong, List<string>> _identitiesByNetId = new Dictionary<ulong, List<string>>();
         private readonly Dictionary<Type, DiscoveryPlan> _typePlans = new Dictionary<Type, DiscoveryPlan>();
         private readonly Queue<BaseEntity> _scanQueue = new Queue<BaseEntity>();
         private readonly Queue<TrackedContainer> _applyQueue = new Queue<TrackedContainer>();
@@ -213,6 +216,8 @@ namespace Oxide.Plugins
         protected override void LoadConfig()
         {
             base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
             try
             {
                 Newtonsoft.Json.Linq.JObject raw = Config.ReadObject<Newtonsoft.Json.Linq.JObject>();
@@ -305,20 +310,24 @@ namespace Oxide.Plugins
             _scanQueue.Clear();
             _applyQueue.Clear();
             _containers.Clear();
+            _identitiesByNetId.Clear();
             _typePlans.Clear();
         }
 
         private void OnEntitySpawned(BaseNetworkable networkable)
         {
             BaseEntity entity = networkable as BaseEntity;
-            if (entity == null) return;
-            Delay(TimeSpan.Zero,
-                delegate { ExecuteProtected(delegate { DiscoverEntity(entity, true); }, "EntitySpawn"); },
-                "fuelstack-spawn-" + (entity.net == null ? "0" : entity.net.ID.Value.ToString()));
+            if (entity == null || _unloading) return;
+            // Every entity spawn on the server reaches this hook. The per-type plan is cached, so reject
+            // types that can never hold an ItemContainer before scheduling any deferred work.
+            if (!GetDiscoveryPlan(entity.GetType()).HasAnyContainer) return;
+            NextTick(delegate { ExecuteProtected(delegate { DiscoverEntity(entity, true); }, "EntitySpawn"); });
         }
 
         private void OnEntityKill(BaseNetworkable networkable)
         {
+            if (networkable == null || networkable.net == null || _identitiesByNetId.Count == 0) return;
+            if (!_identitiesByNetId.ContainsKey(networkable.net.ID.Value)) return;
             BaseEntity entity = networkable as BaseEntity;
             if (entity == null) return;
             ExecuteProtected(delegate { RemoveEntity(entity); }, "EntityKill");
@@ -331,6 +340,7 @@ namespace Oxide.Plugins
             _scanQueue.Clear();
             _applyQueue.Clear();
             _containers.Clear();
+            _identitiesByNetId.Clear();
             _skippedEntityTypes = 0;
             _logScanCompletion = logCompletion;
 
@@ -447,6 +457,11 @@ namespace Oxide.Plugins
             foreach (TrackedContainer tracked in discovered.Values)
             {
                 _containers[tracked.Identity] = tracked;
+                ulong trackedNetId = entity.net == null ? 0UL : entity.net.ID.Value;
+                List<string> identities;
+                if (!_identitiesByNetId.TryGetValue(trackedNetId, out identities))
+                    _identitiesByNetId[trackedNetId] = identities = new List<string>(1);
+                if (!identities.Contains(tracked.Identity)) identities.Add(tracked.Identity);
                 if (!publishImmediately) continue;
 
                 if (IsEligible(tracked)) _applyQueue.Enqueue(tracked);
@@ -619,16 +634,9 @@ namespace Oxide.Plugins
         {
             if (entity == null) return;
             ulong networkId = entity.net == null ? 0UL : entity.net.ID.Value;
-            string prefix = networkId + ":";
-            List<string> keys = null;
-            foreach (string key in _containers.Keys)
-            {
-                if (!key.StartsWith(prefix, StringComparison.Ordinal)) continue;
-                if (keys == null) keys = new List<string>();
-                keys.Add(key);
-            }
-
-            if (keys == null) return;
+            List<string> keys;
+            if (!_identitiesByNetId.TryGetValue(networkId, out keys)) return;
+            _identitiesByNetId.Remove(networkId);
             for (int i = 0; i < keys.Count; i++)
                 _containers.Remove(keys[i]);
         }
@@ -763,6 +771,9 @@ namespace Oxide.Plugins
 
         private bool IsOwnerAllowed(ulong ownerId)
         {
+            // Default config has no owner filters: skip the player lookups and string work entirely.
+            if (_config.Owners.BlacklistPlayers.Count == 0 && _config.Owners.WhitelistPlayers.Count == 0)
+                return true;
             string ownerIdText = ownerId.ToString();
             BasePlayer owner = BasePlayer.FindByID(ownerId) ?? BasePlayer.FindSleeping(ownerId);
             string ownerName = owner == null ? null : owner.displayName;

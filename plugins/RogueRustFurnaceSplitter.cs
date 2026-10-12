@@ -14,12 +14,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.0")]
+    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.3")]
     [Description("Optimized RogueRust furnace splitting with automatic fuel management, configurable stack distribution, ETA display, and responsive UI.")]
     public sealed class RogueRustFurnaceSplitter : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.0";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 0);
+        private const string PluginVersion = "2.1.3";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 3);
 
         [PluginReference]
         private Plugin UIScaleManager;
@@ -133,14 +133,16 @@ namespace Oxide.Plugins
 
         private void OnServerSave()
         {
-            SaveData();
+            // The world save already costs a frame; write this file on a worker thread (RogueRust 4.4.60+).
+            SaveData(background: true);
         }
 
-        private void SaveData()
+        private void SaveData(bool background = false)
         {
             if (!config.savePlayerData) return;
 
-            SaveData(PlayerDataKey, storedData);
+            if (background) SaveDataInBackground(PlayerDataKey, storedData);
+            else SaveData(PlayerDataKey, storedData);
         }
 
         private void InitPlayer(BasePlayer player)
@@ -264,7 +266,7 @@ namespace Oxide.Plugins
             }
             options.Enabled = enabled;
             CreateUiIfFurnaceOpen(player);
-            Debounce("furnacesplitter-data-save", TimeSpan.FromSeconds(2), SaveData);
+            Debounce("furnacesplitter-data-save", TimeSpan.FromSeconds(2), () => SaveData(background: true));
         }
 
         private bool IsSlotCompatible(Item item, BaseOven oven, ItemDefinition itemDefinition)
@@ -288,6 +290,10 @@ namespace Oxide.Plugins
 
         private void OnFuelConsume(BaseOven oven, Item fuel, ItemModBurnable burnable)
         {
+            // Fires once per fuel tick for every burning oven/furnace/campfire on the server. The queued
+            // update only refreshes the looter panel, so skip ovens nobody is looking at.
+            if (oven == null || looters.Count == 0 || !looters.ContainsKey(oven))
+                return;
             if (IsOvenCompatible(oven))
                 QueueUiUpdate(oven);
         }
@@ -333,7 +339,7 @@ namespace Oxide.Plugins
             if (item == null || inventory == null)
                 return null;
 
-            BasePlayer player = inventory.GetComponent<BasePlayer>();
+            BasePlayer player = inventory.baseEntity;
             if (player == null)
                 return null;
 
@@ -637,14 +643,10 @@ namespace Oxide.Plugins
             RemoveLooter(oven, player);
         }
 
-        private void OnEntityKill(BaseNetworkable networkable)
+        // Typed so Oxide only calls this for ovens instead of every entity the server removes.
+        private void OnEntityKill(BaseOven oven)
         {
-            BaseOven oven = networkable as BaseOven;
-
-            if (oven != null)
-            {
-                DestroyOvenUI(oven);
-            }
+            if (oven != null) DestroyOvenUI(oven);
         }
 
         private void OnOvenToggle(BaseOven oven, BasePlayer player)
@@ -1120,7 +1122,7 @@ namespace Oxide.Plugins
 
             options.TotalStacks[ovenName] = Mathf.Clamp(value, 1, lootSource.inputSlots);
             CreateUiIfFurnaceOpen(player);
-            Debounce("furnacesplitter-data-save", TimeSpan.FromSeconds(2), SaveData);
+            Debounce("furnacesplitter-data-save", TimeSpan.FromSeconds(2), () => SaveData(background: true));
             return RogueCommandResult.Ok(options.TotalStacks[ovenName].ToString());
         }
 
@@ -1363,6 +1365,8 @@ namespace Oxide.Plugins
         {
             MigrateLegacyConfig();
             base.LoadConfig();
+            // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
             Config.Settings.Converters.Add(new Vector2Converter());
 
             try

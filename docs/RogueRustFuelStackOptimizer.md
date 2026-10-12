@@ -1,6 +1,6 @@
 # RogueRust Fuel Stack Optimizer
 
-**Version:** `2.1.0`  
+**Version:** `2.1.1`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -142,7 +142,7 @@ The settings are stored in `RogueRustFuelStackOptimizer.json` in the server conf
   "Developer Settings": {
     "Log Detailed Audit on Startup": false
   },
-  "Version (DO NOT CHANGE)": "2.1.0"
+  "Version (DO NOT CHANGE)": "2.1.1"
 }
 ```
 

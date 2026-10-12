@@ -1,6 +1,6 @@
 # RogueRust Event Director
 
-**Version:** `1.2.1`  
+**Version:** `1.3.2`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -22,6 +22,15 @@ Performance-focused world-event scheduling and CH47 crate direction powered by R
 - Persistent last-spawn timestamps alongside next-run schedules
 - RogueRust world-event tracking integration
 
+## Disabling vanilla spawns
+
+Set **Disable Vanilla Spawns** to `true` on an event to stop the game spawning it on its own schedule, leaving only this plugin's schedule.
+
+- Cargo Plane, Patrol Helicopter, CH47 and Cargo Ship are blocked at the game's event trigger, matched by the exact prefab each vanilla event spawns.
+- The Launch Site Bradley is not a triggered event. Its spawner is held so it cannot re-arm itself; a Bradley the game spawned at boot before the plugin was ready is left alone.
+- The startup log lists which vanilla spawns are disabled, and `rred.status` shows the same list with a count of blocked vanilla events.
+- **Requires RogueRust 4.4.62 or newer.** On earlier DLL versions the setting written under its documented name was discarded when the config was loaded, so vanilla spawns were never disabled.
+
 ## Compatibility
 
 Designed for supported Rust servers running **Oxide** or **Carbon** with the RogueRust extension installed.
@@ -39,9 +48,23 @@ Designed for supported Rust servers running **Oxide** or **Carbon** with the Rog
 ## Commands
 
 ### `rred.status`
-Shows RogueRust world-event tracking totals for planes, patrol helicopters, Bradley, CH47, cargo ships and hackable crates.
+Shows each managed event (enabled state, active count and time to the next run), the hackable-crate count, which vanilla spawns are disabled, and how many vanilla events have been blocked since the plugin loaded.
+
+### `rred.next <plane|patrol|bradley|chinook|ship>`
+Shows when the selected event is next scheduled.
 
 ### `rred.spawn <plane|patrol|bradley|chinook|ship>`
+Immediately spawns the selected managed event. Aliases accepted by the command include `heli`, `tank`, `ch47`, `cargo`.
+
+### `rred.trigger <plane|patrol|bradley|chinook|ship>`
+Immediately triggers the selected managed event.
+
+### `rred.delay <plane|patrol|bradley|chinook|ship> <minutes>`
+Pushes the next run of the selected event back by a number of minutes.
+
+### `rred.reschedule [plane|patrol|bradley|chinook|ship|all]`
+Generates a fresh next-run time for one managed event, or for every enabled event, and saves it immediately.
+|patrol|bradley|chinook|ship>`
 Immediately requests the selected managed event. Aliases accepted by the command include `heli`, `tank`, `ch47`, `cargo`.
 
 ### `rred.reschedule`
@@ -164,9 +187,13 @@ Cargo Plane, Patrol Helicopter, Bradley APC and Cargo Ship use the same base set
     "Maximum Spawn Count": 1,
     "Maximum Concurrent": 1
   },
-  "Version (DO NOT CHANGE)": "1.2.1"
+  "Version (DO NOT CHANGE)": "1.3.2"
 }
 ```
+
+## Configuration file
+
+`config/RogueRustEventDirector.json`. With RogueRust 4.4.62 or newer the keys are written exactly as shown in this page. A config saved by an earlier DLL used internal names (`DisableVanillaSpawns`); it still loads and is rewritten with these names on the next save.
 
 ## Stored Data
 

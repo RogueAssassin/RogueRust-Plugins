@@ -1,0 +1,196 @@
+/* RogueRust plugin site. The palette matches the in-game RogueRust administration menu. */
+:root {
+  --window: #020507;
+  --panel: #05111a;
+  --surface: #0a1c24;
+  --surface-alt: #0d2630;
+  --line: #143642;
+  --accent: #1aadd1;
+  --accent-soft: #0b2a34;
+  --brand: #f26b1f;
+  --text: #ebf2f5;
+  --muted: #94adb8;
+  --radius: 6px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--window);
+  color: var(--text);
+  font: 16px/1.6 "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code {
+  background: var(--surface-alt);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font: 0.9em Consolas, "Cascadia Mono", Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+pre {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow-x: auto;
+}
+pre code { background: none; padding: 0; overflow-wrap: normal; }
+
+main { max-width: 1120px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+
+/* Header and footer */
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 0.7rem; color: var(--text); font-size: 1.1rem; }
+.brand:hover { text-decoration: none; }
+.brand-text strong { letter-spacing: 0.06em; }
+.badge {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--brand);
+  font-weight: 700;
+}
+nav { display: flex; gap: 1.1rem; flex-wrap: wrap; }
+.nav-link { color: var(--muted); font-size: 0.95rem; }
+.nav-link:hover { color: var(--text); text-decoration: none; }
+
+.site-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Home page */
+.hero { padding: 3rem 0 1.5rem; }
+.hero h1 { margin: 0 0 0.5rem; font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.2; }
+.hero p { max-width: 46rem; color: var(--muted); margin: 0 0 1.25rem; }
+.hero-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.note { color: var(--muted); font-size: 0.95rem; }
+
+.filter {
+  width: 100%;
+  margin: 0.5rem 0 0.5rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+}
+.filter:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.category h2 {
+  margin: 2rem 0 0.9rem;
+  padding-left: 0.7rem;
+  border-left: 4px solid var(--brand);
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.1rem;
+}
+.card:hover { border-color: var(--accent); }
+.card-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.card h3 { margin: 0; font-size: 1.1rem; margin-right: auto; }
+.card p { flex: 1; margin: 0.6rem 0 1rem; color: var(--muted); font-size: 0.95rem; }
+.card-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+.version {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.tag {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--brand);
+  color: var(--brand);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 0.92rem;
+}
+.button:hover { border-color: var(--accent); text-decoration: none; }
+.button.primary { background: var(--accent); border-color: var(--accent); color: #021016; font-weight: 600; }
+.button.primary:hover { filter: brightness(1.1); }
+.button.ghost { background: transparent; }
+
+/* Documentation pages */
+.doc { padding-top: 1.5rem; max-width: 60rem; }
+.doc-toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.doc h1 { margin: 0.5rem 0 0.75rem; font-size: clamp(1.6rem, 3.5vw, 2.2rem); line-height: 1.2; overflow-wrap: anywhere; }
+.doc h2 { margin: 2.2rem 0 0.75rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--line); font-size: 1.3rem; }
+.doc h3 { margin: 1.5rem 0 0.5rem; font-size: 1.05rem; color: var(--accent); overflow-wrap: anywhere; }
+.doc blockquote {
+  margin: 1rem 0;
+  padding: 0.6rem 1rem;
+  border-left: 4px solid var(--brand);
+  background: var(--panel);
+  color: var(--muted);
+}
+.doc blockquote p { margin: 0.25rem 0; }
+.doc li { margin: 0.2rem 0; }
+
+.doc table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+.doc th, .doc td { padding: 0.5rem 0.75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--surface-alt); }
+.doc tr:nth-child(even) td { background: var(--panel); }
+
+@media (max-width: 520px) {
+  .grid { grid-template-columns: 1fr; }
+  .site-header { justify-content: flex-start; }
+}
