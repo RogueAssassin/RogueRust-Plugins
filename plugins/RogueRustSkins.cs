@@ -17,12 +17,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustSkins", "RogueRust", "2.3.1")]
+    [Info("RogueRustSkins", "RogueRust", "2.3.2")]
     [Description("Performance-first Skinner-style native Rust skin browser powered by RogueRust services.")]
     public sealed class RogueRustSkins : RogueRustPlugin
     {
-        private const string PluginVersion = "2.3.1";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 1);
+        private const string PluginVersion = "2.3.2";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 2);
         [RoguePermission]
         private const string PermissionUse = "roguerustskins.use";
         [RoguePermission]
@@ -2602,6 +2602,16 @@ namespace Oxide.Plugins
 
         private void ApplyBuildingStructures(BasePlayer player)
         {
+            // RogueRustBuildingManager owns structure skinning when it is installed: it checks skin
+            // ownership, spreads the work over ticks and can undo it. The choices made here are handed over.
+            Oxide.Core.Plugins.Plugin manager = plugins.Find("RogueRustBuildingManager");
+            if (manager != null && manager.IsLoaded && player != null)
+            {
+                if (!HasFeature(player, PermissionBase)) return;
+                manager.Call("ApplyBuildingSkins", player, GetPlayerData(player).BuildingSkins);
+                return;
+            }
+
             if (!HasFeature(player, PermissionBase) || !CheckCooldown(player, "base-structures", _config.Cooldowns.Base)) return;
             BuildingManager.Building building = GetAuthorizedBuilding(player);
             if (building == null) { SendReply(player, "No authorized building was found."); return; }
