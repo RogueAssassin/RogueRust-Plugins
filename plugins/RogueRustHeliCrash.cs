@@ -10,14 +10,14 @@ using UnityEngine;
 using UnityEngine.AI;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.1")]
+    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.2")]
     [Description("A malfunctioning patrol helicopter flies in and crashes. The crash site is marked on the map, guarded, and reported until it is looted or expires.")]
     public sealed class RogueRustHeliCrash : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerusthelicrash.admin";
-        private const string PluginVersion = "1.0.1";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 1);
+        private const string PluginVersion = "1.0.2";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 2);
 
         private const string HelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
         private const string HackableCratePrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
@@ -413,8 +413,11 @@ namespace Oxide.Plugins
                 Crash();
                 return;
             }
+            // Leave it alone while it is already heading there; restarting the move makes it slow down.
+            Vector3 destination = _target + Vector3.up * 30f;
+            if (ai._currentState == PatrolHelicopterAI.aiState.MOVE && (ai.destination - destination).sqrMagnitude < 4f) return;
             ai.ExitCurrentState();
-            ai.State_Move_Enter(_target + Vector3.up * 30f);
+            ai.State_Move_Enter(destination);
         }
 
         private void Crash()
@@ -425,8 +428,19 @@ namespace Oxide.Plugins
             // CriticalDamage is the game's own "shot down" sequence: the helicopter spins, falls,
             // explodes and drops its burning crates.
             PatrolHelicopterAI ai = _helicopter.myAI;
-            if (ai != null) ai.CriticalDamage();
-            else _helicopter.Die();
+            if (ai == null)
+            {
+                _helicopter.Die();
+                return;
+            }
+
+            // A dying patrol helicopter normally flies to the nearest monument within 1,200 m before it
+            // spins out. That took this one far from its crash site, so the rule is switched off for
+            // the moment the death sequence starts, which is when the game reads it.
+            bool monumentCrash = PatrolHelicopterAI.monument_crash;
+            PatrolHelicopterAI.monument_crash = false;
+            try { ai.CriticalDamage(); }
+            finally { PatrolHelicopterAI.monument_crash = monumentCrash; }
         }
 
         private void BeginSite()
@@ -792,6 +806,40 @@ namespace Oxide.Plugins
             }
         }
 
+        // Used when the configured prefab does not exist on this version of the game.
+        private static readonly string[] FallbackGuardPrefabs =
+        {
+            "assets/rust.ai/agents/npcplayer/humannpc/scientist/scientistnpc_roamtethered.prefab",
+            "assets/rust.ai/agents/npcplayer/humannpc/scientist/scientistnpc_roam.prefab",
+            "assets/rust.ai/agents/npcplayer/humannpc/scientist/scientistnpc_patrol.prefab",
+            "assets/rust.ai/agents/npcplayer/humannpc/scientist/scientistnpc_heavy.prefab"
+        };
+
+        private string _guardPrefab;
+
+        private BaseEntity CreateGuard(Vector3 position)
+        {
+            // Once a prefab has worked, keep using it for the rest of the session.
+            if (_guardPrefab != null) return GameManager.server.CreateEntity(_guardPrefab, position);
+
+            BaseEntity guard = string.IsNullOrWhiteSpace(_config.Guards.Prefab) ? null : GameManager.server.CreateEntity(_config.Guards.Prefab, position);
+            if (guard != null)
+            {
+                _guardPrefab = _config.Guards.Prefab;
+                return guard;
+            }
+
+            foreach (string prefab in FallbackGuardPrefabs)
+            {
+                guard = GameManager.server.CreateEntity(prefab, position);
+                if (guard == null) continue;
+                _guardPrefab = prefab;
+                LogWarning("Guards", "The configured guard prefab was not found; using " + prefab + " instead.");
+                return guard;
+            }
+            return null;
+        }
+
         private void SpawnGuards()
         {
             GuardSettings settings = _config.Guards;
@@ -802,13 +850,13 @@ namespace Oxide.Plugins
                 Vector3 point = Grounded(_site + new Vector3(ring.x, 0f, ring.y));
 
                 // Scientists need the navigation mesh to move; skip anywhere it does not reach.
-                NavMeshHit hit;
-                if (IsUnderwater(point) || !NavMesh.SamplePosition(point, out hit, 4f, NavMesh.AllAreas)) continue;
+                Vector3 standing;
+                if (IsUnderwater(point) || !TryFindNavigablePoint(point, out standing)) continue;
 
-                BaseEntity guard = GameManager.server.CreateEntity(settings.Prefab, hit.position);
+                BaseEntity guard = CreateGuard(standing);
                 if (guard == null)
                 {
-                    LogWarning("Guards", "Guard prefab could not be created: " + settings.Prefab);
+                    LogWarning("Guards", "No guard prefab could be created. Tried the configured one (" + settings.Prefab + ") and the built-in alternatives.");
                     return;
                 }
 
@@ -821,7 +869,23 @@ namespace Oxide.Plugins
             }
 
             if (placed < settings.Count)
-                LogInformation("Guards", "Placed " + placed + " of " + settings.Count + " guards at " + _siteGrid + "; the ground around the wreck is too rough or wet for the rest.");
+                LogInformation("Guards", "Placed " + placed + " of " + settings.Count + " guards at " + _siteGrid + "; no spot the AI can walk on was found for the rest.");
+        }
+
+        // Rust now runs its AI on its own navigation mesh, so Unity's sampler finds nothing on a
+        // current server. Ask the game's first, and fall back to Unity's for a server still using it.
+        private static bool TryFindNavigablePoint(Vector3 point, out Vector3 standing)
+        {
+            NavMeshHit hit;
+            if (Rust.Ai.Gen2.RustNavMeshHelpers.SamplePosition(point, out hit, 6f, NavMesh.AllAreas, false) ||
+                NavMesh.SamplePosition(point, out hit, 6f, NavMesh.AllAreas))
+            {
+                standing = hit.position;
+                return true;
+            }
+
+            standing = point;
+            return false;
         }
 
         private static bool IsAlive(BaseNetworkable entity)
