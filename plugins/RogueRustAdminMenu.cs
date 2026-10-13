@@ -22,12 +22,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.3")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.4")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.3";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 3);
+    private const string PluginVersion = "2.5.4";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 4);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -629,6 +629,9 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         }
         catch (Exception ex)
         {
+            // Keep the file that could not be read. The defaults are saved over the config below, and
+            // without this copy one typo would cost the owner every setting they had made.
+            try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
             LogWarning("Configuration", $"Configuration was invalid and defaults were loaded: {ex.Message}");
             _config = ConfigData.CreateDefault();
         }
@@ -1149,6 +1152,19 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private void Draw(Session s)
     {
         if (s.Player == null || !s.Player.IsConnected) return;
+
+        // Access can be taken away while the menu is open. Close it, or fall back to the dashboard
+        // when only the current page was lost, instead of leaving a page the player may no longer use.
+        if (!HasAdminPermission(s.Player, UsePermission))
+        {
+            CloseAdminMenu(s);
+            return;
+        }
+        if (!CanAccess(s.Player, s.Menu))
+        {
+            s.Menu = MenuType.Dashboard;
+            s.SubMenu = 0;
+        }
         RogueUiDocument ui = CreateUi(Root);
         ApplyTheme(ui);
 
@@ -1165,7 +1181,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         ui.Panel("rram.logo", "rram.header", Rect(0.014f, 0.14f, 0.060f, 0.86f), "0.045 0.13 0.16 0.94");
         ui.Label("rram.logo.text", "rram.logo", RogueUiRect.Full, "RR", 16, "0.95 0.52 0.20 1", "MiddleCenter");
         ui.Label("rram.brand", "rram.header", Rect(0.071f, 0.39f, 0.38f, 0.91f), "ROGUERUST", 18, _config.UI.Theme.Text, "MiddleLeft");
-        ui.Label("rram.product", "rram.header", Rect(0.071f, 0.08f, 0.55f, 0.43f), "ADMINISTRATION  •  AdminMenu 2.4.9  •  RogueRust 4.2.9", 8, "0.50 0.78 0.83 1", "MiddleLeft");
+        ui.Label("rram.product", "rram.header", Rect(0.071f, 0.08f, 0.55f, 0.43f), "ADMINISTRATION  •  AdminMenu " + PluginVersion + "  •  RogueRust " + Oxide.Ext.RogueRust.RogueRustExtension.CurrentVersion, 8, "0.50 0.78 0.83 1", "MiddleLeft");
         ui.Label("rram.health", "rram.header", Rect(0.70f, 0f, 0.91f, 1f), "● SYSTEM HEALTHY", 9, _config.UI.Theme.Success, "MiddleRight");
         string appearance = UiActionCallback(s.Player, "ui.appearance", () => { s.AppearanceOpen = !s.AppearanceOpen; Draw(s); });
         ui.Button("rram.appearance", "rram.header", Rect(0.920f, 0.20f, 0.950f, 0.80f), "⚙", appearance, "0.025 0.060 0.072 0.98", 13);
@@ -1253,6 +1269,22 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             }
         });
         CuiHelper.AddUi(player, cursor);
+    }
+
+    // Every button and input in the menu goes through these two. They hide the base helpers so a
+    // click is refused once the player no longer has access, even on an overlay drawn earlier.
+    private new string UiActionCallback(BasePlayer player, string key, Action action, bool oneShot = false) =>
+        base.UiActionCallback(player, key, () => { if (StillAllowed(player)) action(); }, oneShot);
+
+    private new string UiCallback(BasePlayer player, string key, Action<ConsoleSystem.Arg> callback, bool oneShot = false) =>
+        base.UiCallback(player, key, arg => { if (StillAllowed(player)) callback(arg); }, oneShot);
+
+    private bool StillAllowed(BasePlayer player)
+    {
+        if (player == null || !player.IsConnected) return false;
+        if (HasAdminPermission(player, UsePermission)) return true;
+        if (_sessions.TryGetValue(player.userID, out Session? session)) CloseAdminMenu(session);
+        return false;
     }
 
     private void CloseAdminMenu(Session s)

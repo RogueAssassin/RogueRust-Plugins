@@ -11,7 +11,7 @@ using Oxide.Game.Rust.Cui;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBuildingManager", "RogueAssassin", "1.1.1")]
+    [Info("RogueRustBuildingManager", "RogueAssassin", "1.2.0")]
     [Description("Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them.")]
     public sealed class RogueRustBuildingManager : RogueRustPlugin
     {
@@ -22,8 +22,8 @@ namespace Oxide.Plugins
         [RoguePermission] private const string NoCostPermission = "roguerustbuildingmanager.nocost";
         [RoguePermission] private const string AdminPermission = "roguerustbuildingmanager.admin";
 
-        private const string PluginVersion = "1.1.1";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 1);
+        private const string PluginVersion = "1.2.0";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 2, 0);
         private static readonly VersionNumber MinimumExtension = new VersionNumber(4, 4, 63);
 
         private const string DataKey = "RogueRustBuildingManager/players";
@@ -63,7 +63,7 @@ namespace Oxide.Plugins
             [JsonProperty("Auto Grade (Grade Blocks As They Are Placed)", Order = 40)] public AutoGradeSettings AutoGrade = new AutoGradeSettings();
             [JsonProperty("Hammer Tool (Grade A Block By Hitting It)", Order = 50)] public FeatureSettings Hammer = new FeatureSettings();
             [JsonProperty("Building Skins", Order = 60)] public SkinSettings Skins = new SkinSettings();
-            [JsonProperty("Wallpaper", Order = 70)] public FeatureSettings Wallpaper = new FeatureSettings();
+            [JsonProperty("Wallpaper", Order = 70)] public WallpaperOptions Wallpaper = new WallpaperOptions();
             [JsonProperty("Undo", Order = 80)] public UndoSettings Undo = new UndoSettings();
 
             [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]
@@ -102,6 +102,11 @@ namespace Oxide.Plugins
         private sealed class AutoGradeSettings : FeatureSettings
         {
             [JsonProperty("Turn Itself Off After This Many Seconds Without Building (0 = Never)")] public float IdleSeconds = 300f;
+        }
+
+        private sealed class WallpaperOptions : FeatureSettings
+        {
+            [JsonProperty("Charge The Game's Price For Each Face Papered")] public bool Charge = true;
         }
 
         private sealed class SkinSettings : FeatureSettings
@@ -147,6 +152,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 LogError("Configuration", "Invalid configuration: " + exception.Message);
                 _config = new Configuration();
             }
@@ -158,7 +166,7 @@ namespace Oxide.Plugins
             if (_config.AutoGrade == null) _config.AutoGrade = new AutoGradeSettings();
             if (_config.Hammer == null) _config.Hammer = new FeatureSettings();
             if (_config.Skins == null) _config.Skins = new SkinSettings();
-            if (_config.Wallpaper == null) _config.Wallpaper = new FeatureSettings();
+            if (_config.Wallpaper == null) _config.Wallpaper = new WallpaperOptions();
             if (_config.Undo == null) _config.Undo = new UndoSettings();
 
             GeneralSettings general = _config.General;
@@ -343,6 +351,7 @@ namespace Oxide.Plugins
         {
             public float ExpiresAt;
             public readonly List<Change> Changes = new List<Change>();
+            public readonly List<FaceChange> Faces = new List<FaceChange>();
             public Dictionary<int, float> Paid = new Dictionary<int, float>();
             public Dictionary<int, float> Refunded = new Dictionary<int, float>();
         }
@@ -604,6 +613,17 @@ namespace Oxide.Plugins
                 }
             }
 
+            if (record.Faces.Count != 0)
+            {
+                _undo.Remove(player.userID);
+                var restore = new List<FaceChange>(record.Faces.Count);
+                foreach (FaceChange face in record.Faces)
+                    restore.Add(new FaceChange { Block = face.Block, Side = face.Side, Wanted = face.Old, Old = face.Wanted });
+                Buildings.Give(player, record.Paid);
+                RunFaces(player, restore, "Done.Undone", 0, 0f, false);
+                return;
+            }
+
             _undo.Remove(player.userID);
             var operation = new Operation { Player = player, DoneMessage = "Done.Undone", Recordable = false };
             foreach (Change change in record.Changes)
@@ -788,6 +808,14 @@ namespace Oxide.Plugins
                 _wallpapers[SlotFloor].Count + " floor, " + _wallpapers[SlotCeiling].Count + " ceiling.");
         }
 
+        private struct FaceChange
+        {
+            public BuildingBlock Block;
+            public int Side;
+            public ulong Wanted;
+            public ulong Old;
+        }
+
         // Applies the chosen wallpapers to every face that takes one, or strips them all when remove is set.
         private void ApplyWallpaper(BasePlayer player, bool remove)
         {
@@ -804,9 +832,6 @@ namespace Oxide.Plugins
                 return;
             }
 
-            List<BuildingBlock> blocks;
-            if (!BeginOperation(player, out blocks)) return;
-
             PlayerPreferences preferences = Preferences(player);
             if (!remove && preferences.Wallpapers[SlotWall] == 0UL && preferences.Wallpapers[SlotFloor] == 0UL && preferences.Wallpapers[SlotCeiling] == 0UL)
             {
@@ -814,52 +839,125 @@ namespace Oxide.Plugins
                 return;
             }
 
+            List<BuildingBlock> blocks;
+            if (!BeginOperation(player, out blocks)) return;
+
+            // Work out every face that would change before anything is charged or touched.
+            var faces = new List<FaceChange>();
+            foreach (BuildingBlock block in blocks)
+            {
+                if (!settings.CanUseWallpaper(block)) continue;
+                for (int side = 0; side < 2; side++)
+                {
+                    ulong old = block.HasWallpaper(side) ? block.GetWallpaperSkin(side) : 0UL;
+                    if (remove)
+                    {
+                        if (block.HasWallpaper(side)) faces.Add(new FaceChange { Block = block, Side = side, Old = old });
+                        continue;
+                    }
+
+                    int slot = SlotOf(settings.GetCategory(block, side));
+                    if (slot < 0) continue;
+                    ulong wanted = preferences.Wallpapers[slot];
+                    if (wanted == 0UL || (block.HasWallpaper(side) && old == wanted)) continue;
+                    faces.Add(new FaceChange { Block = block, Side = side, Wanted = wanted, Old = old });
+                }
+            }
+
+            if (faces.Count == 0)
+            {
+                Reply(player, "Error.NothingToDo");
+                return;
+            }
+
+            // The game charges a fixed price for each face papered by hand; charge the same here.
+            int priceItem = 0;
+            float priceEach = 0f;
+            ItemAmount price = settings.PlacementPrice;
+            if (!remove && _config.Wallpaper.Charge && !PaysNothing(player) && price != null && price.itemDef != null && price.amount > 0f)
+            {
+                priceItem = price.itemDef.itemid;
+                priceEach = price.amount;
+                var cost = new Dictionary<int, float> { [priceItem] = priceEach * faces.Count };
+                var missing = new Dictionary<int, int>();
+                if (!Buildings.TryTake(player, cost, missing))
+                {
+                    Reply(player, "Error.CannotAfford", DescribeItems(missing));
+                    return;
+                }
+            }
+
+            RunFaces(player, faces, remove ? "Done.WallpaperRemoved" : "Done.Wallpapered", priceItem, priceEach, true);
+        }
+
+        // Papers or strips the listed faces a few per tick, refunds any that did not take, and records the rest for undo.
+        private void RunFaces(BasePlayer player, List<FaceChange> faces, string doneMessage, int priceItem, float priceEach, bool recordable)
+        {
             ulong userId = player.userID;
             var operation = new Operation { Player = player, Recordable = false };
             _operations[userId] = operation;
             TryStartCooldown(player, "operation", TimeSpan.FromSeconds(_config.General.CooldownSeconds), out _);
-            Reply(player, "Operation.Started", blocks.Count);
+            Reply(player, "Operation.Started", faces.Count);
 
-            Rogue.Workloads.Batch(Name, "operation:" + userId, blocks.Count, _config.General.BlocksPerTick, TimeSpan.Zero,
+            var done = new List<FaceChange>();
+            Rogue.Workloads.Batch(Name, "operation:" + userId, faces.Count, _config.General.BlocksPerTick, TimeSpan.Zero,
                 index =>
                 {
-                    BuildingBlock block = blocks[index];
-                    if (block == null || block.IsDestroyed || !settings.CanUseWallpaper(block)) return true;
-
-                    bool changed = false;
-                    for (int side = 0; side < 2; side++)
+                    FaceChange face = faces[index];
+                    BuildingBlock block = face.Block;
+                    if (block == null || block.IsDestroyed)
                     {
-                        if (remove)
-                        {
-                            if (!block.HasWallpaper(side)) continue;
-                            block.RemoveWallpaper(side);
-                            changed = true;
-                            continue;
-                        }
-
-                        int slot = SlotOf(settings.GetCategory(block, side));
-                        if (slot < 0) continue;
-                        ulong wanted = preferences.Wallpapers[slot];
-                        if (wanted == 0UL || (block.HasWallpaper(side) && block.GetWallpaperSkin(side) == wanted)) continue;
-                        block.SetWallpaper(wanted, side, 0f);
-                        changed = true;
+                        operation.Skipped++;
+                        return true;
                     }
 
-                    if (changed)
+                    if (face.Wanted == 0UL)
                     {
+                        if (block.HasWallpaper(face.Side)) block.RemoveWallpaper(face.Side);
+                    }
+                    else
+                    {
+                        block.SetWallpaper(face.Wanted, face.Side, 0f);
                         // The second face has to be indoors. This is the game's own check: it takes
                         // the paper back off a face that turns out to be outside.
-                        if (!remove) block.CheckWallpaper();
-                        block.SendNetworkUpdate();
-                        if (remove || block.HasWallpaper()) operation.Applied++;
+                        block.CheckWallpaper();
+                        if (!block.HasWallpaper(face.Side) || block.GetWallpaperSkin(face.Side) != face.Wanted)
+                        {
+                            operation.Skipped++;
+                            return true;
+                        }
                     }
+
+                    block.SendNetworkUpdate();
+                    operation.Applied++;
+                    done.Add(face);
                     return true;
                 },
                 () =>
                 {
                     _operations.Remove(userId);
-                    if (player == null || !player.IsConnected) return;
-                    Reply(player, remove ? "Done.WallpaperRemoved" : "Done.Wallpapered", operation.Applied, string.Empty);
+                    bool online = player != null && player.IsConnected;
+
+                    var paid = new Dictionary<int, float>();
+                    if (priceItem != 0 && priceEach > 0f)
+                    {
+                        // Faces that did not take were paid for up front; hand that part back.
+                        if (online && operation.Skipped != 0)
+                            Buildings.Give(player, new Dictionary<int, float> { [priceItem] = priceEach * operation.Skipped });
+                        if (operation.Applied != 0) paid[priceItem] = priceEach * operation.Applied;
+                    }
+
+                    if (recordable && _config.Undo.Enabled && done.Count != 0)
+                    {
+                        var record = new UndoRecord { ExpiresAt = Time.realtimeSinceStartup + _config.Undo.WindowSeconds, Paid = paid };
+                        record.Faces.AddRange(done);
+                        _undo[userId] = record;
+                    }
+
+                    if (!online) return;
+                    Reply(player, doneMessage, operation.Applied, string.Empty);
+                    if (operation.Skipped != 0) Reply(player, "Operation.FacesSkipped", operation.Skipped);
+                    DrawMenu(player);
                 });
         }
 
@@ -1378,6 +1476,7 @@ namespace Oxide.Plugins
                     ["Error.NoWallpaperChosen"] = "Choose a wallpaper in /bm first.",
                     ["Operation.Started"] = "Working through {0} block(s)...",
                     ["Operation.Skipped"] = "{0} block(s) were skipped: attacked recently, obstructed or removed. Anything you paid for them has been returned.",
+                    ["Operation.FacesSkipped"] = "{0} face(s) were skipped: outdoors or removed. Anything you paid for them has been returned.",
                     ["Done.Upgraded"] = "Upgraded {0} block(s) to {1}.",
                     ["Done.Downgraded"] = "Downgraded {0} block(s) to {1}.",
                     ["Done.Skinned"] = "Re-skinned {0} block(s).",

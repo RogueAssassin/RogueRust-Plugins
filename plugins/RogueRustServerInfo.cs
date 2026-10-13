@@ -9,14 +9,14 @@ using Oxide.Ext.RogueRust.SDK;
 using Oxide.Game.Rust.Cui;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.2")]
+    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.3")]
     [Description("In-game server information and command reference panel. Players see player commands; admins also see the admin list.")]
     public sealed class RogueRustServerInfo : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerustserverinfo.admin";
-        private const string PluginVersion = "1.1.2";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 2);
+        private const string PluginVersion = "1.1.3";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 3);
 
         // The panel is three documents so that only the part that changed is resent:
         // the shell is drawn once when the panel opens, the navigation on a tab change,
@@ -325,6 +325,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 LogError("Configuration", "Invalid configuration: " + exception.Message);
                 _config = new Configuration();
             }

@@ -10,12 +10,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHackableCrateTracker", "RogueAssassin", "2.2.0")]
+    [Info("RogueRustHackableCrateTracker", "RogueAssassin", "2.2.1")]
     [Description("Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock.")]
     public sealed class RogueRustHackableCrateTracker : RogueRustPlugin
     {
-        private const string PluginVersion = "2.2.0";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 0);
+        private const string PluginVersion = "2.2.1";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 1);
         [RoguePermission]
         private const string PermissionUse = "roguerusthackablecratetracker.use";
 
@@ -120,6 +120,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 LogError("Configuration", "Invalid configuration: " + exception.Message + " Loading safe defaults.");
                 _config = new Configuration();
             }

@@ -10,14 +10,14 @@ using Oxide.Game.Rust.Cui;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.1")]
+    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.2")]
     [Description("Schedules safe server restarts with RogueRust runtime protection, chat, game-tip, and GUI warnings.")]
     public sealed class RogueRustServerRestarter : RogueRustPlugin
     {
         private const string UiName = "ServerRestarter.UI";
         private const ulong ChatIconSteamId = 76561198641042212UL;
-        private const string PluginVersion = "2.1.1";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 1);
+        private const string PluginVersion = "2.1.2";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 2);
         private Configuration _config;
 
         [RoguePermission]
@@ -233,6 +233,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 PrintError("Invalid configuration: " + exception.Message);
                 _config = new Configuration();
             }

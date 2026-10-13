@@ -17,12 +17,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustSkins", "RogueRust", "2.3.2")]
+    [Info("RogueRustSkins", "RogueRust", "2.3.3")]
     [Description("Performance-first Skinner-style native Rust skin browser powered by RogueRust services.")]
     public sealed class RogueRustSkins : RogueRustPlugin
     {
-        private const string PluginVersion = "2.3.2";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 2);
+        private const string PluginVersion = "2.3.3";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 3);
         [RoguePermission]
         private const string PermissionUse = "roguerustskins.use";
         [RoguePermission]
@@ -304,7 +304,14 @@ namespace Oxide.Plugins
                 _config.Performance.BulkBatchSize = Mathf.Clamp(_config.Performance.BulkBatchSize, 4, 128);
                 _config.Version = CurrentVersion;
             }
-            catch { PrintWarning("Configuration was invalid; loading RogueRustSkins defaults."); _config = new PluginConfig(); }
+            catch (Exception exception)
+            {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
+                PrintWarning("Configuration was invalid; loading RogueRustSkins defaults. " + exception.Message);
+                _config = new PluginConfig();
+            }
             SaveConfig();
         }
 
@@ -1845,6 +1852,10 @@ namespace Oxide.Plugins
                 foreach (Item child in original.contents.itemList.ToArray())
                     if (!child.MoveToContainer(replacement.contents))
                     {
+                        // Hand back whatever already moved before discarding the replacement, or the
+                        // attachments that did fit would be destroyed with it.
+                        foreach (Item moved in replacement.contents.itemList.ToArray())
+                            if (!moved.MoveToContainer(original.contents)) moved.Drop(player != null ? player.GetDropPosition() : Vector3.zero, Vector3.zero);
                         replacement.Remove();
                         return null;
                     }
@@ -2034,7 +2045,9 @@ namespace Oxide.Plugins
                 _playerSaveTimer = null;
                 if (!_playerDataDirty) return;
                 _playerDataDirty = false;
-                SavePlayerData();
+                // Every player's sets are in this one file. Serialise now, write on a worker thread.
+                try { SaveDataInBackground("RogueRustSkins/players", _playerData); }
+                catch (Exception ex) { PrintWarning("Could not save player skin sets: " + ex.Message); }
             });
         }
 
@@ -2195,7 +2208,7 @@ namespace Oxide.Plugins
             ulong id;
             if (args == null || args.Length != 1 || !ulong.TryParse(args[0], out id) || id == 0)
             { SendReply(player, "Usage: /skinrequest <workshopID>"); return; }
-            int pending = _skinRequests.Values.Count(x => x.RequestedBy == player.userID && x.Status == "Pending");
+            int pending = _skinRequests.Values.Count(x => x != null && x.RequestedBy == player.userID && x.Status == "Pending");
             if (pending >= _config.Requests.MaxPendingPerPlayer) { SendReply(player, "You have reached the pending skin request limit."); return; }
             if (_skinRequests.ContainsKey(id)) { SendReply(player, "That skin is already in the request queue."); return; }
             _skinRequests[id] = new SkinRequestData { SkinId = id, RequestedBy = player.userID, RequestedByName = player.displayName, RequestedUtc = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
@@ -2210,6 +2223,7 @@ namespace Oxide.Plugins
             {
                 ulong id;
                 if (!ulong.TryParse(args[1], out id) || !_skinRequests.ContainsKey(id)) { SendReply(player, "Request not found."); return; }
+                if (_skinRequests[id] == null) { _skinRequests.Remove(id); SendReply(player, "Request not found."); return; }
                 if (args[0].Equals("approve", StringComparison.OrdinalIgnoreCase))
                 {
                     _skinRequests[id].Status = "Approved";
@@ -2226,7 +2240,7 @@ namespace Oxide.Plugins
                     return;
                 }
             }
-            List<SkinRequestData> pending = _skinRequests.Values.Where(x => x.Status == "Pending").Take(20).ToList();
+            List<SkinRequestData> pending = _skinRequests.Values.Where(x => x != null && x.Status == "Pending").Take(20).ToList();
             if (pending.Count == 0) { SendReply(player, "No pending skin requests."); return; }
             SendReply(player, "Pending: " + string.Join(", ", pending.Select(x => x.SkinId + " (" + x.RequestedByName + ")").ToArray()));
         }
@@ -2828,7 +2842,7 @@ namespace Oxide.Plugins
             SaveRequestData();
             SaveImportedWorkshopData();
             Steamworks.SteamInventory.OnDefinitionsUpdated -= OnSteamDefinitionsUpdated;
-            foreach (BrowserState state in _browsers.Values.ToArray()) CloseBrowser(state.Player.userID, false);
+            foreach (ulong browserOwner in _browsers.Keys.ToArray()) CloseBrowser(browserOwner, false);
             if (_rogue != null)
             {
                 _rogue.Workloads.CancelOwner(CacheOwner);

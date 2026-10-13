@@ -14,12 +14,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.3")]
+    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.4")]
     [Description("Optimized RogueRust furnace splitting with automatic fuel management, configurable stack distribution, ETA display, and responsive UI.")]
     public sealed class RogueRustFurnaceSplitter : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.3";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 3);
+        private const string PluginVersion = "2.1.4";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 4);
 
         [PluginReference]
         private Plugin UIScaleManager;
@@ -1394,6 +1394,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 LogWarning("Configuration", "Invalid configuration; using defaults. " + exception.Message);
                 config = GetDefaultConfig();
             }

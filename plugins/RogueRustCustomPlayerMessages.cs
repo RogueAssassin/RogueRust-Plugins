@@ -11,7 +11,7 @@ using Oxide.Ext.RogueRust.SDK;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomPlayerMessages", "RogueAssassin", "3.1.1")]
+    [Info("CustomPlayerMessages", "RogueAssassin", "3.1.2")]
     [Description("Custom connect/disconnect messages and public player-list commands powered by RogueRust.")]
     public sealed class RogueRustCustomPlayerMessages : RogueRustPlugin
     {
@@ -27,9 +27,9 @@ namespace Oxide.Plugins
         private const string DefaultLanguage = "en";
         private const string DefaultCountryLookupUrl = "http://ip-api.com/json/{0}?fields=status,message,country,countryCode";
 
-        private const string PluginVersion = "3.1.1";
+        private const string PluginVersion = "3.1.2";
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 1);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 2);
 
         private Configuration _config;
         private CountryCacheStore _cacheStore;
@@ -175,6 +175,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 PrintError("Invalid configuration; defaults will be used: " + exception.Message);
                 _config = new Configuration();
             }

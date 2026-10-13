@@ -11,13 +11,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.1")]
+    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.2")]
     [Description("RogueRust-powered crafting control with legacy configuration and permission compatibility.")]
 
     public sealed class RogueRustCraftingController : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.1";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 1);
+        private const string PluginVersion = "2.1.2";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 2);
         private const string PluginDataPath = "RogueRustCraftingController";
         private const string LanguageFileName = "messages.json";
         #region Config
@@ -158,6 +158,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 LogWarning("Configuration", $"Configuration file {Name}.json is invalid; using defaults: {exception.Message}");
                 config = new Configuration();
                 SaveConfig();

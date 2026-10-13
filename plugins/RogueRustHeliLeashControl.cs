@@ -7,12 +7,12 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHeliLeashControl", "RogueAssassin", "2.1.3")]
+    [Info("RogueRustHeliLeashControl", "RogueAssassin", "2.1.4")]
     [Description("Keeps a heavily damaged Patrol Helicopter near the last valid attacker.")]
     public sealed class RogueRustHeliLeashControl : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.3";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 3);
+        private const string PluginVersion = "2.1.4";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 4);
         private const ulong ChatIconSteamId = 76561198639403056UL;
         private ConfigData _config;
         private float _maxDistanceSquared;
@@ -148,6 +148,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 PrintError("Invalid configuration: " + exception.Message);
                 _config = new ConfigData();
             }

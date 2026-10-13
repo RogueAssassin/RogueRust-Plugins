@@ -2,13 +2,19 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
 
-**Version:** `2.5.3`  
+**Version:** `2.5.4`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
 [Plugin source](../plugins/RogueRustAdminMenu.cs) · [Back to plugin catalogue](../README.md)
+
+## Recent Changes
+
+- **2.5.4:** access is checked again on every draw and every click. If a player loses the menu permission while it is open, the menu closes; if they lose one page, they are returned to the dashboard.
+- The header shows the real AdminMenu and RogueRust versions instead of two from many releases ago.
+- A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 
 ## Features
 
@@ -150,7 +156,7 @@ The `UI Theme` object contains the full F1-style colour palette and can be custo
   },
   "Integrations": { "Log Menu Actions To Discord Webhook (webhook URL)": "" },
   "Data Settings": { "Recent Players Purge Time (days)": 7 },
-  "Version (DO NOT CHANGE)": "2.5.3"
+  "Version (DO NOT CHANGE)": "2.5.4"
 }
 ```
 

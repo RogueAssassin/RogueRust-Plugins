@@ -10,13 +10,13 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "2.0.2")]
+    [Info("RogueRustGridPower", "RogueAssassin", "2.0.3")]
     [Description("RogueRust GridPower: automatic world streetlights plus output control for Rust's native power-grid access points.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {
         #region Constants
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 2);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 3);
         private static readonly VersionNumber MinimumBackend = new VersionNumber(4, 4, 56);
 
         [RoguePermission]
@@ -241,6 +241,9 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 PrintError("Configuration is invalid: " + ex.Message);
                 PrintWarning("Loading RogueRustGridPower default configuration.");
                 LoadDefaultConfig();
