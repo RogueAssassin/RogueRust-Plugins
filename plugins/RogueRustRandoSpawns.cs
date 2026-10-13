@@ -10,12 +10,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.2")]
+    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.3")]
     [Description("RogueRust-powered random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.")]
     public sealed class RogueRustRandoSpawns : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.2";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 2);
+        private const string PluginVersion = "2.1.3";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 3);
         [PluginReference]
         private Plugin ZoneManager;
 
@@ -510,6 +510,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 LogWarning("Configuration", "Invalid " + Name + ".json; defaults were loaded. " + exception.Message);
                 _config = Configuration.CreateDefault();
             }
@@ -683,7 +686,7 @@ namespace Oxide.Plugins
         {
             public uint WorldSeed;
             public uint WorldSize;
-            public string PluginVersion = "2.1.2";
+            public string PluginVersion = "2.1.3";
             public Dictionary<string, List<CachedVector>> Biomes = new Dictionary<string, List<CachedVector>>(StringComparer.OrdinalIgnoreCase);
         }
 
@@ -762,7 +765,7 @@ namespace Oxide.Plugins
             {
                 WorldSeed = global::World.Seed,
                 WorldSize = global::World.Size,
-                PluginVersion = "2.1.2"
+                PluginVersion = "2.1.3"
             };
 
             foreach (KeyValuePair<TerrainBiome.Enum, List<Vector3>> entry in _spawnPoints)

@@ -10,13 +10,13 @@ using Oxide.Ext.RogueRust.Plugins;
 using Oxide.Ext.RogueRust.SDK;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.1")]
+    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.2")]
     [Description("RogueRust-powered blueprint management with legacy permission and command compatibility.")]
 
     public sealed class RogueRustBlueprintManager : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.1";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 1);
+        private const string PluginVersion = "2.1.2";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 2);
         private const string LanguageFolder = "RogueRustBlueprintManager";
         private const string LanguageFile = "messages.json";
 
@@ -166,6 +166,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 LogWarning("Configuration", "Configuration file " + Name + ".json is invalid; using defaults: " + exception.Message);
                 LoadDefaultConfig();
                 SaveConfig();

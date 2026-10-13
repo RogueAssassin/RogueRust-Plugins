@@ -12,11 +12,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.2")]
+    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.3")]
     [Description("RogueRust-native building and deployable removal tool.")]
     public sealed class RogueRustRemovalTool : RogueRustPlugin
     {
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 2);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 3);
         private const string UiName = "RogueRustRemovalTool.Hud";
         private const string UiRoot = "RogueRustRemovalTool.UI.Root";
         private const string UiSession = "RogueRustRemovalTool.UI.Session";
@@ -381,6 +381,9 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 PrintError("Configuration is invalid; defaults have been loaded: " + ex.Message);
                 _config = new Configuration();
                 SaveConfig();
@@ -392,8 +395,14 @@ namespace Oxide.Plugins
         private bool EnsureConfiguration()
         {
             bool changed = false;
+            if (_config.General == null) { _config.General = new GeneralSettings(); changed = true; }
+            if (_config.Normal == null) { _config.Normal = new NormalSettings(); changed = true; }
+            if (_config.Access == null) { _config.Access = new AccessSettings(); changed = true; }
             if (_config.Admin == null) { _config.Admin = new AdminSettings(); changed = true; }
+            if (_config.Bulk == null) { _config.Bulk = new BulkSettings(); changed = true; }
             if (_config.Costs == null) { _config.Costs = new CostSettings(); changed = true; }
+            if (_config.Refunds == null) { _config.Refunds = new RefundSettings(); changed = true; }
+            if (_config.Ui == null) { _config.Ui = new UiSettings(); changed = true; }
 
             if (_config.Integrations == null)
             {
@@ -405,24 +414,18 @@ namespace Oxide.Plugins
                 _config.General.Command = "remove";
                 changed = true;
             }
-            _config.General.DefaultSessionSeconds = Mathf.Max(5, _config.General.DefaultSessionSeconds);
+            _config.General.DefaultSessionSeconds = Mathf.Clamp(_config.General.DefaultSessionSeconds, 5, 3600);
             _config.General.MaximumSessionSeconds =
-                Mathf.Clamp(Mathf.Max(_config.General.DefaultSessionSeconds, _config.General.MaximumSessionSeconds), 1, 86400);
-            _config.General.Distance = Mathf.Clamp(_config.General.Distance, 1f, 10f);
-            _config.General.RemovalInterval = Mathf.Max(0.1f, _config.General.RemovalInterval);
-            _config.General.CooldownSeconds = Mathf.Max(0f, _config.General.CooldownSeconds);
-            _config.Access.MinimumHealthPercent = Mathf.Clamp(_config.Access.MinimumHealthPercent, 0f, 100f);
-            _config.General.DefaultSessionSeconds = Mathf.Clamp(_config.General.DefaultSessionSeconds, 1, 3600);
-            _config.General.MaximumSessionSeconds = Mathf.Max(_config.General.DefaultSessionSeconds, _config.General.MaximumSessionSeconds);
+                Mathf.Clamp(_config.General.MaximumSessionSeconds, _config.General.DefaultSessionSeconds, 86400);
             _config.General.MaximumRemovals = Mathf.Max(0, _config.General.MaximumRemovals);
             _config.General.Distance = Mathf.Clamp(_config.General.Distance, 1f, 10f);
-            _config.General.RemovalInterval = Mathf.Clamp(_config.General.RemovalInterval, 0.05f, 5f);
+            _config.General.RemovalInterval = Mathf.Clamp(_config.General.RemovalInterval, 0.1f, 5f);
             _config.General.CooldownSeconds = Mathf.Max(0f, _config.General.CooldownSeconds);
 
             _config.Access.MinimumHealthPercent = Mathf.Clamp(_config.Access.MinimumHealthPercent, 0f, 100f);
             _config.Access.EntityAgeLimitSeconds = Mathf.Max(0f, _config.Access.EntityAgeLimitSeconds);
 
-            _config.Bulk.EntitiesPerBatch = Mathf.Clamp(_config.Bulk.EntitiesPerBatch, 1, 200);
+            _config.Bulk.EntitiesPerBatch = Mathf.Clamp(_config.Bulk.EntitiesPerBatch, 1, 250);
             _config.Bulk.BatchIntervalSeconds = Mathf.Clamp(_config.Bulk.BatchIntervalSeconds, 0.01f, 2f);
             _config.Bulk.MaximumEntitiesPerOperation = Mathf.Max(0, _config.Bulk.MaximumEntitiesPerOperation);
             _config.Bulk.ExternalRadius = Mathf.Clamp(_config.Bulk.ExternalRadius, 2f, 50f);
@@ -462,8 +465,6 @@ namespace Oxide.Plugins
             foreach (string key in _config.Refunds.EntityPercentOverrides.Keys.ToList())
                 _config.Refunds.EntityPercentOverrides[key] =
                     Mathf.Clamp(_config.Refunds.EntityPercentOverrides[key], 0f, 100f);
-            _config.Bulk.EntitiesPerBatch = Mathf.Clamp(_config.Bulk.EntitiesPerBatch, 1, 250);
-            _config.Bulk.BatchIntervalSeconds = Mathf.Clamp(_config.Bulk.BatchIntervalSeconds, 0.01f, 2f);
             return changed;
         }
 
@@ -519,8 +520,6 @@ namespace Oxide.Plugins
 
             _bulkConfirmations.Clear();
             _uiState.Clear();
-            foreach (BasePlayer player in BasePlayer.activePlayerList)
-                DestroyRemovalUi(player);
 
             _sessions.Clear();
             _spawnedAt.Clear();
@@ -632,6 +631,15 @@ namespace Oxide.Plugins
             if (!HasPermission(player, permissionName) && !HasPermission(player, PermOverride))
                 return RogueCommandResult.Fail(Message("Error.NoPermission", player));
 
+            // "Cooldown Seconds" was in the config but never applied. It is the wait between one normal
+            // session ending and the next starting; staff modes and the override permission skip it.
+            if (mode == RemovalMode.Normal && _config.General.CooldownSeconds > 0f && !HasPermission(player, PermOverride))
+            {
+                TimeSpan wait = CooldownRemaining(player, "session");
+                if (wait > TimeSpan.Zero)
+                    return RogueCommandResult.Fail("The removal tool can be used again in " + FormatDuration(wait) + ".");
+            }
+
             seconds = Mathf.Clamp(seconds <= 0 ? _config.General.DefaultSessionSeconds : seconds,
                 5, _config.General.MaximumSessionSeconds);
 
@@ -711,7 +719,14 @@ namespace Oxide.Plugins
 
             string reason;
             if (!TryRemove(player, target, session.Mode, out reason))
+            {
+                // The reticle normally shows why a target is blocked. A cost the player cannot meet is
+                // only known at this point, and with the reticle text off nothing else explains it.
+                bool hudExplains = _config.Ui.Enabled && _config.Ui.ShowReticle && _config.Ui.ShowAuthorization;
+                if (!string.IsNullOrWhiteSpace(reason) && (!hudExplains || reason.StartsWith("Requires ", StringComparison.Ordinal)))
+                    player.ChatMessage(reason);
                 return;
+            }
 
             session.Removed++;
             if (_config.General.ResetTimerOnRemove)
@@ -751,7 +766,12 @@ namespace Oxide.Plugins
         private void DisableSession(BasePlayer player, bool message)
         {
             if (player == null) return;
-            if (!_sessions.Remove(player.userID)) return;
+            RemovalSession ended;
+            if (!_sessions.TryGetValue(player.userID, out ended)) return;
+            _sessions.Remove(player.userID);
+
+            if (ended.Mode == RemovalMode.Normal && _config.General.CooldownSeconds > 0f)
+                TryStartCooldown(player, "session", TimeSpan.FromSeconds(_config.General.CooldownSeconds), out _);
 
             DestroyRemovalUi(player);
             Interface.CallHook("OnRogueRustRemovalToolDeactivated", player);
@@ -767,7 +787,7 @@ namespace Oxide.Plugins
 
         #region Removal Engine
 
-        private bool TryRemove(BasePlayer player, BaseEntity entity, RemovalMode mode, out string reason)
+        private bool TryRemove(BasePlayer player, BaseEntity entity, RemovalMode mode, out string reason, bool bulkAuthorised = false)
         {
             reason = string.Empty;
 
@@ -791,7 +811,7 @@ namespace Oxide.Plugins
             }
             else if (mode == RemovalMode.Admin)
             {
-                if (!CanRemoveAdmin(player, entity, out reason))
+                if (!CanRemoveAdmin(player, entity, out reason, bulkAuthorised))
                     return false;
             }
 
@@ -829,11 +849,14 @@ namespace Oxide.Plugins
             return true;
         }
 
-        private bool CanRemoveAdmin(BasePlayer player, BaseEntity entity, out string reason)
+        // permissionChecked: a structure, all or external removal has already been authorised by that
+        // mode's own permission. Without this, those modes removed nothing unless the player also held
+        // the admin permission, and reported "0 removed" with no reason.
+        private bool CanRemoveAdmin(BasePlayer player, BaseEntity entity, out string reason, bool permissionChecked = false)
         {
             reason = string.Empty;
 
-            if (player == null || !HasPermission(player, PermAdmin))
+            if (player == null || (!permissionChecked && !HasPermission(player, PermAdmin)))
             {
                 reason = "You do not have permission to use admin removal.";
                 return false;
@@ -1285,7 +1308,7 @@ namespace Oxide.Plugins
                     }
 
                     string ignored;
-                    if (TryRemove(player, entity, RemovalMode.Admin, out ignored))
+                    if (TryRemove(player, entity, RemovalMode.Admin, out ignored, true))
                         removed++;
                     return true;
                 },

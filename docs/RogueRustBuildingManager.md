@@ -2,7 +2,7 @@
 
 > Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them.
 
-**Version:** `1.1.1`  
+**Version:** `1.2.0`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.63 or newer
@@ -11,6 +11,8 @@
 
 ## Recent Changes
 
+- **1.2.0:** wallpaper now costs the game's own price per face, taken up front with anything unused returned, and is covered by undo. `Charge The Game's Price For Each Face Papered` under Wallpaper turns the cost off.
+- A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 - **1.1.1:** each wallpaper is listed once. The wall and ceiling lists were being filled twice. A wallpaper put on a face that turns out to be outdoors is taken back off by the game's own check.
 - **1.1.0:** the menu is drawn in sections, so a click only resends the part that changed. Wallpapers are chosen from a list by name instead of stepping through them one at a time. The upgrade effect is skipped on large operations.
 
@@ -21,7 +23,7 @@
 - **Hammer grading** — hit a block to take it to your chosen grade. A block already at that grade gets a normal hit, so it can still be repaired.
 - **Skins** — a skin per grade, used when upgrading, when you upgrade by hand, or applied to the whole base.
 - **Wallpaper** — one each for walls, floors and ceilings, picked from a list, then applied to or stripped from the whole base. The list is read from the game, so new wallpapers appear without a plugin update.
-- **Undo** — the last upgrade, downgrade or skin operation can be reversed for a short while, with resources returned.
+- **Undo** — the last upgrade, downgrade, skin or wallpaper operation can be reversed for a short while, with resources returned.
 - **Fair costs** — upgrades charge the game's own price, all or nothing, and tell you what you are short of. Anything paid for a block that is then skipped is returned.
 - Work is spread over server ticks so a large base does not stall the server.
 
@@ -85,6 +87,7 @@ Refunds are off by default. With them on, a player who upgrades for free could h
 
 Each has an `Enabled` switch. In addition:
 
+- **Wallpaper** — `Charge The Game's Price For Each Face Papered`, default `true`.
 - **Auto Grade** — `Turn Itself Off After This Many Seconds Without Building (0 = Never)`, default `300`.
 - **Undo** — `Seconds An Operation Can Be Undone For`, default `120`.
 
@@ -100,7 +103,8 @@ Building skins are paid game content. Leave ownership checking on unless you hav
 
 ## Wallpaper notes
 
-- Wallpaper is free and is not covered by undo.
+- Each face papered costs the game's own wallpaper price. The total is taken up front and anything unused is returned. Players with `nocost` pay nothing.
+- Wallpaper operations can be undone like any other.
 - Floors take a floor wallpaper on top and a ceiling wallpaper underneath.
 - The second face of a wall, and the underside of a floor, must be indoors. The game checks this itself and removes paper from a face that is outside.
 

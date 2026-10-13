@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustEventDirector", "RogueAssassin", "1.4.0")]
+[Info("RogueRustEventDirector", "RogueAssassin", "1.4.1")]
 [Description("Performance-focused world event scheduling and CH47 crate direction powered by RogueRust.")]
 public sealed class RogueRustEventDirector : RogueRustPlugin
 {
@@ -18,9 +18,9 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     [RoguePermission]
     private const string AdminPermission = "roguerusteventdirector.admin";
 
-    private const string PluginVersion = "1.4.0";
+    private const string PluginVersion = "1.4.1";
 
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 0);
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 1);
 
     private const string CargoPlanePrefab = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
     private const string PatrolHelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
@@ -162,6 +162,22 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         return disabled.Count == 0 ? "none" : string.Join(", ", disabled);
     }
 
+    // Active events of a type as far as scheduling is concerned. A helicopter flying to a
+    // RogueRustHeliCrash site is that plugin's event, not a patrol, so it does not use up a patrol slot.
+    private int CountManaged(RogueWorldEventType type)
+    {
+        int active = WorldEvents.CountActive(type);
+        if (type != RogueWorldEventType.PatrolHelicopter || active == 0)
+            return active;
+
+        foreach (RogueWorldEventEntity tracked in WorldEvents.GetActive(type))
+        {
+            if (tracked.NativeEntity != null && Interface.CallHook("IsHeliCrashHelicopter", tracked.NativeEntity) != null)
+                active--;
+        }
+        return Math.Max(0, active);
+    }
+
     private static bool IsPrefab(string path, string prefab) =>
         string.Equals(path, prefab, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(System.IO.Path.GetFileName(path), System.IO.Path.GetFileName(prefab), StringComparison.OrdinalIgnoreCase);
@@ -297,7 +313,7 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
                 return;
             }
         }
-        else if (WorldEvents.IsAtOrAboveLimit(type, settings.MaximumConcurrent))
+        else if (CountManaged(type) >= settings.MaximumConcurrent)
         {
             nextUtc = now.AddSeconds(Math.Max(30, _config.Scheduler.ConcurrencyRetrySeconds));
             SaveStateDebounced();
@@ -308,7 +324,7 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         // the actual world entity rather than the generic world-event tracker.
         int availableSlots = type == RogueWorldEventType.Bradley
             ? 1
-            : Math.Max(0, settings.MaximumConcurrent - WorldEvents.CountActive(type));
+            : Math.Max(0, settings.MaximumConcurrent - CountManaged(type));
         int requested = type == RogueWorldEventType.Bradley
             ? 1
             : NextInt(settings.MinimumSpawnCount, settings.MaximumSpawnCount);

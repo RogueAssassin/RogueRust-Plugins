@@ -2,7 +2,7 @@
 
 > A malfunctioning patrol helicopter flies in and crashes. The crash site is marked on the map, guarded, and reported until it is looted or expires.
 
-**Version:** `1.0.2`  
+**Version:** `1.0.3`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.62 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 - **1.0.2:** guards now spawn. Placement was asking Unity's navigation mesh, which is empty now that Rust runs its AI on its own; the plugin asks the game's navigation mesh first. If the configured guard prefab does not exist, built-in alternatives are tried and the one used is logged.
 - The helicopter now comes down at the chosen site. A dying patrol helicopter normally flies to the nearest monument within 1,200 m before it spins out; that rule is switched off for the moment the crash starts.
 - **1.0.1:** a crash site now needs dry land for 70 m in every direction. The helicopter spins before it explodes and throws its crates outwards, so a site on the shoreline could put the loot in the sea.

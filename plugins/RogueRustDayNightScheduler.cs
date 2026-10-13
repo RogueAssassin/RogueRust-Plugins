@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("DayNightScheduler", "RogueAssassin", "3.1.2")]
+    [Info("DayNightScheduler", "RogueAssassin", "3.1.3")]
     [Description("RogueRust-powered day/night duration scheduling, cycle skipping, and protected time controls.")]
     public sealed class RogueRustDayNightScheduler : RogueRustPlugin
     {
@@ -21,9 +21,9 @@ namespace Oxide.Plugins
         private const string DefaultLanguage = "en";
         private const string InitRetryWorkload = "tod-initialize";
 
-        private const string PluginVersion = "3.1.2";
+        private const string PluginVersion = "3.1.3";
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 2);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 3);
 
         private ConfigData _config;
         private TOD_Sky _sky;
@@ -169,6 +169,9 @@ namespace Oxide.Plugins
             }
             catch (Exception exception)
             {
+                // Keep the file that could not be read. The defaults are saved over the config below, and
+                // without this copy one typo would cost the owner every setting they had made.
+                try { System.IO.File.Copy(Config.Filename, Config.Filename + ".invalid", true); } catch { }
                 PrintError("Invalid configuration; defaults will be used: " + exception.Message);
                 _config = new ConfigData();
             }

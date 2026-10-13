@@ -2,24 +2,27 @@
 
 > RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics and player-facing grid events.
 
-**Version:** `2.0.2`  
+**Version:** `2.0.3`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
 
 [Plugin source](../plugins/RogueRustGridPower.cs) · [Back to plugin catalogue](../README.md)
 
+## Recent Changes
+
+- A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
+
 ## Features
 
 - Automatic world streetlight control by Rust world hour.
 - Deterministic streetlight density/selection seed.
-- Optional player grid-power infrastructure and power-pole discovery.
-- Configurable pole power output and transformer output limit.
-- Cooperative/batched infrastructure spawning.
-- Wooden ladder placement support on RogueRust-managed power poles, with cached pole targeting and native Rust ladder entities.
+- Optional control of Rust's native power grid: access-point output by server values or a fixed amount, optionally only while the street lights are on.
+- Transformers fitted to native power poles that are missing one, a few per frame.
+- Wooden ladders can be placed on power poles.
 - GameTip notifications for night/dawn transitions.
-- Streetlight/infrastructure cache refresh controls.
-- Administrative status, refresh, scan, inspect, debug and power diagnostics.
+- Street light cache refresh on a timer, with a per-frame budget.
+- Administrative status, refresh, apply, native-grid inspection and debug markers.
 - RogueRust shared GridPower backend integration.
 
 ## Permissions
@@ -50,110 +53,93 @@ Configuration file: `config/RogueRustGridPower.json`
 
 ### General Settings
 
-`Enable Plugin`: `true`
+| Setting | Default |
+| --- | --- |
+| Enable Plugin | `true` |
 
 ### Street Lights
 
-| Setting | Default | Validation |
-| --- | ---: | --- |
-| Enabled | `true` | — |
-| Turn On Hour (0-23) | `20` | clamped to valid world hour |
-| Turn Off Hour (0-23) | `8` | clamped to valid world hour |
-| Street Light Density Percent (0-100) | `100` | `0-100` |
-| Selection Seed | `0` | deterministic selection seed |
+| Setting | Default |
+| --- | --- |
+| Enabled | `true` |
+| Turn On Hour (0-23) | `20` |
+| Turn Off Hour (0-23) | `8` |
+| Street Light Density Percent (0-100) | `100` |
+| Selection Seed | `0` |
 
-### Player Grid Power
+The seed decides which lights are lit when the density is below 100, so the same lights are chosen after every restart.
+
+### Native Power Grid
+
+Controls the output of Rust's own power-grid access points. Off by default.
 
 | Setting | Default |
 | --- | --- |
 | Enabled | `false` |
-| Discover Power Poles | `true` |
-| Require Vanilla Power Grid | `false` |
+| Output Mode (Vanilla, Convars, Fixed) | `Convars` |
+| Convars: Base Output (-1 = keep server value) | `-1` |
+| Convars: Maximum Output (-1 = keep server value) | `600` |
+| Override Power Plant Requirement | `false` |
+| Fixed: Output | `100` |
+| Only While Grid Online (follows street light hours) | `false` |
+| Respect powergrid.enabled | `true` |
 
-#### Power Poles
+- **Vanilla** leaves the game's output alone.
+- **Convars** sets the server's base and maximum output values.
+- **Fixed** gives every access point the same output.
 
-| Setting | Default | Validation |
-| --- | ---: | --- |
-| Enabled | `true` | — |
-| Density Percent | `100` | `0-100` |
-| Selection Seed | `0` | — |
-| Power Output | `600` | `>= 0` |
-| Limit Transformer Output | `true` | — |
-| Transformer Maximum Output | `100` | `>= 0` |
-| Spawn Batch Size | `2` | `1-2` |
-| Batch Interval Seconds | `0.25` | `>= 0.25` |
-| Allow Wooden Ladders On Grid Power Poles | `true` | — |
-| Ladder Pole Detection Radius | `4` | clamped `1-8` metres |
-| Show Ladder Placement GameTip | `true` | — |
-| Ladder Placement GameTip Duration Seconds | `2.5` | clamped `1-10` |
-| Ladder Placement Success Message | `Ladder attached to RogueRust GridPower pole.` | configurable text |
+### Native Pole Transformers
+
+| Setting | Default |
+| --- | --- |
+| Enabled | `true` |
+| Density Percent (share of native poles with a transformer) | `100` |
+| Selection Seed | `0` |
+| Transformers Fitted Per Frame | `4` |
+
+A pole that is missing a transformer is fitted with one; a pole never gets a second.
+
+### Power Pole Ladders
+
+| Setting | Default |
+| --- | --- |
+| Allow Wooden Ladders On Power Poles | `true` |
+| Pole Detection Radius | `4` |
+| Show Placement GameTip | `true` |
+| Placement GameTip Duration Seconds | `2.5` |
+| Placement Success Message | `Ladder attached to the power pole.` |
 
 ### Player Notifications
 
 | Setting | Default |
 | --- | --- |
 | Show GameTips | `true` |
-| GameTip Duration Seconds | `8` (clamped `1-30`) |
-| Night Message | grid generators/streetlights night message |
-| Dawn Message | daylight/grid shutdown message |
+| GameTip Duration Seconds | `8` |
+| Night Message | `As night settles in, the grid generators rumble to life and the roadside lights begin to glow.` |
+| Dawn Message | `As daylight returns, the grid generators wind down and the streetlights fade out.` |
 
 ### Performance Settings
 
-| Setting | Default | Minimum |
-| --- | ---: | ---: |
-| Street Light Check Interval Seconds | `30` | `5` |
-| Refresh Street Light Cache Minutes | `10` | `1` |
+| Setting | Default |
+| --- | --- |
+| Street Light Check Interval Seconds | `30` |
+| Refresh Street Light Cache Minutes | `10` |
+| Street Light Frame Budget Milliseconds | `1.0` |
+| Street Light Fixtures Per Frame (0 = all at once) | `12` |
+| Native Grid Refresh Budget Milliseconds | `1.0` |
+| Native Grid Access Points Refreshed Per Frame | `32` |
 
 ### Developer Settings
 
-`Log Diagnostics`: `false`. Detailed discovery/per-entity/recovery traces remain silent unless enabled.
-
-### Representative default configuration
-
-```json
-{
-  "General Settings": { "Enable Plugin": true },
-  "Street Lights": {
-    "Enabled": true,
-    "Turn On Hour (0-23)": 20.0,
-    "Turn Off Hour (0-23)": 8.0,
-    "Street Light Density Percent (0-100)": 100,
-    "Selection Seed": 0
-  },
-  "Player Grid Power": {
-    "Enabled": false,
-    "Discover Power Poles": true,
-    "Power Poles": {
-      "Enabled": true,
-      "Density Percent (0-100)": 100,
-      "Selection Seed": 0,
-      "Power Output": 600,
-      "Limit Transformer Output": true,
-      "Transformer Maximum Output": 100,
-      "Spawn Batch Size": 2,
-      "Batch Interval Seconds": 0.25,
-      "Allow Wooden Ladders On Grid Power Poles": true,
-      "Ladder Pole Detection Radius": 4.0,
-      "Show Ladder Placement GameTip": true,
-      "Ladder Placement GameTip Duration Seconds": 2.5,
-      "Ladder Placement Success Message": "Ladder attached to RogueRust GridPower pole."
-    },
-    "Require Vanilla Power Grid": false
-  },
-  "Performance Settings": {
-    "Street Light Check Interval Seconds": 30.0,
-    "Refresh Street Light Cache Minutes": 10.0
-  },
-  "Developer Settings": { "Log Diagnostics": false },
-  "Version (DO NOT CHANGE)": "2.0.2"
-}
-```
+| Setting | Default |
+| --- | --- |
+| Log Diagnostics | `false` |
 
 ## Ladder placement notes
 
-When player-grid power is enabled and managed power poles are active, players holding a wooden wall ladder can place it directly against recognized RogueRust GridPower poles. The plugin caches eligible pole positions for short periods, verifies the player is actually targeting a power-pole collider, spawns the native ladder entity with ownership/skin preserved, and fires the normal `OnEntityBuilt` hook for compatibility.
+Players holding a wooden wall ladder can place it directly against a power pole. The plugin caches eligible pole positions for short periods, verifies the player is actually targeting a power-pole collider, spawns the native ladder entity with ownership/skin preserved, and fires the normal `OnEntityBuilt` hook for compatibility.
 
-This feature can be disabled independently without affecting streetlights or player-grid power.
+This feature can be disabled independently without affecting street lights or the native power grid.
 
 ## Runtime and performance notes
 

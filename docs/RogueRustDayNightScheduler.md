@@ -1,6 +1,6 @@
 # RogueRust Day/Night Scheduler
 
-**Version:** `3.1.2`  
+**Version:** `3.1.3`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -10,6 +10,7 @@ RogueRust-powered day/night duration scheduling, cycle skipping, manual time con
 
 ## Recent Changes
 
+- A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 - Configuration section ordering standardized for consistent RogueRust family config output.
 
 ## Features
