@@ -2,7 +2,7 @@
 
 > Performance-first Skinner-style native Rust skin browser powered by RogueRust services.
 
-**Version:** `2.3.1`  
+**Version:** `2.3.2`  
 **Author:** RogueRust  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.3.2:** when RogueRustBuildingManager is installed, the Structures action and `/skinbase` hand structure skinning to it, using the skins chosen here. It checks skin ownership, spreads the work over server ticks and can undo it. Without it, structure skinning works as before.
 - Configuration sections now use explicit RogueRust family ordering for stable config layout.
 
 ## Features

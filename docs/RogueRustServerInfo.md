@@ -2,7 +2,7 @@
 
 > In-game server information and command reference panel. Players see the commands available to them; admins also get the admin list.
 
-**Version:** `1.1.1`  
+**Version:** `1.1.2`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)

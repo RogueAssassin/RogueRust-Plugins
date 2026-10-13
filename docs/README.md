@@ -18,6 +18,7 @@ The collection has a source-verification and documentation release gate. See [RE
 
 - [RogueRustAdminMenu](RogueRustAdminMenu.md)
 - [RogueRustBlueprintManager](RogueRustBlueprintManager.md)
+- [RogueRustBuildingManager](RogueRustBuildingManager.md)
 - [RogueRustCraftingController](RogueRustCraftingController.md)
 - [RogueRustCustomPlayerMessages](RogueRustCustomPlayerMessages.md)
 - [RogueRustDayNightScheduler](RogueRustDayNightScheduler.md)

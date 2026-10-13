@@ -9,14 +9,14 @@ using Oxide.Ext.RogueRust.SDK;
 using Oxide.Game.Rust.Cui;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.1")]
+    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.2")]
     [Description("In-game server information and command reference panel. Players see player commands; admins also see the admin list.")]
     public sealed class RogueRustServerInfo : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerustserverinfo.admin";
-        private const string PluginVersion = "1.1.1";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 1);
+        private const string PluginVersion = "1.1.2";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 2);
 
         // The panel is three documents so that only the part that changed is resent:
         // the shell is drawn once when the panel opens, the navigation on a tab change,
@@ -214,6 +214,7 @@ namespace Oxide.Plugins
             const string Grid = "RogueRustGridPower";
             const string Turrets = "RogueRustTurretLimitOverride";
             const string Crash = "RogueRustHeliCrash";
+            const string Building = "RogueRustBuildingManager";
             return new List<CommandEntry>
             {
                 // Player commands
@@ -225,6 +226,9 @@ namespace Oxide.Plugins
                 Entry(Messages, D, "Players", "players", "/players", "Lists online players."),
                 Entry(Notes, D, "Combat", "dn", "/dn [on|off|toggle|teamonly|teamoff|meters|feet|yards]", "Controls Death Notes visibility, team mode and distance units."),
                 Entry(Removal, D, "Building", "remove", "/remove [seconds|off]", "Enables or disables the removal tool.", "roguerustremovaltool.normal"),
+                Entry(Building, D, "Building", "bm", "/bm", "Opens the building manager: target grade, auto grade, hammer grading, skins and wallpaper.", "roguerustbuildingmanager.use"),
+                Entry(Building, D, "Building", "up", "/up [wood|stone|metal|hqm]", "Upgrades the whole building you are looking at or standing in.", "roguerustbuildingmanager.bulk"),
+                Entry(Building, D, "Building", "down", "/down [twig|wood|stone|metal]", "Downgrades the whole building you are looking at or standing in.", "roguerustbuildingmanager.bulk"),
                 Entry(Furnace, D, "Furnace", "fs", "/fs [on|off]", "Shows or toggles Furnace Splitter for you.", "roguerustfurnacesplitter.use"),
                 Entry(Skins, D, "Skins", "skin", "/skin", "Opens the skin browser.", "roguerustskins.use"),
                 Entry(Skins, D, "Skins", "skins", "/skins", "Opens the skin menu.", "roguerustskins.use"),

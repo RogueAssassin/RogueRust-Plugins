@@ -29,7 +29,7 @@ $repositoryUrl = 'https://github.com/RogueAssassin/RogueRust-Plugins'
 $categories = [ordered]@{
     'Administration' = @('RogueRustAdminMenu', 'RogueRustServerInfo', 'RogueRustServerRestarter', 'RogueRustCustomPlayerMessages')
     'World events'   = @('RogueRustEventDirector', 'RogueRustHeliCrash', 'RogueRustHeliLeashControl', 'RogueRustHackableCrateTracker', 'RogueRustDeathNotes')
-    'Building and base' = @('RogueRustRemovalTool', 'RogueRustGridPower', 'RogueRustTurretLimitOverride', 'RogueRustFurnaceSplitter', 'RogueRustFuelStackOptimizer')
+    'Building and base' = @('RogueRustBuildingManager', 'RogueRustRemovalTool', 'RogueRustGridPower', 'RogueRustTurretLimitOverride', 'RogueRustFurnaceSplitter', 'RogueRustFuelStackOptimizer')
     'Players and progression' = @('RogueRustSkins', 'RogueRustBlueprintManager', 'RogueRustCraftingController', 'RogueRustRandoSpawns')
     'World' = @('RogueRustDayNightScheduler')
 }
@@ -146,7 +146,7 @@ $homeBody = @"
     <a class="button primary" href="$extensionUrl">1. Install the RogueRust DLL</a>
     <a class="button" href="#plugins">2. Pick your plugins</a>
   </div>
-  <p class="note">Current plugins require RogueRust 4.4.62 or newer. Drop the DLL into <code>RustDedicated_Data/Managed</code>, then put each plugin in <code>oxide/plugins</code>.</p>
+  <p class="note">Current plugins require RogueRust 4.4.63 or newer. Drop the DLL into <code>RustDedicated_Data/Managed</code>, then put each plugin in <code>oxide/plugins</code>.</p>
 </section>
 <section id="plugins">
   <input id="filter" class="filter" type="search" placeholder="Filter plugins, for example: heli, skins, admin" aria-label="Filter plugins">

@@ -4,7 +4,7 @@ A maintained collection of **Rust server plugins** from RogueRust, designed arou
 
 **Website:** [plugins.roguegaming.com.au](https://plugins.roguegaming.com.au) — the catalogue, documentation and downloads in one place.
 
-**Current plugins require RogueRust 4.4.62 or newer.**
+**Current plugins require RogueRust 4.4.63 or newer.**
 
 The repository is framework-neutral: documentation describes plugin behaviour and requirements without treating either supported mod framework as secondary.
 
@@ -14,6 +14,7 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 |---|---:|---|---|
 | **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.3` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
 | **[RogueRustBlueprintManager](docs/RogueRustBlueprintManager.md)** | `2.1.1` | Blueprint management with legacy permission/config compatibility. | [Source](plugins/RogueRustBlueprintManager.cs) |
+| **[RogueRustBuildingManager](docs/RogueRustBuildingManager.md)** | `1.1.1` | Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them. | [Source](plugins/RogueRustBuildingManager.cs) |
 | **[RogueRustCraftingController](docs/RogueRustCraftingController.md)** | `2.1.1` | Crafting control with RogueRust integration. | [Source](plugins/RogueRustCraftingController.cs) |
 | **[CustomPlayerMessages](docs/RogueRustCustomPlayerMessages.md)** | `3.1.1` | Custom connect/disconnect messages and player-list commands. | [Source](plugins/RogueRustCustomPlayerMessages.cs) |
 | **[DayNightScheduler](docs/RogueRustDayNightScheduler.md)** | `3.1.2` | Day/night duration scheduling and protected time controls. | [Source](plugins/RogueRustDayNightScheduler.cs) |
@@ -27,9 +28,9 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 | **[RogueRustHeliLeashControl](docs/RogueRustHeliLeashControl.md)** | `2.1.3` | Keeps damaged Patrol Helicopters near the last valid attacker. | [Source](plugins/RogueRustHeliLeashControl.cs) |
 | **[RogueRustRandoSpawns](docs/RogueRustRandoSpawns.md)** | `2.1.2` | Random respawns with biome weighting and topology/zone protection. | [Source](plugins/RogueRustRandoSpawns.cs) |
 | **[RogueRustRemovalTool](docs/RogueRustRemovalTool.md)** | `2.0.2` | RogueRust-native building and deployable removal tool. | [Source](plugins/RogueRustRemovalTool.cs) |
-| **[RogueRustServerInfo](docs/RogueRustServerInfo.md)** | `1.1.1` | In-game server information and command reference panel that lists the commands each player can use. | [Source](plugins/RogueRustServerInfo.cs) |
+| **[RogueRustServerInfo](docs/RogueRustServerInfo.md)** | `1.1.2` | In-game server information and command reference panel that lists the commands each player can use. | [Source](plugins/RogueRustServerInfo.cs) |
 | **[RogueRustServerRestarter](docs/RogueRustServerRestarter.md)** | `2.1.1` | Safe scheduled restarts with chat/game-tip/GUI warnings. | [Source](plugins/RogueRustServerRestarter.cs) |
-| **[RogueRustSkins](docs/RogueRustSkins.md)** | `2.3.1` | Performance-first native Rust skin browser. | [Source](plugins/RogueRustSkins.cs) |
+| **[RogueRustSkins](docs/RogueRustSkins.md)** | `2.3.2` | Performance-first native Rust skin browser. | [Source](plugins/RogueRustSkins.cs) |
 | **[RogueRustTurretLimitOverride](docs/RogueRustTurretLimitOverride.md)** | `2.1.3` | Configures Rust turret interference ConVars. | [Source](plugins/RogueRustTurretLimitOverride.cs) |
 
 ## Documentation
