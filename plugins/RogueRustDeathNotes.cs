@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("RogueRustDeathNotes", "RogueAssassin", "2.5.3")]
+	[Info("RogueRustDeathNotes", "RogueAssassin", "2.5.4")]
 	[Description("RogueRustDeathNotes - RogueRust death notification engine, based on the original Death Notes concept, with integrated native GUI output and per-player controls.")]
 	public sealed class RogueRustDeathNotes : RogueRustPlugin
 	{
@@ -41,9 +41,9 @@ namespace Oxide.Plugins
         [RoguePermission]
         private const string TeamOnlyPermission = "roguerustdeathnotes.seeteamonly";
 
-		private const string PluginVersion = "2.5.3";
+		private const string PluginVersion = "2.5.4";
 
-		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 3);
+		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 4);
 
 		private static RogueRustDeathNotes _instance;
 
@@ -58,6 +58,8 @@ namespace Oxide.Plugins
         private const string EmbeddedIconKey = "notification-icon";
         private const string EmbeddedIconResource = "Oxide.Ext.RogueRust.Icons.RogueRustDeathNotes.png";
         private string _embeddedDeathNotesIcon;
+        // Set after a failed lookup so a DLL/game mismatch is reported once, not on every death.
+        private bool _embeddedIconUnavailable;
         private PlayerSettingsData _playerSettings = new PlayerSettingsData();
         private PluginConfiguration.Translation _translationData = new PluginConfiguration.Translation();
 
@@ -920,7 +922,8 @@ namespace Oxide.Plugins
 				else if (data.KillerEntityType == CombatEntityType.Turret
 						 || data.KillerEntityType == CombatEntityType.Lock
 						 || data.KillerEntityType == CombatEntityType.Trap
-						 || data.KillerEntityType == CombatEntityType.SAM)
+						 || data.KillerEntityType == CombatEntityType.SAM
+						 || data.KillerEntityType == CombatEntityType.FrankensteinPet)
 				{
 					replacements.Add("owner",
 						covalence.Players.FindPlayerById(data.KillerEntity.OwnerID.ToString())?.Name ?? "Unknown Owner"
@@ -1114,6 +1117,19 @@ namespace Oxide.Plugins
                 case DigitSendCodeLock:
                     return CombatEntityType.Lock;
 
+                // Halloween: built at a Frankenstein table. The table's owner becomes the pet's owner.
+                case FrankensteinPet:
+                    return CombatEntityType.FrankensteinPet;
+
+                // Catch-alls placed last so the specific cases above win. Crabs, jellyfish and any animal Facepunch
+                // adds later are Gen2 animals; bandit guards and other human NPCs fight like scientists.
+                case BaseNPC2:
+                case WildlifeHazard:
+                    return CombatEntityType.Animal;
+
+                case HumanNPC:
+                    return CombatEntityType.Scientist;
+
 				default:
 					return CombatEntityType.Other;
 			}
@@ -1169,6 +1185,10 @@ namespace Oxide.Plugins
 					{
 						return name;
 					}
+
+					// A bandit guard without a display name would otherwise read as "Scientist".
+					if (entity is BanditGuard)
+						return "Bandit Guard";
 
 					if (!_entityNames.ContainsKey(entity.ShortPrefabName))
 					{
@@ -1245,6 +1265,9 @@ namespace Oxide.Plugins
 
                 case CombatEntityType.CargoShip:
                     return "Cargo Ship";
+
+                case CombatEntityType.FrankensteinPet:
+                    return "Frankenstein Pet";
 
                 case CombatEntityType.TravellingVendor:
                     return "Travelling Vendor";
@@ -1333,7 +1356,8 @@ namespace Oxide.Plugins
             Tugboat = 38,
             CargoShip = 39,
             CustomNPC = 40,
-            TravellingVendor = 41
+            TravellingVendor = 41,
+            FrankensteinPet = 42
 		}
 
 		#endregion
@@ -1798,6 +1822,8 @@ namespace Oxide.Plugins
         {
             if (!string.IsNullOrWhiteSpace(_embeddedDeathNotesIcon))
                 return _embeddedDeathNotesIcon;
+            if (_embeddedIconUnavailable)
+                return null;
 
             try
             {
@@ -1811,6 +1837,7 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
+                _embeddedIconUnavailable = true;
                 PrintWarning("RogueRustDeathNotes could not initialize its embedded NativeGUI icon: " + ex.Message);
             }
 
@@ -2098,7 +2125,8 @@ namespace Oxide.Plugins
 											  killerType == CombatEntityType.GingerbreadNPC ||
   											  killerType == CombatEntityType.HeavyScientist ||
   											  killerType == CombatEntityType.CustomNPC ||
-                                              killerType == CombatEntityType.NPCShopKeeper)) ||
+                                              killerType == CombatEntityType.NPCShopKeeper ||
+                                              killerType == CombatEntityType.FrankensteinPet)) ||
 											  ((victimType == CombatEntityType.Murderer ||
 											  victimType == CombatEntityType.Scientist ||
                                               victimType == CombatEntityType.Sentry ||
@@ -2109,7 +2137,8 @@ namespace Oxide.Plugins
 											  victimType == CombatEntityType.GingerbreadNPC ||
                                               victimType == CombatEntityType.HeavyScientist ||
                                               victimType == CombatEntityType.CustomNPC ||
-											  victimType == CombatEntityType.NPCShopKeeper) &&
+											  victimType == CombatEntityType.NPCShopKeeper ||
+                                              victimType == CombatEntityType.FrankensteinPet) &&
                                               (killerType == CombatEntityType.Player)));
 		}
 
@@ -2439,6 +2468,8 @@ namespace Oxide.Plugins
 				AddDefault("TravellingVendor", "Player", "*", "{victim} was killed by the {killer}.");
 				AddDefault("Player", "TravellingVendor", "*", "{killer} destroyed the {victim} with their {weapon}.");
 				AddDefault("TravellingVendor", "*", "*", "{killer} vended pain to {victim}.");
+				AddDefault("FrankensteinPet", "*", "*", "{owner}'s {killer} is alive! However, {victim} no longer is.");
+				AddDefault("*", "FrankensteinPet", "*", "{killer} unalived a {victim}.");
 				AddDefault("Bradley", "Player", "*", "{victim} was blasted by the {killer}.");
 				AddDefault("Helicopter", "Player", "*", "{victim} had no chance against the {killer}.");
 				AddDefault("Trap", "Player", "*", "{victim} was reckless and ran into a {killer}.");

@@ -10,13 +10,13 @@ using Oxide.Ext.RogueRust.Plugins;
 using Oxide.Ext.RogueRust.SDK;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.2")]
+    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.3")]
     [Description("RogueRust-powered blueprint management with legacy permission and command compatibility.")]
 
     public sealed class RogueRustBlueprintManager : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.2";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 2);
+        private const string PluginVersion = "2.1.3";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 3);
         private const string LanguageFolder = "RogueRustBlueprintManager";
         private const string LanguageFile = "messages.json";
 
@@ -924,7 +924,10 @@ namespace Oxide.Plugins
             WipeAllBps();
         }
 
-        object CanUnlockTechTreeNode(BasePlayer player, TechTreeData.NodeInstance node, TechTreeData techTree)
+        // Workbench.RPC_TechTreeUnlock calls OnTechTreeNodeUnlock(workbench, node, player); a non-null
+        // return cancels the unlock. (CanUnlockTechTreeNode, used before 2.1.3, is not an Oxide hook,
+        // so locked blueprints could still be unlocked through the tech tree.)
+        object OnTechTreeNodeUnlock(Workbench workbench, TechTreeData.NodeInstance node, BasePlayer player)
         {
             ItemBlueprint itemBlueprint = node.itemDef.Blueprint;
             if (itemBlueprint != null && !itemBlueprint.isResearchable)

@@ -2,7 +2,7 @@
 
 > RogueRust death notification engine based on the Death Notes concept, with native GUI output, per-player controls and optional notification integrations.
 
-**Version:** `2.5.3`  
+**Version:** `2.5.4`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -11,6 +11,10 @@
 
 ## Recent Changes
 
+- **2.5.4:** the Halloween Frankenstein pet is recognised as a killer and a victim (`FrankensteinPet`), with its owner available as `{owner}`. Two default messages are added to existing data on the next load.
+- Crabs, jellyfish, the new birds and seagulls, and any other Gen2 animal are reported as animals, and bandit guards and other human NPCs as scientists, instead of being treated as unknown entities. Bandit guards are named `Bandit Guard`.
+- If the notification icon cannot be loaded (for example a RogueRust DLL built for an older game), the warning is logged once and notices are shown without the icon; before, it was retried and logged on every death.
+- RogueRust 4.4.65 or newer adds the matching default display names (`Frankenstein Pet`, `Bandit Guard`, `Crab`, `Bird Flock`, `Seagulls`). The plugin also works with an older DLL.
 - **2.5.3:** restored the default display names for killers and victims (animals, NPCs, traps, turrets, locks, vehicles) and about 85 weapon and vehicle aliases. They ship in the RogueRust DLL (4.4.62 or newer) and are written to `killer-data` for editing.
 - Traps, turrets and locks are named from their entity class again (`Auto Turret`, `Shotgun Trap`) instead of a raw prefab name.
 - Held weapons are resolved from the running server's item list, so a new gun or tool is named correctly without a plugin update.

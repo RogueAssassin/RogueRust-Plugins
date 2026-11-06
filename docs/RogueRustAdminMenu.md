@@ -2,7 +2,7 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
 
-**Version:** `2.5.4`  
+**Version:** `2.5.5`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,6 +12,8 @@
 
 ## Recent Changes
 
+- **2.5.5:** vanish's second line of defence now works. It answered `CanNpcAttack`, which Oxide never calls; it now answers `OnNpcAttack`, so an animal or NPC that had already targeted an admin before they vanished cannot attack them.
+- The Give page's vehicle artwork lookup is guarded: if the RogueRust image service fails, vehicles are shown without artwork and one warning is logged, instead of the page failing to draw.
 - **2.5.4:** access is checked again on every draw and every click. If a player loses the menu permission while it is open, the menu closes; if they lose one page, they are returned to the dashboard.
 - The header shows the real AdminMenu and RogueRust versions instead of two from many releases ago.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
@@ -156,7 +158,7 @@ The `UI Theme` object contains the full F1-style colour palette and can be custo
   },
   "Integrations": { "Log Menu Actions To Discord Webhook (webhook URL)": "" },
   "Data Settings": { "Recent Players Purge Time (days)": 7 },
-  "Version (DO NOT CHANGE)": "2.5.4"
+  "Version (DO NOT CHANGE)": "2.5.5"
 }
 ```
 

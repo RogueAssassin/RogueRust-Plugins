@@ -22,12 +22,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.4")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.5")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.4";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 4);
+    private const string PluginVersion = "2.5.5";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 5);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -106,7 +106,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private static readonly string[] VanishHooks =
     {
         nameof(CanBeTargeted), nameof(CanBradleyApcTarget), nameof(CanHelicopterTarget),
-        nameof(CanHelicopterStrafeTarget), nameof(OnNpcTarget), nameof(CanNpcAttack),
+        nameof(CanHelicopterStrafeTarget), nameof(OnNpcTarget), nameof(OnNpcAttack),
         nameof(CanEntityBeHostile), nameof(OnEntityMarkHostile), nameof(OnRunPlayerMetabolism)
     };
 
@@ -555,8 +555,9 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         => player != null && _vanishedAdmins.Contains(player.userID) ? true : null;
 
     // Second line of defence: even if an AI already acquired the player before vanish was enabled,
-    // deny the actual NPC attack. This also covers animals using BaseNpc attack logic.
-    private object? CanNpcAttack(BaseNpc npc, BaseEntity target)
+    // deny the actual NPC attack. This also covers animals using BaseNpc attack logic. BaseNpc.StartAttack
+    // calls OnNpcAttack and a non-null return cancels it; CanNpcAttack (before 2.5.5) is not an Oxide hook.
+    private object? OnNpcAttack(BaseNpc npc, BaseEntity target)
     {
         BasePlayer player = target as BasePlayer;
         return player != null && _vanishedAdmins.Contains(player.userID) ? false : null;
@@ -3057,7 +3058,29 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         return bestScore > 0 ? bestPath : null;
     }
 
+    // ImageLibrary lives in the RogueRust DLL. If the DLL was built for another game version its calls
+    // throw MissingMethodException; the Give page then shows the vehicle without artwork instead of failing.
     private bool TryGetVehicleImage(RogueVehicleDescriptor vehicle, out string png)
+    {
+        try
+        {
+            return TryGetVehicleImageCore(vehicle, out png);
+        }
+        catch (Exception ex)
+        {
+            png = string.Empty;
+            if (!_vehicleImageLookupFailed)
+            {
+                _vehicleImageLookupFailed = true;
+                LogWarning("UI", "Vehicle image lookup failed; vehicles are shown without artwork: " + ex.Message);
+            }
+            return false;
+        }
+    }
+
+    private bool _vehicleImageLookupFailed;
+
+    private bool TryGetVehicleImageCore(RogueVehicleDescriptor vehicle, out string png)
     {
         png = string.Empty;
         if (!_config.UI.UseItemImages || vehicle == null) return false;

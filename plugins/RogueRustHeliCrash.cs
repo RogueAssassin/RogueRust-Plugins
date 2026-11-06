@@ -10,14 +10,14 @@ using UnityEngine;
 using UnityEngine.AI;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.3")]
+    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.4")]
     [Description("A malfunctioning patrol helicopter flies in and crashes. The crash site is marked on the map, guarded, and reported until it is looted or expires.")]
     public sealed class RogueRustHeliCrash : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerusthelicrash.admin";
-        private const string PluginVersion = "1.0.3";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 3);
+        private const string PluginVersion = "1.0.4";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 4);
 
         private const string HelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
         private const string HackableCratePrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
@@ -252,17 +252,27 @@ namespace Oxide.Plugins
             foreach (RogueMonumentInfo monument in World.GetMonuments())
                 _monuments.Add(monument.Position);
 
-            // The alert icon ships inside the RogueRust DLL (4.4.62+). Without it the alert is text only.
-            string png;
-            if (ImageLibrary.TryGetEmbeddedImage(Name, "alert-icon", IconResource, out png) && !string.IsNullOrWhiteSpace(png))
-                _icon = png;
-
             // A time saved before a restart may already have passed; never start an event the moment the server boots.
             if (_state.NextEventUnix <= UnixTime) ScheduleNext();
             Repeat(TimeSpan.FromSeconds(1), Tick, "helicrash-tick");
 
             if (_config.Schedule.Automatic)
                 LogInformation("Schedule", "Next helicopter crash in " + FormatDuration(_state.NextEventUnix - UnixTime) + ".");
+
+            // The alert icon ships inside the RogueRust DLL (4.4.62+). Loaded last and guarded: a DLL
+            // built for an older game (MissingMethodException from FileStorage) costs the icon, not the
+            // schedule. ShowAlert draws a text-only alert while _icon is empty.
+            try
+            {
+                string png;
+                if (ImageLibrary.TryGetEmbeddedImage(Name, "alert-icon", IconResource, out png) && !string.IsNullOrWhiteSpace(png))
+                    _icon = png;
+            }
+            catch (Exception ex)
+            {
+                _icon = string.Empty;
+                LogWarning("Icon", "Alert icon unavailable, alerts will be text only: " + ex.Message);
+            }
         }
 
         private void Unload()
