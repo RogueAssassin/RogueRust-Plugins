@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.3")]
+    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.4")]
     [Description("RogueRust-native building and deployable removal tool.")]
     public sealed class RogueRustRemovalTool : RogueRustPlugin
     {

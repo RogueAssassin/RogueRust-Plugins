@@ -2,7 +2,7 @@
 
 > RogueRust-powered blueprint management with legacy permission and command compatibility.
 
-**Version:** `2.1.3`  
+**Version:** `2.1.4`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,6 +12,7 @@
 
 ## Recent Changes
 
+- **2.1.4:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **2.1.3:** blueprints locked after wipe can no longer be unlocked through the tech tree. The lock answered `CanUnlockTechTreeNode`, which Oxide never calls; it now answers `OnTechTreeNodeUnlock`, which the workbench calls before every tech-tree unlock.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 
@@ -101,7 +102,7 @@ When advanced mode is enabled, missing item entries are generated from current R
   "Advanced Blueprint Settings": {
     "Blueprint Management Options": {}
   },
-  "Version (DO NOT CHANGE)": "2.1.3"
+  "Version (DO NOT CHANGE)": "2.1.4"
 }
 ```
 

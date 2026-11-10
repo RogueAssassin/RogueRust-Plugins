@@ -2,7 +2,7 @@
 
 > Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them.
 
-**Version:** `1.2.0`  
+**Version:** `1.2.1`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.63 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **1.2.1:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **1.2.0:** wallpaper now costs the game's own price per face, taken up front with anything unused returned, and is covered by undo. `Charge The Game's Price For Each Face Papered` under Wallpaper turns the cost off.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 - **1.1.1:** each wallpaper is listed once. The wall and ceiling lists were being filled twice. A wallpaper put on a face that turns out to be outdoors is taken back off by the game's own check.

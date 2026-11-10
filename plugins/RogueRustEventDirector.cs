@@ -1,3 +1,4 @@
+#nullable enable annotations
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
@@ -8,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustEventDirector", "RogueAssassin", "1.4.1")]
+[Info("RogueRustEventDirector", "RogueAssassin", "1.4.2")]
 [Description("Performance-focused world event scheduling and CH47 crate direction powered by RogueRust.")]
 public sealed class RogueRustEventDirector : RogueRustPlugin
 {
@@ -18,7 +19,7 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     [RoguePermission]
     private const string AdminPermission = "roguerusteventdirector.admin";
 
-    private const string PluginVersion = "1.4.1";
+    private const string PluginVersion = "1.4.2";
 
     private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 1);
 

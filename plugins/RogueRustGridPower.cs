@@ -10,7 +10,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "2.0.3")]
+    [Info("RogueRustGridPower", "RogueAssassin", "2.0.4")]
     [Description("RogueRust GridPower: automatic world streetlights plus output control for Rust's native power-grid access points.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {

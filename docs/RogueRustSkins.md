@@ -2,7 +2,7 @@
 
 > Performance-first Skinner-style native Rust skin browser powered by RogueRust services.
 
-**Version:** `2.3.3`  
+**Version:** `2.3.4`  
 **Author:** RogueRust  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.3.4:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **2.3.3:** if a weapon's attachments do not all fit when its skin changes the item type, the ones already moved are handed back instead of being destroyed.
 - Player skin sets are written on a worker thread, so the save no longer pauses the server.
 - A damaged request record can no longer break `/skinrequest` or `/skinrequests`.

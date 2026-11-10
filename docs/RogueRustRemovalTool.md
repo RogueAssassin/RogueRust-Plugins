@@ -2,7 +2,7 @@
 
 > RogueRust-native building and deployable removal tool with normal/admin/bulk modes, authorization rules, costs, refunds and integrations.
 
-**Version:** `2.0.3`  
+**Version:** `2.0.4`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.0.4:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **2.0.3:** structure, all and external removal now work with their own permission. They used to remove nothing, and report `0 removed`, unless the player also held `roguerustremovaltool.admin`.
 - `Cooldown Seconds` now takes effect. It was in the config but never applied: it is the wait between one normal session ending and the next starting. Staff modes and the override permission skip it. Set it to `0` to keep the old behaviour.
 - When a click removes nothing because you cannot afford it, or the reticle text is turned off, the reason is sent in chat.

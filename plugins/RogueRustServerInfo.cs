@@ -9,13 +9,13 @@ using Oxide.Ext.RogueRust.SDK;
 using Oxide.Game.Rust.Cui;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.3")]
+    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.4")]
     [Description("In-game server information and command reference panel. Players see player commands; admins also see the admin list.")]
     public sealed class RogueRustServerInfo : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerustserverinfo.admin";
-        private const string PluginVersion = "1.1.3";
+        private const string PluginVersion = "1.1.4";
         private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 3);
 
         // The panel is three documents so that only the part that changed is resent:

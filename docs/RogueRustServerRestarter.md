@@ -2,7 +2,7 @@
 
 > Schedules safe server restarts with RogueRust runtime protection, chat, game-tip and GUI warnings.
 
-**Version:** `2.1.2`  
+**Version:** `2.1.3`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.1.3:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 
 ## Features
@@ -94,7 +95,7 @@ Reason colours default to `M_DEFAULT`, `M_1` and `M_2` entries.
   "Permission Settings": {
     "Automatically Grant Use/Admin Permissions to Built-In Admin Group": true
   },
-  "Version (DO NOT CHANGE)": "2.1.2"
+  "Version (DO NOT CHANGE)": "2.1.3"
 }
 ```
 

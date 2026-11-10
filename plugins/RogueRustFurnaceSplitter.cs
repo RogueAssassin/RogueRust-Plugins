@@ -14,11 +14,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.4")]
+    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.5")]
     [Description("Optimized RogueRust furnace splitting with automatic fuel management, configurable stack distribution, ETA display, and responsive UI.")]
     public sealed class RogueRustFurnaceSplitter : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.4";
+        private const string PluginVersion = "2.1.5";
         private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 4);
 
         [PluginReference]

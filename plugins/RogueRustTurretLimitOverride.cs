@@ -9,7 +9,7 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustTurretLimitOverride", "RogueAssassin", "2.1.4")]
+    [Info("RogueRustTurretLimitOverride", "RogueAssassin", "2.1.5")]
     [Description("Configures Rust's turret interference ConVars.")]
     public sealed class RogueRustTurretLimitOverride : RogueRustPlugin
     {
@@ -17,7 +17,7 @@ namespace Oxide.Plugins
         private const string DefaultAdminPermission = "roguerustturretlimitoverride.admin";
         private const float VanillaRadius = 40f;
         private const int VanillaMaximum = 12;
-        private const string PluginVersion = "2.1.4";
+        private const string PluginVersion = "2.1.5";
         private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 4);
         private Configuration _config;
 

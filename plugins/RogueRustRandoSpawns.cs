@@ -10,11 +10,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.3")]
+    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.4")]
     [Description("RogueRust-powered random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.")]
     public sealed class RogueRustRandoSpawns : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.3";
+        private const string PluginVersion = "2.1.4";
         private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 3);
         [PluginReference]
         private Plugin ZoneManager;
@@ -686,7 +686,7 @@ namespace Oxide.Plugins
         {
             public uint WorldSeed;
             public uint WorldSize;
-            public string PluginVersion = "2.1.3";
+            public string PluginVersion = RogueRustRandoSpawns.PluginVersion;
             public Dictionary<string, List<CachedVector>> Biomes = new Dictionary<string, List<CachedVector>>(StringComparer.OrdinalIgnoreCase);
         }
 
@@ -765,7 +765,7 @@ namespace Oxide.Plugins
             {
                 WorldSeed = global::World.Seed,
                 WorldSize = global::World.Size,
-                PluginVersion = "2.1.3"
+                PluginVersion = RogueRustRandoSpawns.PluginVersion
             };
 
             foreach (KeyValuePair<TerrainBiome.Enum, List<Vector3>> entry in _spawnPoints)

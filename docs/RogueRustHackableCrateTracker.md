@@ -2,7 +2,7 @@
 
 > Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock.
 
-**Version:** `2.2.1`  
+**Version:** `2.2.2`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.2.2:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 - **2.2.0:** in-game reporting rewritten around three messages: hack started, crate looted, and crate still unopened a few minutes after it unlocked.
 - The "is attempting to hack" message is removed. It fired on every press of the laptop, including rejected ones.

@@ -11,7 +11,7 @@ using Oxide.Game.Rust.Cui;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBuildingManager", "RogueAssassin", "1.2.0")]
+    [Info("RogueRustBuildingManager", "RogueAssassin", "1.2.1")]
     [Description("Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them.")]
     public sealed class RogueRustBuildingManager : RogueRustPlugin
     {
@@ -22,7 +22,7 @@ namespace Oxide.Plugins
         [RoguePermission] private const string NoCostPermission = "roguerustbuildingmanager.nocost";
         [RoguePermission] private const string AdminPermission = "roguerustbuildingmanager.admin";
 
-        private const string PluginVersion = "1.2.0";
+        private const string PluginVersion = "1.2.1";
         private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 2, 0);
         private static readonly VersionNumber MinimumExtension = new VersionNumber(4, 4, 63);
 
