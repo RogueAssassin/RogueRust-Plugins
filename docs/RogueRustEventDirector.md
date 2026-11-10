@@ -1,6 +1,6 @@
 # RogueRust Event Director
 
-**Version:** `1.4.2`  
+**Version:** `1.4.3`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -26,6 +26,7 @@ Performance-focused world-event scheduling and CH47 crate direction powered by R
 
 ## Recent Changes
 
+- **1.4.3:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **1.4.2:** Compiles with no warnings: its nullable annotations now have a declared context. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **1.4.1:** a helicopter flying to a RogueRustHeliCrash site no longer uses up a patrol helicopter slot, so it cannot delay a scheduled patrol.
 - **1.4.0:** CH47 crates are kept off the water. `Avoid Water` used to test the helicopter's own position, which is always far above the sea, so crates could be dropped over open ocean. It now tests the ground underneath.
@@ -219,7 +220,7 @@ The Bradley marker follows every Bradley on the map, including ones spawned by o
     "Maximum Spawn Count": 1,
     "Maximum Concurrent": 1
   },
-  "Version (DO NOT CHANGE)": "1.4.2"
+  "Version (DO NOT CHANGE)": "1.4.3"
 }
 ```
 

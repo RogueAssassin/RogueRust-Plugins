@@ -2,7 +2,7 @@
 
 > RogueRust death notification engine based on the Death Notes concept, with native GUI output, per-player controls and optional notification integrations.
 
-**Version:** `2.5.5`  
+**Version:** `2.5.6`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.5.6:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **2.5.5:** With Oxide.Ext.RogueRust 4.4.67 the NativeGUI icon loads again instead of falling back to text only. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **2.5.4:** the Halloween Frankenstein pet is recognised as a killer and a victim (`FrankensteinPet`), with its owner available as `{owner}`. Two default messages are added to existing data on the next load.
 - Crabs, jellyfish, the new birds and seagulls, and any other Gen2 animal are reported as animals, and bandit guards and other human NPCs as scientists, instead of being treated as unknown entities. Bandit guards are named `Bandit Guard`.

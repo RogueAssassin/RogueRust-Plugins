@@ -2,7 +2,7 @@
 
 > RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics and player-facing grid events.
 
-**Version:** `2.0.4`  
+**Version:** `2.0.5`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.0.5:** The startup log line and the config file now show the plugin's real version (2.0.4 still reported 2.0.3).
 - **2.0.4:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 

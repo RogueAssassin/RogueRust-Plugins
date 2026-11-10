@@ -10,12 +10,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.4")]
+    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.5")]
     [Description("RogueRust-powered random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.")]
     public sealed class RogueRustRandoSpawns : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.4";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 3);
+        private const string PluginVersion = "2.1.5";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 5);
         [PluginReference]
         private Plugin ZoneManager;
 

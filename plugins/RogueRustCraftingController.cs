@@ -11,13 +11,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.3")]
+    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.4")]
     [Description("RogueRust-powered crafting control with legacy configuration and permission compatibility.")]
 
     public sealed class RogueRustCraftingController : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.3";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 2);
+        private const string PluginVersion = "2.1.4";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 4);
         private const string PluginDataPath = "RogueRustCraftingController";
         private const string LanguageFileName = "messages.json";
         #region Config

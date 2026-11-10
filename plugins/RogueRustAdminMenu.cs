@@ -23,12 +23,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.6")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.7")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.6";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 5);
+    private const string PluginVersion = "2.5.7";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 7);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";

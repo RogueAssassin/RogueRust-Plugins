@@ -10,12 +10,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHackableCrateTracker", "RogueAssassin", "2.2.2")]
+    [Info("RogueRustHackableCrateTracker", "RogueAssassin", "2.2.3")]
     [Description("Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock.")]
     public sealed class RogueRustHackableCrateTracker : RogueRustPlugin
     {
-        private const string PluginVersion = "2.2.2";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 1);
+        private const string PluginVersion = "2.2.3";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 3);
         [RoguePermission]
         private const string PermissionUse = "roguerusthackablecratetracker.use";
 

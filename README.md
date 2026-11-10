@@ -12,26 +12,26 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 
 | Plugin | Version | Description | Source |
 |---|---:|---|---|
-| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.6` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
-| **[RogueRustBlueprintManager](docs/RogueRustBlueprintManager.md)** | `2.1.4` | Blueprint management with legacy permission/config compatibility. | [Source](plugins/RogueRustBlueprintManager.cs) |
-| **[RogueRustBuildingManager](docs/RogueRustBuildingManager.md)** | `1.2.1` | Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them. | [Source](plugins/RogueRustBuildingManager.cs) |
-| **[RogueRustCraftingController](docs/RogueRustCraftingController.md)** | `2.1.3` | Crafting control with RogueRust integration. | [Source](plugins/RogueRustCraftingController.cs) |
-| **[CustomPlayerMessages](docs/RogueRustCustomPlayerMessages.md)** | `3.1.3` | Custom connect/disconnect messages and player-list commands. | [Source](plugins/RogueRustCustomPlayerMessages.cs) |
-| **[DayNightScheduler](docs/RogueRustDayNightScheduler.md)** | `3.1.4` | Day/night duration scheduling and protected time controls. | [Source](plugins/RogueRustDayNightScheduler.cs) |
-| **[RogueRustDeathNotes](docs/RogueRustDeathNotes.md)** | `2.5.5` | Death notification engine with native GUI output and player controls. | [Source](plugins/RogueRustDeathNotes.cs) |
-| **[RogueRustEventDirector](docs/RogueRustEventDirector.md)** | `1.4.2` | Managed Rust world-event scheduling with vanilla-spawn suppression (including Bradley), dry-land airdrop and crate placement, Bradley and airdrop map markers, startup staggering, randomized GameTips and CH47 crate direction. | [Source](plugins/RogueRustEventDirector.cs) |
-| **[RogueRustFuelStackOptimizer](docs/RogueRustFuelStackOptimizer.md)** | `2.1.3` | Optimises dedicated Rust fuel containers through cached discovery. | [Source](plugins/RogueRustFuelStackOptimizer.cs) |
-| **[RogueRustFurnaceSplitter](docs/RogueRustFurnaceSplitter.md)** | `2.1.5` | Furnace splitting, fuel management, ETA and responsive UI. | [Source](plugins/RogueRustFurnaceSplitter.cs) |
-| **[RogueRustGridPower](docs/RogueRustGridPower.md)** | `2.0.4` | Automatic streetlights, player-grid power, diagnostics and wooden-ladder support for managed power poles. | [Source](plugins/RogueRustGridPower.cs) |
-| **[RogueRustHackableCrateTracker](docs/RogueRustHackableCrateTracker.md)** | `2.2.2` | Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock. | [Source](plugins/RogueRustHackableCrateTracker.cs) |
-| **[RogueRustHeliCrash](docs/RogueRustHeliCrash.md)** | `1.0.5` | A malfunctioning patrol helicopter flies in and crashes; the site is marked, guarded and reported until looted. | [Source](plugins/RogueRustHeliCrash.cs) |
-| **[RogueRustHeliLeashControl](docs/RogueRustHeliLeashControl.md)** | `2.1.5` | Keeps damaged Patrol Helicopters near the last valid attacker. | [Source](plugins/RogueRustHeliLeashControl.cs) |
-| **[RogueRustRandoSpawns](docs/RogueRustRandoSpawns.md)** | `2.1.4` | Random respawns with biome weighting and topology/zone protection. | [Source](plugins/RogueRustRandoSpawns.cs) |
-| **[RogueRustRemovalTool](docs/RogueRustRemovalTool.md)** | `2.0.4` | RogueRust-native building and deployable removal tool. | [Source](plugins/RogueRustRemovalTool.cs) |
-| **[RogueRustServerInfo](docs/RogueRustServerInfo.md)** | `1.1.4` | In-game server information and command reference panel that lists the commands each player can use. | [Source](plugins/RogueRustServerInfo.cs) |
-| **[RogueRustServerRestarter](docs/RogueRustServerRestarter.md)** | `2.1.3` | Safe scheduled restarts with chat/game-tip/GUI warnings. | [Source](plugins/RogueRustServerRestarter.cs) |
-| **[RogueRustSkins](docs/RogueRustSkins.md)** | `2.3.4` | Performance-first native Rust skin browser. | [Source](plugins/RogueRustSkins.cs) |
-| **[RogueRustTurretLimitOverride](docs/RogueRustTurretLimitOverride.md)** | `2.1.5` | Configures Rust turret interference ConVars. | [Source](plugins/RogueRustTurretLimitOverride.cs) |
+| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.7` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
+| **[RogueRustBlueprintManager](docs/RogueRustBlueprintManager.md)** | `2.1.5` | Blueprint management with legacy permission/config compatibility. | [Source](plugins/RogueRustBlueprintManager.cs) |
+| **[RogueRustBuildingManager](docs/RogueRustBuildingManager.md)** | `1.2.2` | Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them. | [Source](plugins/RogueRustBuildingManager.cs) |
+| **[RogueRustCraftingController](docs/RogueRustCraftingController.md)** | `2.1.4` | Crafting control with RogueRust integration. | [Source](plugins/RogueRustCraftingController.cs) |
+| **[CustomPlayerMessages](docs/RogueRustCustomPlayerMessages.md)** | `3.1.4` | Custom connect/disconnect messages and player-list commands. | [Source](plugins/RogueRustCustomPlayerMessages.cs) |
+| **[DayNightScheduler](docs/RogueRustDayNightScheduler.md)** | `3.1.5` | Day/night duration scheduling and protected time controls. | [Source](plugins/RogueRustDayNightScheduler.cs) |
+| **[RogueRustDeathNotes](docs/RogueRustDeathNotes.md)** | `2.5.6` | Death notification engine with native GUI output and player controls. | [Source](plugins/RogueRustDeathNotes.cs) |
+| **[RogueRustEventDirector](docs/RogueRustEventDirector.md)** | `1.4.3` | Managed Rust world-event scheduling with vanilla-spawn suppression (including Bradley), dry-land airdrop and crate placement, Bradley and airdrop map markers, startup staggering, randomized GameTips and CH47 crate direction. | [Source](plugins/RogueRustEventDirector.cs) |
+| **[RogueRustFuelStackOptimizer](docs/RogueRustFuelStackOptimizer.md)** | `2.1.4` | Optimises dedicated Rust fuel containers through cached discovery. | [Source](plugins/RogueRustFuelStackOptimizer.cs) |
+| **[RogueRustFurnaceSplitter](docs/RogueRustFurnaceSplitter.md)** | `2.1.6` | Furnace splitting, fuel management, ETA and responsive UI. | [Source](plugins/RogueRustFurnaceSplitter.cs) |
+| **[RogueRustGridPower](docs/RogueRustGridPower.md)** | `2.0.5` | Automatic streetlights, player-grid power, diagnostics and wooden-ladder support for managed power poles. | [Source](plugins/RogueRustGridPower.cs) |
+| **[RogueRustHackableCrateTracker](docs/RogueRustHackableCrateTracker.md)** | `2.2.3` | Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock. | [Source](plugins/RogueRustHackableCrateTracker.cs) |
+| **[RogueRustHeliCrash](docs/RogueRustHeliCrash.md)** | `1.0.6` | A malfunctioning patrol helicopter flies in and crashes; the site is marked, guarded and reported until looted. | [Source](plugins/RogueRustHeliCrash.cs) |
+| **[RogueRustHeliLeashControl](docs/RogueRustHeliLeashControl.md)** | `2.1.6` | Keeps damaged Patrol Helicopters near the last valid attacker. | [Source](plugins/RogueRustHeliLeashControl.cs) |
+| **[RogueRustRandoSpawns](docs/RogueRustRandoSpawns.md)** | `2.1.5` | Random respawns with biome weighting and topology/zone protection. | [Source](plugins/RogueRustRandoSpawns.cs) |
+| **[RogueRustRemovalTool](docs/RogueRustRemovalTool.md)** | `2.0.5` | RogueRust-native building and deployable removal tool. | [Source](plugins/RogueRustRemovalTool.cs) |
+| **[RogueRustServerInfo](docs/RogueRustServerInfo.md)** | `1.1.5` | In-game server information and command reference panel that lists the commands each player can use. | [Source](plugins/RogueRustServerInfo.cs) |
+| **[RogueRustServerRestarter](docs/RogueRustServerRestarter.md)** | `2.1.4` | Safe scheduled restarts with chat/game-tip/GUI warnings. | [Source](plugins/RogueRustServerRestarter.cs) |
+| **[RogueRustSkins](docs/RogueRustSkins.md)** | `2.3.5` | Performance-first native Rust skin browser. | [Source](plugins/RogueRustSkins.cs) |
+| **[RogueRustTurretLimitOverride](docs/RogueRustTurretLimitOverride.md)** | `2.1.6` | Configures Rust turret interference ConVars. | [Source](plugins/RogueRustTurretLimitOverride.cs) |
 
 ## Documentation
 

@@ -1,6 +1,6 @@
 # RogueRust Day/Night Scheduler
 
-**Version:** `3.1.4`  
+**Version:** `3.1.5`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -10,6 +10,7 @@ RogueRust-powered day/night duration scheduling, cycle skipping, manual time con
 
 ## Recent Changes
 
+- **3.1.5:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **3.1.4:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
 - Configuration section ordering standardized for consistent RogueRust family config output.
@@ -107,7 +108,7 @@ All commands have a 0.5-second RogueCommand cooldown.
   "Developer Settings": {
     "LogLevel (Error, Warning, Info, Debug)": "Info"
   },
-  "Version (DO NOT CHANGE)": "3.1.4"
+  "Version (DO NOT CHANGE)": "3.1.5"
 }
 ```
 

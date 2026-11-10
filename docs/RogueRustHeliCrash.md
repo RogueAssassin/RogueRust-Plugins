@@ -2,7 +2,7 @@
 
 > A malfunctioning patrol helicopter flies in and crashes. The crash site is marked on the map, guarded, and reported until it is looted or expires.
 
-**Version:** `1.0.5`  
+**Version:** `1.0.6`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.62 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **1.0.6:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **1.0.5:** With Oxide.Ext.RogueRust 4.4.67 the alert icon loads again. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **1.0.4:** the schedule, the event timer and the "Next helicopter crash in" log line now start before the alert icon is loaded, and the icon load is guarded. With a RogueRust DLL built for an older game (`Method not found: FileStorage.Store` after the November 2026 Rust update) the plugin keeps running and alerts are shown without the icon, instead of `OnServerInitialized` failing and no crash ever being scheduled.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
