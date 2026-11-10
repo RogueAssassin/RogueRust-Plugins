@@ -36,8 +36,16 @@ for source in plugin_files:
         continue
     plugin_name, version = info.groups()
 
-    # Public documentation is paired to the source filename. A compatibility build may
-    # intentionally retain a legacy [Info] title while using the RogueRust family filename.
+    # Installers and the site catalogue identify a plugin by its [Info] title, Oxide and
+    # Carbon by its class name; both must match the file name.
+    check(plugin_name == source.stem, f"{source.name}: [Info] title '{plugin_name}' does not match the file name")
+    check(re.search(rf'\bclass {re.escape(source.stem)}\b', text) is not None, f"{source.name}: no class named {source.stem}")
+    # Version constants written to config files must agree with [Info].
+    for const in re.findall(r'const string PluginVersion = "([^"]+)"', text):
+        check(const == version, f"{source.name}: PluginVersion {const} does not match [Info] {version}")
+    for parts in re.findall(r'VersionNumber CurrentVersion = new VersionNumber\((\d+), (\d+), (\d+)\)', text):
+        check(".".join(parts) == version, f"{source.name}: CurrentVersion {'.'.join(parts)} does not match [Info] {version}")
+
     expected_doc = DOCS / f"{source.stem}.md"
     check(expected_doc.exists(), f"{source.name}: missing docs/{source.stem}.md")
     check(f"plugins/{source.name}" in readme, f"{source.name}: missing source link in root README")

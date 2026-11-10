@@ -11,7 +11,7 @@ using Oxide.Ext.RogueRust.SDK;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomPlayerMessages", "RogueAssassin", "3.1.4")]
+    [Info("RogueRustCustomPlayerMessages", "RogueAssassin", "3.1.5")]
     [Description("Custom connect/disconnect messages and public player-list commands powered by RogueRust.")]
     public sealed class RogueRustCustomPlayerMessages : RogueRustPlugin
     {
@@ -27,9 +27,9 @@ namespace Oxide.Plugins
         private const string DefaultLanguage = "en";
         private const string DefaultCountryLookupUrl = "http://ip-api.com/json/{0}?fields=status,message,country,countryCode";
 
-        private const string PluginVersion = "3.1.4";
+        private const string PluginVersion = "3.1.5";
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 4);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 5);
 
         private Configuration _config;
         private CountryCacheStore _cacheStore;

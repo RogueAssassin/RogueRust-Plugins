@@ -2,7 +2,7 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
 
-**Version:** `2.5.7`  
+**Version:** `2.5.8`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,6 +12,7 @@
 
 ## Recent Changes
 
+- **2.5.8:** The config migration log line shows the old version as a number (2.5.5) instead of a JSON object.
 - **2.5.7:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **2.5.6:** Compiles with no warnings: its nullable annotations now have a declared context, and the header comment shows the real version. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **2.5.5:** vanish's second line of defence now works. It answered `CanNpcAttack`, which Oxide never calls; it now answers `OnNpcAttack`, so an animal or NPC that had already targeted an admin before they vanished cannot attack them.
@@ -160,7 +161,7 @@ The `UI Theme` object contains the full F1-style colour palette and can be custo
   },
   "Integrations": { "Log Menu Actions To Discord Webhook (webhook URL)": "" },
   "Data Settings": { "Recent Players Purge Time (days)": 7 },
-  "Version (DO NOT CHANGE)": "2.5.7"
+  "Version (DO NOT CHANGE)": "2.5.8"
 }
 ```
 

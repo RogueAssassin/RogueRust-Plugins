@@ -1,4 +1,4 @@
-// RogueRustAdminMenu v2.5.6 RRAM release build: RRADMIN-256
+// RogueRustAdminMenu v2.5.8 RRAM release build: RRADMIN-258
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
 // Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted release build
 #nullable enable annotations
@@ -23,12 +23,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.7")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.8")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.7";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 7);
+    private const string PluginVersion = "2.5.8";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 8);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -622,7 +622,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         {
             JObject raw = Config.ReadObject<JObject>() ?? new JObject();
             JToken legacyVersion = raw["Config Version"];
-            loadedVersion = legacyVersion?.ToString() ?? raw["Version (DO NOT CHANGE)"]?.ToString() ?? "legacy";
+            loadedVersion = DescribeVersion(legacyVersion ?? raw["Version (DO NOT CHANGE)"]);
 
             _config = raw.ToObject<ConfigData>() ?? ConfigData.CreateDefault();
             migratedLegacy = raw["General Settings"] == null;
@@ -650,6 +650,14 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         // Always rewrite in the family-standard grouped/pretty format after a legacy migration.
         if (migratedLegacy || changed)
             SaveConfig();
+    }
+
+    // The version is saved as a VersionNumber object ({"Major":2,"Minor":5,"Patch":5}); older configs stored a string.
+    private static string DescribeVersion(JToken? token)
+    {
+        if (token is JObject version && version["Major"] != null)
+            return version.Value<int>("Major") + "." + version.Value<int>("Minor") + "." + version.Value<int>("Patch");
+        return token?.ToString() ?? "legacy";
     }
 
     protected override void SaveConfig() => Config.WriteObject(_config, true);

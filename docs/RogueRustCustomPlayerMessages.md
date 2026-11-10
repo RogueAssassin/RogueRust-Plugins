@@ -1,6 +1,6 @@
 # RogueRust Custom Player Messages
 
-**Version:** `3.1.4`  
+**Version:** `3.1.5`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -10,6 +10,7 @@ Custom connect/disconnect messages and public player-list commands powered by Ro
 
 ## Recent Changes
 
+- **3.1.5:** The plugin's title is now RogueRustCustomPlayerMessages, matching its file name, so installers that check the name accept it. Config, data and language files are unchanged.
 - **3.1.4:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **3.1.3:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
@@ -88,7 +89,7 @@ Configuration is stored in `CustomPlayerMessages.json` / the framework-generated
     "Minimum seconds between requests to the country lookup host": 0.25,
     "Country lookup URL (HTTP is required by ip-api's free endpoint)": "http://ip-api.com/json/{0}?fields=status,message,country,countryCode"
   },
-  "Version (DO NOT CHANGE)": "3.1.4"
+  "Version (DO NOT CHANGE)": "3.1.5"
 }
 ```
 

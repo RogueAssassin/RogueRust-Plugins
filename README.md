@@ -12,12 +12,12 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 
 | Plugin | Version | Description | Source |
 |---|---:|---|---|
-| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.7` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
+| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.8` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
 | **[RogueRustBlueprintManager](docs/RogueRustBlueprintManager.md)** | `2.1.5` | Blueprint management with legacy permission/config compatibility. | [Source](plugins/RogueRustBlueprintManager.cs) |
 | **[RogueRustBuildingManager](docs/RogueRustBuildingManager.md)** | `1.2.2` | Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them. | [Source](plugins/RogueRustBuildingManager.cs) |
 | **[RogueRustCraftingController](docs/RogueRustCraftingController.md)** | `2.1.4` | Crafting control with RogueRust integration. | [Source](plugins/RogueRustCraftingController.cs) |
-| **[CustomPlayerMessages](docs/RogueRustCustomPlayerMessages.md)** | `3.1.4` | Custom connect/disconnect messages and player-list commands. | [Source](plugins/RogueRustCustomPlayerMessages.cs) |
-| **[DayNightScheduler](docs/RogueRustDayNightScheduler.md)** | `3.1.5` | Day/night duration scheduling and protected time controls. | [Source](plugins/RogueRustDayNightScheduler.cs) |
+| **[RogueRustCustomPlayerMessages](docs/RogueRustCustomPlayerMessages.md)** | `3.1.5` | Custom connect/disconnect messages and player-list commands. | [Source](plugins/RogueRustCustomPlayerMessages.cs) |
+| **[RogueRustDayNightScheduler](docs/RogueRustDayNightScheduler.md)** | `3.1.6` | Day/night duration scheduling and protected time controls. | [Source](plugins/RogueRustDayNightScheduler.cs) |
 | **[RogueRustDeathNotes](docs/RogueRustDeathNotes.md)** | `2.5.6` | Death notification engine with native GUI output and player controls. | [Source](plugins/RogueRustDeathNotes.cs) |
 | **[RogueRustEventDirector](docs/RogueRustEventDirector.md)** | `1.4.3` | Managed Rust world-event scheduling with vanilla-spawn suppression (including Bradley), dry-land airdrop and crate placement, Bradley and airdrop map markers, startup staggering, randomized GameTips and CH47 crate direction. | [Source](plugins/RogueRustEventDirector.cs) |
 | **[RogueRustFuelStackOptimizer](docs/RogueRustFuelStackOptimizer.md)** | `2.1.4` | Optimises dedicated Rust fuel containers through cached discovery. | [Source](plugins/RogueRustFuelStackOptimizer.cs) |
