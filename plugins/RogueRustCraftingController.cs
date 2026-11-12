@@ -1,5 +1,6 @@
 using Facepunch;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using System;
 using System.Collections.Generic;
@@ -11,13 +12,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.4")]
+    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.5")]
     [Description("RogueRust-powered crafting control with legacy configuration and permission compatibility.")]
 
     public sealed class RogueRustCraftingController : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.4";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 4);
+        private const string PluginVersion = "2.1.5";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 5);
         private const string PluginDataPath = "RogueRustCraftingController";
         private const string LanguageFileName = "messages.json";
         #region Config
@@ -154,7 +155,9 @@ namespace Oxide.Plugins
                 }
 
                 NormalizeConfig();
-                SaveConfig();
+                // Rewrite the file only when migration, normalisation or new options changed it.
+                if (!structured || !ConfigMatchesFile())
+                    SaveConfigChanges();
             }
             catch (Exception exception)
             {
@@ -223,10 +226,27 @@ namespace Oxide.Plugins
             }
         }
 
-        protected override void SaveConfig()
+        protected override void SaveConfig() => Config.WriteObject(config, true);
+
+        private void SaveConfigChanges()
         {
+            SaveConfig();
             LogInformation("Configuration", $"Configuration changes saved to {Name}.json");
-            Config.WriteObject(config, true);
+        }
+
+        private bool ConfigMatchesFile()
+        {
+            try
+            {
+                JToken current = JToken.FromObject(config, JsonSerializer.Create(Config.Settings));
+                return JToken.DeepEquals(current, Config.ReadObject<JObject>());
+            }
+            catch (Exception exception)
+            {
+                // Unable to compare: save, which is what every load did before.
+                LogWarning("Configuration", "Could not compare the configuration with the file: " + exception.Message);
+                return false;
+            }
         }
 
         #endregion Config
@@ -281,6 +301,7 @@ namespace Oxide.Plugins
                 Unsubscribe(nameof(OnItemCraftCancelled));
             }
 
+            int addedOptions = 0;
             foreach (var item in ItemManager.bpList)
             {
                 if (config.CraftingOptions.ContainsKey(item.targetItem.shortname)) continue;
@@ -291,9 +312,14 @@ namespace Oxide.Plugins
                     canCraft = item.userCraftable,
                     canResearch = item.isResearchable
                 });
+                addedOptions++;
             }
 
-            SaveConfig();
+            if (addedOptions > 0)
+            {
+                SaveConfigChanges();
+                LogInformation("Configuration", $"Added crafting options for {addedOptions} new blueprint(s).");
+            }
             UpdateCraftingRate();
         }
 
