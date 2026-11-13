@@ -1,4 +1,4 @@
-// RogueRustAdminMenu v2.5.8 RRAM release build: RRADMIN-258
+// RogueRustAdminMenu v2.5.9 RRAM release build: RRADMIN-259
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
 // Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted release build
 #nullable enable annotations
@@ -23,12 +23,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.8")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.9")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.8";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 8);
+    private const string PluginVersion = "2.5.9";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 9);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -647,9 +647,8 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         }
 
         NormalizeConfig();
-        // Always rewrite in the family-standard grouped/pretty format after a legacy migration.
-        if (migratedLegacy || changed)
-            SaveConfig();
+        // Rewrite only when a migration or normalisation changed the file; a version change keeps the old file as a .bak.
+        SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
     }
 
     // The version is saved as a VersionNumber object ({"Major":2,"Minor":5,"Patch":5}); older configs stored a string.

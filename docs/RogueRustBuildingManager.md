@@ -2,15 +2,16 @@
 
 > Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them.
 
-**Version:** `1.2.2`  
+**Version:** `1.2.3`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
-**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.63 or newer
+**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
 
 [Plugin source](../plugins/RogueRustBuildingManager.cs) · [Back to plugin catalogue](../README.md)
 
 ## Recent Changes
 
+- **1.2.3:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustBuildingManager.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **1.2.2:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **1.2.1:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **1.2.0:** wallpaper now costs the game's own price per face, taken up front with anything unused returned, and is covered by undo. `Charge The Game's Price For Each Face Papered` under Wallpaper turns the cost off.
@@ -131,7 +132,7 @@ Other plugins can call `OpenBuildingManager(BasePlayer)` and `ApplyBuildingSkins
 
 ## Installation
 
-1. Install [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.63 or newer. The plugin will not compile on an older DLL.
+1. Install [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer. The plugin will not compile on an older DLL.
 2. Place `RogueRustBuildingManager.cs` in the plugin directory.
 3. Grant `roguerustbuildingmanager.use` and whichever of `bulk`, `skins` and `wallpaper` you want players to have.
 

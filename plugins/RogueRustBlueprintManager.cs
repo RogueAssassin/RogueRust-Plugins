@@ -10,13 +10,13 @@ using Oxide.Ext.RogueRust.Plugins;
 using Oxide.Ext.RogueRust.SDK;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.5")]
+    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.6")]
     [Description("RogueRust-powered blueprint management with legacy permission and command compatibility.")]
 
     public sealed class RogueRustBlueprintManager : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.5";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 5);
+        private const string PluginVersion = "2.1.6";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
         private const string LanguageFolder = "RogueRustBlueprintManager";
         private const string LanguageFile = "messages.json";
 
@@ -161,8 +161,7 @@ namespace Oxide.Plugins
                     LogInformation("Configuration", "Migrated configuration from v" + oldVersion + " to v" + CurrentVersion + ".");
                 }
 
-                if (legacy || changed)
-                    SaveConfig();
+                SaveConfigIfChanged(config, JsonConvert.SerializeObject(config, Config.Settings), CurrentVersion);
             }
             catch (Exception exception)
             {
@@ -415,7 +414,7 @@ namespace Oxide.Plugins
                     StartUnlockAfterWipeScheduler();
             }
             QueueAllPlayersForUpdate();
-            SaveConfig();
+            SaveConfigIfChanged(config, JsonConvert.SerializeObject(config, Config.Settings), CurrentVersion);
         }
         private void QueueAllPlayersForUpdate()
         {

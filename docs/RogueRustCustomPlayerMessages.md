@@ -1,15 +1,16 @@
 # RogueRust Custom Player Messages
 
-**Version:** `3.1.5`  
+**Version:** `3.1.6`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
-**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
+**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
 
 Custom connect/disconnect messages and public player-list commands powered by RogueRust, with optional country lookup, privacy-aware player lists, persistent country caching and migrated localization.
 
 ## Recent Changes
 
+- **3.1.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustCustomPlayerMessages.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **3.1.5:** The plugin's title is now RogueRustCustomPlayerMessages, matching its file name, so installers that check the name accept it. Config, data and language files are unchanged.
 - **3.1.4:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **3.1.3:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
@@ -89,7 +90,7 @@ Configuration is stored in `CustomPlayerMessages.json` / the framework-generated
     "Minimum seconds between requests to the country lookup host": 0.25,
     "Country lookup URL (HTTP is required by ip-api's free endpoint)": "http://ip-api.com/json/{0}?fields=status,message,country,countryCode"
   },
-  "Version (DO NOT CHANGE)": "3.1.5"
+  "Version (DO NOT CHANGE)": "3.1.6"
 }
 ```
 

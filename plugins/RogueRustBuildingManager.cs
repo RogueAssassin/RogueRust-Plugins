@@ -11,7 +11,7 @@ using Oxide.Game.Rust.Cui;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBuildingManager", "RogueAssassin", "1.2.2")]
+    [Info("RogueRustBuildingManager", "RogueAssassin", "1.2.3")]
     [Description("Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them.")]
     public sealed class RogueRustBuildingManager : RogueRustPlugin
     {
@@ -22,8 +22,8 @@ namespace Oxide.Plugins
         [RoguePermission] private const string NoCostPermission = "roguerustbuildingmanager.nocost";
         [RoguePermission] private const string AdminPermission = "roguerustbuildingmanager.admin";
 
-        private const string PluginVersion = "1.2.2";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 2, 2);
+        private const string PluginVersion = "1.2.3";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 2, 3);
         private static readonly VersionNumber MinimumExtension = new VersionNumber(4, 4, 63);
 
         private const string DataKey = "RogueRustBuildingManager/players";
@@ -180,7 +180,7 @@ namespace Oxide.Plugins
             _config.AutoGrade.IdleSeconds = Mathf.Clamp(_config.AutoGrade.IdleSeconds, 0f, 86400f);
             _config.Undo.WindowSeconds = Mathf.Clamp(_config.Undo.WindowSeconds, 10f, 3600f);
             if (_config.Version < CurrentVersion) _config.Version = CurrentVersion;
-            SaveConfig();
+            SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
         }
 
         protected override void SaveConfig()

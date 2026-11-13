@@ -2,16 +2,17 @@
 
 > RogueRust-powered blueprint management with legacy permission and command compatibility.
 
-**Version:** `2.1.5`  
+**Version:** `2.1.6`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
-**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
+**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
 
 [Plugin source](../plugins/RogueRustBlueprintManager.cs) · [Back to plugin catalogue](../README.md)
 
 ## Recent Changes
 
+- **2.1.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustBlueprintManager.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.1.5:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **2.1.4:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **2.1.3:** blueprints locked after wipe can no longer be unlocked through the tech tree. The lock answered `CanUnlockTechTreeNode`, which Oxide never calls; it now answers `OnTechTreeNodeUnlock`, which the workbench calls before every tech-tree unlock.
@@ -103,7 +104,7 @@ When advanced mode is enabled, missing item entries are generated from current R
   "Advanced Blueprint Settings": {
     "Blueprint Management Options": {}
   },
-  "Version (DO NOT CHANGE)": "2.1.5"
+  "Version (DO NOT CHANGE)": "2.1.6"
 }
 ```
 

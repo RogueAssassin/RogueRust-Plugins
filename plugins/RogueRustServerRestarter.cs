@@ -10,14 +10,14 @@ using Oxide.Game.Rust.Cui;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.4")]
+    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.5")]
     [Description("Schedules safe server restarts with RogueRust runtime protection, chat, game-tip, and GUI warnings.")]
     public sealed class RogueRustServerRestarter : RogueRustPlugin
     {
         private const string UiName = "ServerRestarter.UI";
         private const ulong ChatIconSteamId = 76561198641042212UL;
-        private const string PluginVersion = "2.1.4";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 4);
+        private const string PluginVersion = "2.1.5";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 5);
         private Configuration _config;
 
         [RoguePermission]
@@ -273,7 +273,7 @@ namespace Oxide.Plugins
             _config.GametipDelay = Mathf.Clamp(_config.GametipDelay, 0f, 60f);
             _config.FontSize = Mathf.Clamp(_config.FontSize, 8, 40);
 
-            SaveConfig();
+            SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
         }
 
         protected override void SaveConfig()

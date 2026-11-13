@@ -7,12 +7,12 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHeliLeashControl", "RogueAssassin", "2.1.6")]
+    [Info("RogueRustHeliLeashControl", "RogueAssassin", "2.1.7")]
     [Description("Keeps a heavily damaged Patrol Helicopter near the last valid attacker.")]
     public sealed class RogueRustHeliLeashControl : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.6";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
+        private const string PluginVersion = "2.1.7";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
         private const ulong ChatIconSteamId = 76561198639403056UL;
         private ConfigData _config;
         private float _maxDistanceSquared;
@@ -170,7 +170,7 @@ namespace Oxide.Plugins
             if (string.IsNullOrWhiteSpace(_config.GlobalMessageFormat))
                 _config.GlobalMessageFormat = "Helicopter is staying close to {0} at {1}.";
 
-            SaveConfig();
+            SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
         }
 
         protected override void SaveConfig()

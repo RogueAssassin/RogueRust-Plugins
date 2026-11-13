@@ -1,15 +1,16 @@
 # RogueRust Fuel Stack Optimizer
 
-**Version:** `2.1.4`  
+**Version:** `2.1.5`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
-**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
+**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
 
 Optimises dedicated Rust fuel containers through cached discovery using native Oxide/Carbon hooks. It is designed to change fuel stack limits without repeatedly scanning ordinary inventories, with batching and cached reflection plans to keep server overhead controlled.
 
 ## Recent Changes
 
+- **2.1.5:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustFuelStackOptimizer.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.1.4:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **2.1.3:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.
@@ -148,7 +149,7 @@ The settings are stored in `RogueRustFuelStackOptimizer.json` in the server conf
   "Developer Settings": {
     "Log Detailed Audit on Startup": false
   },
-  "Version (DO NOT CHANGE)": "2.1.4"
+  "Version (DO NOT CHANGE)": "2.1.5"
 }
 ```
 

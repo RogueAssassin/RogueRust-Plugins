@@ -12,11 +12,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.5")]
+    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.6")]
     [Description("RogueRust-native building and deployable removal tool.")]
     public sealed class RogueRustRemovalTool : RogueRustPlugin
     {
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 5);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 6);
         private const string UiName = "RogueRustRemovalTool.Hud";
         private const string UiRoot = "RogueRustRemovalTool.UI.Root";
         private const string UiSession = "RogueRustRemovalTool.UI.Session";
@@ -377,7 +377,7 @@ namespace Oxide.Plugins
                     _config.Version = CurrentVersion;
                     changed = true;
                 }
-                if (changed) SaveConfig();
+                SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
             }
             catch (Exception ex)
             {

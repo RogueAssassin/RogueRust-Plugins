@@ -10,12 +10,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHackableCrateTracker", "RogueAssassin", "2.2.3")]
+    [Info("RogueRustHackableCrateTracker", "RogueAssassin", "2.2.4")]
     [Description("Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock.")]
     public sealed class RogueRustHackableCrateTracker : RogueRustPlugin
     {
-        private const string PluginVersion = "2.2.3";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 3);
+        private const string PluginVersion = "2.2.4";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 4);
         [RoguePermission]
         private const string PermissionUse = "roguerusthackablecratetracker.use";
 
@@ -135,7 +135,7 @@ namespace Oxide.Plugins
             if (_config.Discord.MapUrlTemplate == null) _config.Discord.MapUrlTemplate = string.Empty;
             _config.Reporting.UnopenedMinutes = Mathf.Clamp(_config.Reporting.UnopenedMinutes, 0f, 120f);
             _config.Version = CurrentVersion;
-            SaveConfig();
+            SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
         }
 
         protected override void SaveConfig() => Config.WriteObject(_config, true);

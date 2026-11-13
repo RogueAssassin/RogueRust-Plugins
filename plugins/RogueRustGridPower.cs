@@ -10,13 +10,13 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "2.0.5")]
+    [Info("RogueRustGridPower", "RogueAssassin", "2.0.6")]
     [Description("RogueRust GridPower: automatic world streetlights plus output control for Rust's native power-grid access points.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {
         #region Constants
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 5);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 6);
         private static readonly VersionNumber MinimumBackend = new VersionNumber(4, 4, 56);
 
         [RoguePermission]
@@ -231,9 +231,8 @@ namespace Oxide.Plugins
                     changed = true;
                 }
 
-                if (changed)
+                if (SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion) && changed)
                 {
-                    SaveConfig();
                     LogInformation("Configuration",
                         "Configuration updated to v" + CurrentVersion +
                         "; existing values were preserved and new settings were added.");

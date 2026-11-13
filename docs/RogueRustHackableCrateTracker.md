@@ -2,15 +2,16 @@
 
 > Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock.
 
-**Version:** `2.2.3`  
+**Version:** `2.2.4`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
-**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)
+**Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
 
 [Plugin source](../plugins/RogueRustHackableCrateTracker.cs) · [Back to plugin catalogue](../README.md)
 
 ## Recent Changes
 
+- **2.2.4:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustHackableCrateTracker.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.2.3:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **2.2.2:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - A config file that cannot be read is copied to `<name>.json.invalid` before the defaults are written, so a typo no longer costs every setting.

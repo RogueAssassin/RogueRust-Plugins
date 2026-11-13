@@ -146,7 +146,7 @@ $homeBody = @"
     <a class="button primary" href="$extensionUrl">1. Install the RogueRust DLL</a>
     <a class="button" href="#plugins">2. Pick your plugins</a>
   </div>
-  <p class="note">Current plugins require RogueRust 4.4.63 or newer. Drop the DLL into <code>RustDedicated_Data/Managed</code>, then put each plugin in <code>oxide/plugins</code>.</p>
+  <p class="note">Current plugins require RogueRust 4.4.69 or newer. On Oxide, put the DLL in <code>RustDedicated_Data/Managed</code> and each plugin in <code>oxide/plugins</code>; on Carbon, use <code>carbon/extensions</code> and <code>carbon/plugins</code>. Restart the server after installing or updating the DLL.</p>
 </section>
 <section id="plugins">
   <input id="filter" class="filter" type="search" placeholder="Filter plugins, for example: heli, skins, admin" aria-label="Filter plugins">

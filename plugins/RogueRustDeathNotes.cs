@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("RogueRustDeathNotes", "RogueAssassin", "2.5.6")]
+	[Info("RogueRustDeathNotes", "RogueAssassin", "2.5.7")]
 	[Description("RogueRustDeathNotes - RogueRust death notification engine, based on the original Death Notes concept, with integrated native GUI output and per-player controls.")]
 	public sealed class RogueRustDeathNotes : RogueRustPlugin
 	{
@@ -41,9 +41,9 @@ namespace Oxide.Plugins
         [RoguePermission]
         private const string TeamOnlyPermission = "roguerustdeathnotes.seeteamonly";
 
-		private const string PluginVersion = "2.5.6";
+		private const string PluginVersion = "2.5.7";
 
-		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 6);
+		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 7);
 
 		private static RogueRustDeathNotes _instance;
 
@@ -195,7 +195,7 @@ namespace Oxide.Plugins
 			_configuration.LoadDefaults();
             _translationData = _configuration.Translations;
             SaveTranslationData();
-			Config.WriteObject(_configuration);
+			SaveConfigIfChanged(_configuration, JsonConvert.SerializeObject(_configuration, Config.Settings), CurrentVersion);
 
             string tmpPerm;
             foreach (string perm in _configuration.PatrolHeliDisplayPerms)

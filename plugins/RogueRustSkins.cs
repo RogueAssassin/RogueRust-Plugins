@@ -17,12 +17,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustSkins", "RogueRust", "2.3.5")]
+    [Info("RogueRustSkins", "RogueRust", "2.3.6")]
     [Description("Performance-first Skinner-style native Rust skin browser powered by RogueRust services.")]
     public sealed class RogueRustSkins : RogueRustPlugin
     {
-        private const string PluginVersion = "2.3.5";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 5);
+        private const string PluginVersion = "2.3.6";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 6);
         [RoguePermission]
         private const string PermissionUse = "roguerustskins.use";
         [RoguePermission]
@@ -312,7 +312,7 @@ namespace Oxide.Plugins
                 PrintWarning("Configuration was invalid; loading RogueRustSkins defaults. " + exception.Message);
                 _config = new PluginConfig();
             }
-            SaveConfig();
+            SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
         }
 
         protected override void SaveConfig() => Config.WriteObject(_config, true);

@@ -14,12 +14,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.6")]
+    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.7")]
     [Description("Optimized RogueRust furnace splitting with automatic fuel management, configurable stack distribution, ETA display, and responsive UI.")]
     public sealed class RogueRustFurnaceSplitter : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.6";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
+        private const string PluginVersion = "2.1.7";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
 
         [PluginReference]
         private Plugin UIScaleManager;
@@ -115,7 +115,7 @@ namespace Oxide.Plugins
             }
 
             if (saveCfg)
-                SaveConfig();
+                SaveConfigIfChanged(config, JsonConvert.SerializeObject(config, Config.Settings), CurrentVersion);
 
             Unsubscribe(nameof(OnServerSave));
             if (config.savePlayerData)
@@ -1421,7 +1421,7 @@ namespace Oxide.Plugins
             }
 
             config.Version = CurrentVersion;
-            SaveConfig();
+            SaveConfigIfChanged(config, JsonConvert.SerializeObject(config, Config.Settings), CurrentVersion);
         }
 
         protected override void SaveConfig() => Config.WriteObject(config, true);
