@@ -2,7 +2,7 @@
 
 > Configures Rust's turret interference ConVars through a small RogueRust administration plugin.
 
-**Version:** `2.1.8`  
+**Version:** `2.1.9`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.1.9:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added.
 - **2.1.8:** A version upgrade no longer logs a warning. A warning is logged only when the turret limits in the config were out of range and had to be corrected.
 - **2.1.7:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustTurretLimitOverride.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.1.6:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
@@ -66,7 +67,7 @@ Configuration file: `config/RogueRustTurretLimitOverride.json`
   "Version (DO NOT CHANGE)": {
     "Major": 2,
     "Minor": 1,
-    "Patch": 8
+    "Patch": 9
   }
 }
 ```

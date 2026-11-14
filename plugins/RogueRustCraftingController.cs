@@ -226,7 +226,7 @@ namespace Oxide.Plugins
 
         protected override void SaveConfig() => Config.WriteObject(config, true);
 
-        // Writes and logs only when the file would change; a version change keeps the old file as a .bak.
+        // Writes and logs only when the file would change; it is updated in place.
         private void SaveConfigChanges() =>
             SaveConfigIfChanged(config, JsonConvert.SerializeObject(config, Config.Settings), CurrentVersion);
 

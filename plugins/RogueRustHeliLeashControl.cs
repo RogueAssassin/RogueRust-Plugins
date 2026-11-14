@@ -7,12 +7,12 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHeliLeashControl", "RogueAssassin", "2.1.7")]
+    [Info("RogueRustHeliLeashControl", "RogueAssassin", "2.1.8")]
     [Description("Keeps a heavily damaged Patrol Helicopter near the last valid attacker.")]
     public sealed class RogueRustHeliLeashControl : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
+        private const string PluginVersion = "2.1.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
         private const ulong ChatIconSteamId = 76561198639403056UL;
         private ConfigData _config;
         private float _maxDistanceSquared;
@@ -118,7 +118,7 @@ namespace Oxide.Plugins
 
                 if (legacy)
                 {
-                    LegacyConfigData old = raw.ToObject<LegacyConfigData>() ?? new LegacyConfigData();
+                    LegacyConfigData old = raw.ToObject<LegacyConfigData>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings)) ?? new LegacyConfigData();
                     _config = new ConfigData
                     {
                         Leash = new LeashSettings
@@ -143,7 +143,7 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    _config = raw == null ? new ConfigData() : raw.ToObject<ConfigData>();
+                    _config = raw == null ? new ConfigData() : raw.ToObject<ConfigData>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings));
                 }
             }
             catch (Exception exception)

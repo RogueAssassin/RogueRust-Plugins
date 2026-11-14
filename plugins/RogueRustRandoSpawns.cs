@@ -10,12 +10,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.6")]
+    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.7")]
     [Description("RogueRust-powered random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.")]
     public sealed class RogueRustRandoSpawns : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.6";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
+        private const string PluginVersion = "2.1.7";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
         [PluginReference]
         private Plugin ZoneManager;
 
@@ -565,6 +565,9 @@ namespace Oxide.Plugins
                 if (Generation == null) Generation = new GenerationOptions();
                 if (Spawn == null) Spawn = SpawnOptions.CreateDefault();
                 if (Spawn.Biomes == null || Spawn.Biomes.Count == 0) Spawn.Biomes = SpawnOptions.CreateDefaultBiomes();
+                // A biome added in a newer release is added with its defaults; biomes already in the file keep their values.
+                foreach (KeyValuePair<TerrainBiome.Enum, BiomeOptions> biome in SpawnOptions.CreateDefaultBiomes())
+                    if (!Spawn.Biomes.ContainsKey(biome.Key)) Spawn.Biomes[biome.Key] = biome.Value;
                 if (Spawn.BlockedZoneIds == null) Spawn.BlockedZoneIds = new string[0];
                 if (Spawn.BlockedTopologies == null) Spawn.BlockedTopologies = SpawnOptions.DefaultTopologies();
 

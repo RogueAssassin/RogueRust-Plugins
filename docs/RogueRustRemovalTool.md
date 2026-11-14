@@ -11,7 +11,7 @@
 
 ## Recent Changes
 
-- **2.0.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustRemovalTool.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
+- **2.0.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustRemovalTool.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **2.0.5:** The startup log line and the config file now show the plugin's real version (2.0.4 still reported 2.0.3).
 - **2.0.4:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **2.0.3:** structure, all and external removal now work with their own permission. They used to remove nothing, and report `0 removed`, unless the player also held `roguerustremovaltool.admin`.

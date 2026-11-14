@@ -94,7 +94,7 @@ function New-Page([string]$Title, [string]$Description, [string]$Body, [switch]$
 $Body
 </main>
 <footer class="site-footer">
-  <span>RogueRust plugins for Rust servers &middot; Oxide / Carbon</span>
+  <span>RogueRust plugins for Rust servers &middot; Oxide / Carbon &middot; created by RogueAssassin</span>
   <span><a href="$repositoryUrl/issues">Report a problem</a></span>
 </footer>
 </body>

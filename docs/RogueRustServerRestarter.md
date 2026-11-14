@@ -2,7 +2,7 @@
 
 > Schedules safe server restarts with RogueRust runtime protection, chat, game-tip and GUI warnings.
 
-**Version:** `2.1.5`  
+**Version:** `2.1.6`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.1.6:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. The config is read with the same settings as every other RogueRust plugin, so lists in your file are never merged with the defaults. Your restart times and warning minutes are kept in the order you wrote them; blank, invalid and repeated entries are skipped when the schedule is built instead of being removed from the file. An old flat config keeps its game tip delay as it was.
 - **2.1.5:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustServerRestarter.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.1.4:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **2.1.3:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
@@ -49,7 +50,7 @@ Configuration file: `config/RogueRustServerRestarter.json`
 | Scheduled Restart Times | `03:00`, `15:00` |
 | Server Command to Execute After Saving | `restart 0` |
 
-Invalid time values are ignored with a warning. Duplicate values are removed. An empty valid schedule disables automatic restarts.
+Invalid time values are ignored with a warning. Duplicate values are used once; the file is left as written. An empty valid schedule disables automatic restarts.
 
 ### Warning Settings
 
@@ -100,7 +101,7 @@ Reason colours default to `M_DEFAULT`, `M_1` and `M_2` entries.
   "Version (DO NOT CHANGE)": {
     "Major": 2,
     "Minor": 1,
-    "Patch": 5
+    "Patch": 6
   }
 }
 ```
@@ -112,7 +113,7 @@ Custom language data: **none** in the current revision; warning messages are con
 
 ## Migration
 
-Legacy flat configuration is converted into Schedule, Warning, UI and Permission sections. Old `restart` is normalized to `restart 0`, invalid ranges are clamped, and duplicate/invalid schedule entries are cleaned.
+Legacy flat configuration is converted into Schedule, Warning, UI and Permission sections. Old `restart` is normalized to `restart 0`, and invalid ranges are clamped. Duplicate and invalid schedule entries stay in the file and are skipped when the schedule is built.
 
 ## Runtime notes
 

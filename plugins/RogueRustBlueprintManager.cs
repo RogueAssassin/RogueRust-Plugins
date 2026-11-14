@@ -10,13 +10,13 @@ using Oxide.Ext.RogueRust.Plugins;
 using Oxide.Ext.RogueRust.SDK;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.7")]
+    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.8")]
     [Description("RogueRust-powered blueprint management with legacy permission and command compatibility.")]
 
     public sealed class RogueRustBlueprintManager : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
+        private const string PluginVersion = "2.1.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
         private const string LanguageFolder = "RogueRustBlueprintManager";
         private const string LanguageFile = "messages.json";
 
@@ -143,13 +143,13 @@ namespace Oxide.Plugins
 
                 if (legacy)
                 {
-                    LegacyConfiguration old = raw.ToObject<LegacyConfiguration>() ?? new LegacyConfiguration();
+                    LegacyConfiguration old = raw.ToObject<LegacyConfiguration>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings)) ?? new LegacyConfiguration();
                     config = MigrateLegacyConfiguration(old);
                     LogInformation("Configuration", "Migrated the legacy flat configuration to the RogueRust family configuration layout.");
                 }
                 else
                 {
-                    config = raw.ToObject<Configuration>() ?? new Configuration();
+                    config = raw.ToObject<Configuration>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings)) ?? new Configuration();
                 }
 
                 bool changed = EnsureConfigDefaults();

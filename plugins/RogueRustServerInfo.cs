@@ -9,14 +9,14 @@ using Oxide.Ext.RogueRust.SDK;
 using Oxide.Game.Rust.Cui;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.6")]
+    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.7")]
     [Description("In-game server information and command reference panel. Players see player commands; admins also see the admin list.")]
     public sealed class RogueRustServerInfo : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerustserverinfo.admin";
-        private const string PluginVersion = "1.1.6";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 6);
+        private const string PluginVersion = "1.1.7";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 7);
 
         // The panel is three documents so that only the part that changed is resent:
         // the shell is drawn once when the panel opens, the navigation on a tab change,
@@ -346,7 +346,7 @@ namespace Oxide.Plugins
             if (_config.Version < new VersionNumber(1, 1, 0)) UpgradeTo110();
             if (_config.Version < CurrentVersion)
             {
-                AddNewDefaultCommands();
+                AddNewDefaultCommands(_config.Version);
                 _config.Version = CurrentVersion;
             }
 
@@ -373,16 +373,30 @@ namespace Oxide.Plugins
             }
         }
 
-        // Runs once per plugin update: appends the defaults this config does not have yet. An entry an
-        // owner deleted by hand comes back here; set "Show In Panel" to false to keep one out for good.
-        private void AddNewDefaultCommands()
+        // Default entries added after the first release, keyed by EntryKey, with the version that added them.
+        // Add a line here whenever DefaultCommands gains an entry.
+        private static readonly Dictionary<string, VersionNumber> DefaultCommandsAddedIn = new Dictionary<string, VersionNumber>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["default:bm"] = new VersionNumber(1, 1, 2),
+            ["default:up"] = new VersionNumber(1, 1, 2),
+            ["default:down"] = new VersionNumber(1, 1, 2)
+        };
+
+        // Runs once per plugin update: appends only the defaults introduced after the config's version, so an
+        // entry the owner deleted stays deleted across updates.
+        private void AddNewDefaultCommands(VersionNumber storedVersion)
         {
             var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (CommandEntry entry in _config.Commands)
                 if (entry != null) existing.Add(EntryKey(entry));
 
             foreach (CommandEntry entry in DefaultCommands())
-                if (existing.Add(EntryKey(entry))) _config.Commands.Add(entry);
+            {
+                string key = EntryKey(entry);
+                VersionNumber addedIn;
+                if (DefaultCommandsAddedIn.TryGetValue(key, out addedIn) && addedIn > storedVersion && existing.Add(key))
+                    _config.Commands.Add(entry);
+            }
         }
 
         private static string EntryKey(CommandEntry entry)

@@ -11,7 +11,7 @@
 
 ## Recent Changes
 
-- **2.1.6:** Uses the shared RogueRust config check: the file is rewritten only when it changes, and on a version change the previous file is kept as `RogueRustCraftingController.json.v<old version>.bak`. This also fixes a comparison that could treat decimal values such as 0.1 as changed and save on every boot. Requires RogueRust 4.4.69 or later.
+- **2.1.6:** Uses the shared RogueRust config check: the file is rewritten only when it changes, and on a version change the previous file is kept as `RogueRustCraftingController.json.v<old version>.bak`. This also fixes a comparison that could treat decimal values such as 0.1 as changed and save on every boot. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **2.1.5:** The config file is rewritten, and "Configuration changes saved" logged, only when something actually changed: a migration, a corrected value, a new option or a new blueprint. Previously every boot saved it twice.
 - **2.1.4:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **2.1.3:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.

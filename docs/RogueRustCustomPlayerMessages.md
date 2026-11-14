@@ -10,7 +10,7 @@ Custom connect/disconnect messages and public player-list commands powered by Ro
 
 ## Recent Changes
 
-- **3.1.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustCustomPlayerMessages.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
+- **3.1.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustCustomPlayerMessages.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **3.1.5:** The plugin's title is now RogueRustCustomPlayerMessages, matching its file name, so installers that check the name accept it. Config, data and language files are unchanged.
 - **3.1.4:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **3.1.3:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.

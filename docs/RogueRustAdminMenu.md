@@ -2,7 +2,7 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
 
-**Version:** `2.5.11`  
+**Version:** `2.5.12`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,9 +12,10 @@
 
 ## Recent Changes
 
+- **2.5.12:** Fixes the config file growing on every load. Each load added another copy of every entry in Player Info Custom Commands and Admin Commands (a long-running server could have dozens). Existing duplicates are removed automatically on the first load, and the cleanup is logged.
 - **2.5.11:** Unloading (plugin reload or server shutdown) writes only data that is still pending, instead of rewriting every data file. Saved locations and moderation notes are already written when they change. Unload took about 185 ms before.
 - **2.5.10:** The item, convar and permission lists are built the first time an admin opens those screens, not during server start (removes most of the 145 ms `OnServerInitialized` warning). Permission changes from other plugins now only mark the list for a rebuild. The config upgrade is logged once, by RogueRust.
-- **2.5.9:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustAdminMenu.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
+- **2.5.9:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustAdminMenu.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **2.5.8:** The config migration log line shows the old version as a number (2.5.5) instead of a JSON object.
 - **2.5.7:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **2.5.6:** Compiles with no warnings: its nullable annotations now have a declared context, and the header comment shows the real version. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
@@ -167,7 +168,7 @@ The `UI Theme` object contains the full F1-style colour palette and can be custo
   "Version (DO NOT CHANGE)": {
     "Major": 2,
     "Minor": 5,
-    "Patch": 11
+    "Patch": 12
   }
 }
 ```

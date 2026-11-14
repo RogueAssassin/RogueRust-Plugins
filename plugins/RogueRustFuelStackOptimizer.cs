@@ -11,14 +11,14 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.5")]
+    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.6")]
     [Description("Optimises dedicated Rust fuel containers through cached discovery using native Oxide/Carbon hooks.")]
     public sealed class RogueRustFuelStackOptimizer : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerustfuelstackoptimizer.admin";
-        private const string PluginVersion = "2.1.5";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 5);
+        private const string PluginVersion = "2.1.6";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
 
         private static readonly string[] DefaultFuelItems =
         {
@@ -46,6 +46,9 @@ namespace Oxide.Plugins
         private readonly Queue<TrackedContainer> _applyQueue = new Queue<TrackedContainer>();
         private HashSet<string> _recognisedFuelItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private HashSet<string> _enabledKinds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private List<string> _recognisedFuelList = new List<string>();
+        private List<string> _whitelistPlayers = new List<string>();
+        private List<string> _blacklistPlayers = new List<string>();
 
         private bool _scanScheduled;
         private bool _applyScheduled;
@@ -226,7 +229,7 @@ namespace Oxide.Plugins
 
                 if (legacy)
                 {
-                    LegacyConfigData old = raw.ToObject<LegacyConfigData>() ?? new LegacyConfigData();
+                    LegacyConfigData old = raw.ToObject<LegacyConfigData>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings)) ?? new LegacyConfigData();
                     _config = new ConfigData();
                     _config.General.GlobalStackMax = old.GlobalStackMax;
                     _config.General.RecognisedFuelItems = old.RecognisedFuelItems;
@@ -245,7 +248,7 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    _config = raw == null ? new ConfigData() : raw.ToObject<ConfigData>();
+                    _config = raw == null ? new ConfigData() : raw.ToObject<ConfigData>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings));
                 }
             }
             catch (Exception exception)
@@ -272,16 +275,20 @@ namespace Oxide.Plugins
                 ? 0f
                 : Mathf.Clamp(_config.Performance.RescanInterval, 60f, 86400f);
 
-            _config.Containers.EnabledKinds = CleanKinds(_config.Containers.EnabledKinds);
-            _config.General.RecognisedFuelItems = CleanStrings(_config.General.RecognisedFuelItems, DefaultFuelItems);
-            _config.Owners.WhitelistPlayers = CleanStrings(_config.Owners.WhitelistPlayers, null);
-            _config.Owners.BlacklistPlayers = CleanStrings(_config.Owners.BlacklistPlayers, null);
+            // The lists stay as the owner wrote them; only the runtime copies below are trimmed and deduplicated.
+            if (_config.Containers.EnabledKinds == null) _config.Containers.EnabledKinds = DefaultKinds();
+            if (_config.General.RecognisedFuelItems == null) _config.General.RecognisedFuelItems = new List<string>(DefaultFuelItems);
+            if (_config.Owners.WhitelistPlayers == null) _config.Owners.WhitelistPlayers = new List<string>();
+            if (_config.Owners.BlacklistPlayers == null) _config.Owners.BlacklistPlayers = new List<string>();
             _config.Containers.EntityOverrides = ValidateOverrides(_config.Containers.EntityOverrides);
             _config.Containers.NameOverrides = ValidateOverrides(_config.Containers.NameOverrides);
             _config.Containers.PrefabOverrides = ValidateOverrides(_config.Containers.PrefabOverrides);
 
-            _recognisedFuelItems = new HashSet<string>(_config.General.RecognisedFuelItems, StringComparer.OrdinalIgnoreCase);
-            _enabledKinds = new HashSet<string>(_config.Containers.EnabledKinds, StringComparer.OrdinalIgnoreCase);
+            _recognisedFuelList = CleanStrings(_config.General.RecognisedFuelItems, DefaultFuelItems);
+            _recognisedFuelItems = new HashSet<string>(_recognisedFuelList, StringComparer.OrdinalIgnoreCase);
+            _enabledKinds = new HashSet<string>(CleanKinds(_config.Containers.EnabledKinds), StringComparer.OrdinalIgnoreCase);
+            _whitelistPlayers = CleanStrings(_config.Owners.WhitelistPlayers, null);
+            _blacklistPlayers = CleanStrings(_config.Owners.BlacklistPlayers, null);
             SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
         }
 
@@ -626,8 +633,8 @@ namespace Oxide.Plugins
             else if (_config.Containers.NameOverrides != null && _config.Containers.NameOverrides.TryGetValue(shortName, out value)) maximum = value;
             else if (_config.Containers.PrefabOverrides != null && _config.Containers.PrefabOverrides.TryGetValue(prefab, out value)) maximum = value;
 
-            if (_config.Owners.BlacklistPlayers != null && _config.Owners.BlacklistPlayers.Contains(ownerId)) return 1;
-            if (_config.Owners.WhitelistPlayers != null && _config.Owners.WhitelistPlayers.Count > 0 && !_config.Owners.WhitelistPlayers.Contains(ownerId)) return 1;
+            if (_blacklistPlayers.Contains(ownerId)) return 1;
+            if (_whitelistPlayers.Count > 0 && !_whitelistPlayers.Contains(ownerId)) return 1;
             return Math.Max(1, maximum);
         }
 
@@ -674,12 +681,12 @@ namespace Oxide.Plugins
         private string CreateDetailedAuditReport()
         {
             StringBuilder output = new StringBuilder();
-            output.AppendLine("RogueRustFuelStackOptimizer v2.1.0 audit");
+            output.AppendLine("RogueRustFuelStackOptimizer v" + PluginVersion + " audit");
             output.AppendLine(CreateSummary());
             output.AppendLine("Safety mode: dedicated fuel containers only = " +
                 _config.Containers.DedicatedFuelContainersOnly + ".");
             output.AppendLine("Recognised fuel short names: " +
-                string.Join(", ", _config.General.RecognisedFuelItems.ToArray()) + ".");
+                string.Join(", ", _recognisedFuelList.ToArray()) + ".");
 
             foreach (var group in _containers.Values
                 .Where(item => item.Entity != null && item.Container != null)
@@ -734,7 +741,7 @@ namespace Oxide.Plugins
         {
             if (!CanAdmin(context)) return RogueCommandResult.Fail("You are not allowed to use this command.");
             return RogueCommandResult.Ok("Recognised fuel item short names: " +
-                string.Join(", ", _config.General.RecognisedFuelItems.ToArray()));
+                string.Join(", ", _recognisedFuelList.ToArray()));
         }
 
         [RogueCommand("fuelstack.rescan",
@@ -775,14 +782,14 @@ namespace Oxide.Plugins
         private bool IsOwnerAllowed(ulong ownerId)
         {
             // Default config has no owner filters: skip the player lookups and string work entirely.
-            if (_config.Owners.BlacklistPlayers.Count == 0 && _config.Owners.WhitelistPlayers.Count == 0)
+            if (_blacklistPlayers.Count == 0 && _whitelistPlayers.Count == 0)
                 return true;
             string ownerIdText = ownerId.ToString();
             BasePlayer owner = BasePlayer.FindByID(ownerId) ?? BasePlayer.FindSleeping(ownerId);
             string ownerName = owner == null ? null : owner.displayName;
-            if (ContainsOwner(_config.Owners.BlacklistPlayers, ownerIdText, ownerName)) return false;
-            return _config.Owners.WhitelistPlayers.Count == 0 ||
-                ContainsOwner(_config.Owners.WhitelistPlayers, ownerIdText, ownerName);
+            if (ContainsOwner(_blacklistPlayers, ownerIdText, ownerName)) return false;
+            return _whitelistPlayers.Count == 0 ||
+                ContainsOwner(_whitelistPlayers, ownerIdText, ownerName);
         }
 
         private static bool ContainsOwner(List<string> entries, string ownerId, string ownerName)

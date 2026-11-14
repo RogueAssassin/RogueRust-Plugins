@@ -10,13 +10,13 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "2.0.7")]
+    [Info("RogueRustGridPower", "RogueAssassin", "2.0.8")]
     [Description("RogueRust GridPower: automatic world streetlights plus output control for Rust's native power-grid access points.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {
         #region Constants
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 7);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 8);
         private static readonly VersionNumber MinimumBackend = new VersionNumber(4, 4, 56);
 
         [RoguePermission]
@@ -198,6 +198,8 @@ namespace Oxide.Plugins
         protected override void LoadConfig()
         {
             base.LoadConfig();
+            // RogueRust config standard: lists in the file replace the defaults instead of being appended to them.
+            Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
 
             try
             {
@@ -216,7 +218,7 @@ namespace Oxide.Plugins
                     raw["Developer Settings"] == null ||
                     raw["Version (DO NOT CHANGE)"] == null;
 
-                _config = raw != null ? raw.ToObject<PluginConfig>() : new PluginConfig();
+                _config = raw != null ? raw.ToObject<PluginConfig>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings)) : new PluginConfig();
                 if (_config == null)
                     throw new JsonException("Configuration deserialized to null.");
 

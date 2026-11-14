@@ -11,7 +11,7 @@
 
 ## Recent Changes
 
-- **1.0.7:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustHeliCrash.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
+- **1.0.7:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustHeliCrash.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **1.0.6:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **1.0.5:** With Oxide.Ext.RogueRust 4.4.67 the alert icon loads again. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
 - **1.0.4:** the schedule, the event timer and the "Next helicopter crash in" log line now start before the alert icon is loaded, and the icon load is guarded. With a RogueRust DLL built for an older game (`Method not found: FileStorage.Store` after the November 2026 Rust update) the plugin keeps running and alerts are shown without the icon, instead of `OnServerInitialized` failing and no crash ever being scheduled.

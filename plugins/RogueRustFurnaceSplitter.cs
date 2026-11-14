@@ -14,12 +14,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.7")]
+    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.8")]
     [Description("Optimized RogueRust furnace splitting with automatic fuel management, configurable stack distribution, ETA display, and responsive UI.")]
     public sealed class RogueRustFurnaceSplitter : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
+        private const string PluginVersion = "2.1.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
 
         [PluginReference]
         private Plugin UIScaleManager;
@@ -1378,7 +1378,7 @@ namespace Oxide.Plugins
 
                 if (legacyFlat)
                 {
-                    LegacyPluginConfig legacy = raw.ToObject<LegacyPluginConfig>() ?? new LegacyPluginConfig();
+                    LegacyPluginConfig legacy = raw.ToObject<LegacyPluginConfig>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings)) ?? new LegacyPluginConfig();
                     config = GetDefaultConfig();
                     config.UiPosition = legacy.UiPosition;
                     config.savePlayerData = legacy.savePlayerData;
@@ -1389,7 +1389,7 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    config = raw == null ? GetDefaultConfig() : raw.ToObject<PluginConfig>();
+                    config = raw == null ? GetDefaultConfig() : raw.ToObject<PluginConfig>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings));
                 }
             }
             catch (Exception exception)

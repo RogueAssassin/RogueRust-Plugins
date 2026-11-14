@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustEventDirector", "RogueAssassin", "1.4.4")]
+[Info("RogueRustEventDirector", "RogueAssassin", "1.4.5")]
 [Description("Performance-focused world event scheduling and CH47 crate direction powered by RogueRust.")]
 public sealed class RogueRustEventDirector : RogueRustPlugin
 {
@@ -19,9 +19,9 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     [RoguePermission]
     private const string AdminPermission = "roguerusteventdirector.admin";
 
-    private const string PluginVersion = "1.4.4";
+    private const string PluginVersion = "1.4.5";
 
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 4);
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 5);
 
     private const string CargoPlanePrefab = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
     private const string PatrolHelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
@@ -56,8 +56,9 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         VersionNumber loadedVersion = _config.Version;
         MigrateConfiguration(loadedVersion);
         NormalizeConfiguration();
-        // Keep the old file on a version change; the save itself is skipped when nothing changed.
-        KeepPreviousConfiguration(ConfigKey, loadedVersion, CurrentVersion);
+        // The file is updated in place; the save itself is skipped when nothing changed.
+        if (loadedVersion != CurrentVersion)
+            LogInformation("Configuration", $"Configuration updated from {loadedVersion} to {CurrentVersion}; existing settings were kept and new ones added with their defaults.");
         SaveConfiguration(ConfigKey, _config);
 
         _state = LoadData(DataKey, () => new ScheduleState()) ?? new ScheduleState();

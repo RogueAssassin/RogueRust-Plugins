@@ -9,7 +9,7 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustTurretLimitOverride", "RogueAssassin", "2.1.8")]
+    [Info("RogueRustTurretLimitOverride", "RogueAssassin", "2.1.9")]
     [Description("Configures Rust's turret interference ConVars.")]
     public sealed class RogueRustTurretLimitOverride : RogueRustPlugin
     {
@@ -17,8 +17,8 @@ namespace Oxide.Plugins
         private const string DefaultAdminPermission = "roguerustturretlimitoverride.admin";
         private const float VanillaRadius = 40f;
         private const int VanillaMaximum = 12;
-        private const string PluginVersion = "2.1.8";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
+        private const string PluginVersion = "2.1.9";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 9);
         private Configuration _config;
 
         private string AdminPermission { get { return DefaultAdminPermission; } }
@@ -80,13 +80,13 @@ namespace Oxide.Plugins
                 {
                     raw["Turret Settings"] = raw["01 - Turret Settings"].DeepClone();
                     raw.Remove("01 - Turret Settings");
-                    _config = raw.ToObject<Configuration>() ?? new Configuration();
+                    _config = raw.ToObject<Configuration>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings)) ?? new Configuration();
                 }
                 else if (raw != null && raw["Turret Settings"] == null &&
                     (raw["Enable override"] != null || raw["Interference radius (0 disables the radius check)"] != null ||
                      raw["Maximum active turrets in the interference radius"] != null))
                 {
-                    LegacyConfiguration legacy = raw.ToObject<LegacyConfiguration>() ?? new LegacyConfiguration();
+                    LegacyConfiguration legacy = raw.ToObject<LegacyConfiguration>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings)) ?? new LegacyConfiguration();
                     _config = new Configuration();
                     _config.Turret.EnableOverride = legacy.EnableOverride;
                     _config.Turret.InterferenceRadius = legacy.InterferenceRadius;
@@ -94,7 +94,7 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    _config = raw == null ? new Configuration() : raw.ToObject<Configuration>();
+                    _config = raw == null ? new Configuration() : raw.ToObject<Configuration>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings));
                 }
             }
             catch (Exception exception)

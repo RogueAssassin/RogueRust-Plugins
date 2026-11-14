@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Ext.RogueRust.Plugins;
@@ -10,14 +9,14 @@ using Oxide.Game.Rust.Cui;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.5")]
+    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.6")]
     [Description("Schedules safe server restarts with RogueRust runtime protection, chat, game-tip, and GUI warnings.")]
     public sealed class RogueRustServerRestarter : RogueRustPlugin
     {
         private const string UiName = "ServerRestarter.UI";
         private const ulong ChatIconSteamId = 76561198641042212UL;
-        private const string PluginVersion = "2.1.5";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 5);
+        private const string PluginVersion = "2.1.6";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
         private Configuration _config;
 
         [RoguePermission]
@@ -191,7 +190,7 @@ namespace Oxide.Plugins
 
                 if (legacy)
                 {
-                    LegacyConfiguration old = raw.ToObject<LegacyConfiguration>() ?? new LegacyConfiguration();
+                    LegacyConfiguration old = raw.ToObject<LegacyConfiguration>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings)) ?? new LegacyConfiguration();
                     _config = new Configuration
                     {
                         Schedule = new ScheduleSettings
@@ -204,7 +203,7 @@ namespace Oxide.Plugins
                             WarningMinutes = old.WarningMinutes ?? new List<int>(),
                             WarningMessages = old.WarningMessages ?? new Dictionary<int, string>(),
                             UseChat = old.UseChat,
-                            GametipDelay = old.Version < CurrentVersion && Math.Abs(old.GametipDelay - 60f) < 0.01f ? 0f : old.GametipDelay,
+                            GametipDelay = old.GametipDelay,
                             GametipDuration = old.GametipDuration
                         },
                         UI = new UiSettings
@@ -228,7 +227,7 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    _config = raw == null ? new Configuration() : raw.ToObject<Configuration>();
+                    _config = raw == null ? new Configuration() : raw.ToObject<Configuration>(Newtonsoft.Json.JsonSerializer.Create(Config.Settings));
                 }
             }
             catch (Exception exception)
@@ -252,16 +251,8 @@ namespace Oxide.Plugins
             if (_config.WarningMessages == null) _config.WarningMessages = new Dictionary<int, string>();
             if (_config.RestartColors == null) _config.RestartColors = new Dictionary<string, string>();
 
-            _config.RestartTimes = _config.RestartTimes
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => value.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            _config.WarningMinutes = _config.WarningMinutes
-                .Where(value => value > 0)
-                .Distinct()
-                .OrderByDescending(value => value)
-                .ToList();
+            // The lists are kept as the owner wrote them; ParseRestartTimes and ScheduleWarnings skip blank,
+            // invalid and repeated entries.
 
             if (string.IsNullOrWhiteSpace(_config.RestartCommand) ||
                 _config.RestartCommand.Trim().Equals("restart", StringComparison.OrdinalIgnoreCase))
@@ -319,8 +310,10 @@ namespace Oxide.Plugins
             _restartTimes.Clear();
             foreach (string configuredTime in _config.RestartTimes)
             {
+                if (string.IsNullOrWhiteSpace(configuredTime))
+                    continue;
                 TimeSpan value;
-                if (TimeSpan.TryParseExact(configuredTime, "hh\\:mm", CultureInfo.InvariantCulture, out value) &&
+                if (TimeSpan.TryParseExact(configuredTime.Trim(), "hh\\:mm", CultureInfo.InvariantCulture, out value) &&
                     value >= TimeSpan.Zero && value < TimeSpan.FromDays(1))
                 {
                     if (!_restartTimes.Contains(value))
@@ -370,9 +363,12 @@ namespace Oxide.Plugins
 
         private void ScheduleWarnings(DateTime now, int generation)
         {
+            var scheduled = new HashSet<int>();
             for (int i = 0; i < _config.WarningMinutes.Count; i++)
             {
                 int minutes = _config.WarningMinutes[i];
+                if (minutes <= 0 || !scheduled.Add(minutes))
+                    continue;
                 float delay = (float)(_restartTime.AddMinutes(-minutes) - now).TotalSeconds;
                 if (delay <= 0f)
                     continue;

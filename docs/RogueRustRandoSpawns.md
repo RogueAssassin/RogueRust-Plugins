@@ -2,7 +2,7 @@
 
 > RogueRust-powered random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.
 
-**Version:** `2.1.6`  
+**Version:** `2.1.7`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.1.7:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. A biome added to Rust in a later release is added to `Biomes` with its defaults; the biomes already in your file keep their settings.
 - **2.1.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustRandoSpawns.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.1.5:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **2.1.4:** The spawn cache takes its version from the plugin's version constant instead of separate copies. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.

@@ -2,7 +2,7 @@
 
 > RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics and player-facing grid events.
 
-**Version:** `2.0.7`  
+**Version:** `2.0.8`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.0.8:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. Lists in the file now always replace the built-in defaults when the config loads, so an entry you removed stays removed.
 - **RogueRust 4.4.70:** No plugin change. With RogueRust 4.4.70 or later, reloading GridPower no longer rescans the map for power-grid access points twice; unload took about 350 ms before.
 - **2.0.7:** The config upgrade is logged once, by RogueRust, instead of three times.
 - **2.0.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustGridPower.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
