@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **RogueRust 4.4.70:** No plugin change. With RogueRust 4.4.70 or later, reloading GridPower no longer rescans the map for power-grid access points twice; unload took about 350 ms before.
 - **2.0.7:** The config upgrade is logged once, by RogueRust, instead of three times.
 - **2.0.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustGridPower.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.0.5:** The startup log line and the config file now show the plugin's real version (2.0.4 still reported 2.0.3).
