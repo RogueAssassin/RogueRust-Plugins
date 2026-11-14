@@ -10,13 +10,13 @@ using Oxide.Ext.RogueRust.Plugins;
 using Oxide.Ext.RogueRust.SDK;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.6")]
+    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.7")]
     [Description("RogueRust-powered blueprint management with legacy permission and command compatibility.")]
 
     public sealed class RogueRustBlueprintManager : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.6";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
+        private const string PluginVersion = "2.1.7";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
         private const string LanguageFolder = "RogueRustBlueprintManager";
         private const string LanguageFile = "messages.json";
 
@@ -155,10 +155,8 @@ namespace Oxide.Plugins
                 bool changed = EnsureConfigDefaults();
                 if (!(config.Version == CurrentVersion))
                 {
-                    VersionNumber oldVersion = config.Version;
                     config.Version = CurrentVersion;
                     changed = true;
-                    LogInformation("Configuration", "Migrated configuration from v" + oldVersion + " to v" + CurrentVersion + ".");
                 }
 
                 SaveConfigIfChanged(config, JsonConvert.SerializeObject(config, Config.Settings), CurrentVersion);

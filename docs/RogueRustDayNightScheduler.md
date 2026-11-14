@@ -110,7 +110,11 @@ All commands have a 0.5-second RogueCommand cooldown.
   "Developer Settings": {
     "LogLevel (Error, Warning, Info, Debug)": "Info"
   },
-  "Version (DO NOT CHANGE)": "3.1.7"
+  "Version (DO NOT CHANGE)": {
+    "Major": 3,
+    "Minor": 1,
+    "Patch": 7
+  }
 }
 ```
 

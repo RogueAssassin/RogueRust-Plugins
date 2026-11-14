@@ -221,7 +221,11 @@ The Bradley marker follows every Bradley on the map, including ones spawned by o
     "Maximum Spawn Count": 1,
     "Maximum Concurrent": 1
   },
-  "Version (DO NOT CHANGE)": "1.4.4"
+  "Version (DO NOT CHANGE)": {
+    "Major": 1,
+    "Minor": 4,
+    "Patch": 4
+  }
 }
 ```
 

@@ -10,13 +10,13 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "2.0.6")]
+    [Info("RogueRustGridPower", "RogueAssassin", "2.0.7")]
     [Description("RogueRust GridPower: automatic world streetlights plus output control for Rust's native power-grid access points.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {
         #region Constants
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 6);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 7);
         private static readonly VersionNumber MinimumBackend = new VersionNumber(4, 4, 56);
 
         [RoguePermission]
@@ -220,23 +220,16 @@ namespace Oxide.Plugins
                 if (_config == null)
                     throw new JsonException("Configuration deserialized to null.");
 
-                VersionNumber loadedVersion = _config.Version;
                 bool changed = missingSections;
                 changed |= EnsureConfigDefaults();
 
                 if (_config.Version != CurrentVersion)
                 {
-                    LogInformation("Configuration", "Configuration migrated from v" + loadedVersion + " to v" + CurrentVersion + ".");
                     _config.Version = CurrentVersion;
                     changed = true;
                 }
 
-                if (SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion) && changed)
-                {
-                    LogInformation("Configuration",
-                        "Configuration updated to v" + CurrentVersion +
-                        "; existing values were preserved and new settings were added.");
-                }
+                SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
             }
             catch (Exception ex)
             {

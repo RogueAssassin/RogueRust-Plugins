@@ -149,7 +149,11 @@ The settings are stored in `RogueRustFuelStackOptimizer.json` in the server conf
   "Developer Settings": {
     "Log Detailed Audit on Startup": false
   },
-  "Version (DO NOT CHANGE)": "2.1.5"
+  "Version (DO NOT CHANGE)": {
+    "Major": 2,
+    "Minor": 1,
+    "Patch": 5
+  }
 }
 ```
 

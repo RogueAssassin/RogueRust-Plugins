@@ -90,7 +90,11 @@ Configuration is stored in `CustomPlayerMessages.json` / the framework-generated
     "Minimum seconds between requests to the country lookup host": 0.25,
     "Country lookup URL (HTTP is required by ip-api's free endpoint)": "http://ip-api.com/json/{0}?fields=status,message,country,countryCode"
   },
-  "Version (DO NOT CHANGE)": "3.1.6"
+  "Version (DO NOT CHANGE)": {
+    "Major": 3,
+    "Minor": 1,
+    "Patch": 6
+  }
 }
 ```
 

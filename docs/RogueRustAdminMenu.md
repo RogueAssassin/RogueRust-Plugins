@@ -2,7 +2,7 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
 
-**Version:** `2.5.9`  
+**Version:** `2.5.10`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,6 +12,7 @@
 
 ## Recent Changes
 
+- **2.5.10:** The item, convar and permission lists are built the first time an admin opens those screens, not during server start (removes most of the 145 ms `OnServerInitialized` warning). Permission changes from other plugins now only mark the list for a rebuild. The config upgrade is logged once, by RogueRust.
 - **2.5.9:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustAdminMenu.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.5.8:** The config migration log line shows the old version as a number (2.5.5) instead of a JSON object.
 - **2.5.7:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
@@ -162,7 +163,11 @@ The `UI Theme` object contains the full F1-style colour palette and can be custo
   },
   "Integrations": { "Log Menu Actions To Discord Webhook (webhook URL)": "" },
   "Data Settings": { "Recent Players Purge Time (days)": 7 },
-  "Version (DO NOT CHANGE)": "2.5.9"
+  "Version (DO NOT CHANGE)": {
+    "Major": 2,
+    "Minor": 5,
+    "Patch": 10
+  }
 }
 ```
 

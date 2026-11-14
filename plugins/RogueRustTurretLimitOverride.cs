@@ -9,7 +9,7 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustTurretLimitOverride", "RogueAssassin", "2.1.7")]
+    [Info("RogueRustTurretLimitOverride", "RogueAssassin", "2.1.8")]
     [Description("Configures Rust's turret interference ConVars.")]
     public sealed class RogueRustTurretLimitOverride : RogueRustPlugin
     {
@@ -17,8 +17,8 @@ namespace Oxide.Plugins
         private const string DefaultAdminPermission = "roguerustturretlimitoverride.admin";
         private const float VanillaRadius = 40f;
         private const int VanillaMaximum = 12;
-        private const string PluginVersion = "2.1.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
+        private const string PluginVersion = "2.1.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
         private Configuration _config;
 
         private string AdminPermission { get { return DefaultAdminPermission; } }
@@ -73,7 +73,6 @@ namespace Oxide.Plugins
             base.LoadConfig();
             // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
             Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
-            bool migrated = false;
             try
             {
                 Newtonsoft.Json.Linq.JObject raw = Config.ReadObject<Newtonsoft.Json.Linq.JObject>();
@@ -82,7 +81,6 @@ namespace Oxide.Plugins
                     raw["Turret Settings"] = raw["01 - Turret Settings"].DeepClone();
                     raw.Remove("01 - Turret Settings");
                     _config = raw.ToObject<Configuration>() ?? new Configuration();
-                    migrated = true;
                 }
                 else if (raw != null && raw["Turret Settings"] == null &&
                     (raw["Enable override"] != null || raw["Interference radius (0 disables the radius check)"] != null ||
@@ -93,7 +91,6 @@ namespace Oxide.Plugins
                     _config.Turret.EnableOverride = legacy.EnableOverride;
                     _config.Turret.InterferenceRadius = legacy.InterferenceRadius;
                     _config.Turret.MaxInterference = legacy.MaxInterference;
-                    migrated = true;
                 }
                 else
                 {
@@ -118,17 +115,13 @@ namespace Oxide.Plugins
             {
                 _config.Turret.InterferenceRadius = radius;
                 _config.Turret.MaxInterference = maximum;
-                migrated = true;
+                LogWarning("Configuration", "Turret limits were outside the allowed range and were corrected (radius 0 to 10000, maximum 1 to 10000).");
             }
 
             if (_config.Version < CurrentVersion)
             {
                 _config.Version = CurrentVersion;
-                migrated = true;
             }
-
-            if (migrated)
-                LogWarning("Configuration", "Configuration was migrated and validated for v" + CurrentVersion + ".");
 
             SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
         }

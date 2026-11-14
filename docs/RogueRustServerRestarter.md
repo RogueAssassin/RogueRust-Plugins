@@ -97,7 +97,11 @@ Reason colours default to `M_DEFAULT`, `M_1` and `M_2` entries.
   "Permission Settings": {
     "Automatically Grant Use/Admin Permissions to Built-In Admin Group": true
   },
-  "Version (DO NOT CHANGE)": "2.1.5"
+  "Version (DO NOT CHANGE)": {
+    "Major": 2,
+    "Minor": 1,
+    "Patch": 5
+  }
 }
 ```
 

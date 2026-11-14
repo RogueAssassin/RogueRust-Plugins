@@ -12,8 +12,8 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 
 | Plugin | Version | Description | Source |
 |---|---:|---|---|
-| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.9` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
-| **[RogueRustBlueprintManager](docs/RogueRustBlueprintManager.md)** | `2.1.6` | Blueprint management with legacy permission/config compatibility. | [Source](plugins/RogueRustBlueprintManager.cs) |
+| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.10` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
+| **[RogueRustBlueprintManager](docs/RogueRustBlueprintManager.md)** | `2.1.7` | Blueprint management with legacy permission/config compatibility. | [Source](plugins/RogueRustBlueprintManager.cs) |
 | **[RogueRustBuildingManager](docs/RogueRustBuildingManager.md)** | `1.2.3` | Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them. | [Source](plugins/RogueRustBuildingManager.cs) |
 | **[RogueRustCraftingController](docs/RogueRustCraftingController.md)** | `2.1.6` | Crafting control with RogueRust integration. | [Source](plugins/RogueRustCraftingController.cs) |
 | **[RogueRustCustomPlayerMessages](docs/RogueRustCustomPlayerMessages.md)** | `3.1.6` | Custom connect/disconnect messages and player-list commands. | [Source](plugins/RogueRustCustomPlayerMessages.cs) |
@@ -22,7 +22,7 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 | **[RogueRustEventDirector](docs/RogueRustEventDirector.md)** | `1.4.4` | Managed Rust world-event scheduling with vanilla-spawn suppression (including Bradley), dry-land airdrop and crate placement, Bradley and airdrop map markers, startup staggering, randomized GameTips and CH47 crate direction. | [Source](plugins/RogueRustEventDirector.cs) |
 | **[RogueRustFuelStackOptimizer](docs/RogueRustFuelStackOptimizer.md)** | `2.1.5` | Optimises dedicated Rust fuel containers through cached discovery. | [Source](plugins/RogueRustFuelStackOptimizer.cs) |
 | **[RogueRustFurnaceSplitter](docs/RogueRustFurnaceSplitter.md)** | `2.1.7` | Furnace splitting, fuel management, ETA and responsive UI. | [Source](plugins/RogueRustFurnaceSplitter.cs) |
-| **[RogueRustGridPower](docs/RogueRustGridPower.md)** | `2.0.6` | Automatic streetlights, player-grid power, diagnostics and wooden-ladder support for managed power poles. | [Source](plugins/RogueRustGridPower.cs) |
+| **[RogueRustGridPower](docs/RogueRustGridPower.md)** | `2.0.7` | Automatic streetlights, player-grid power, diagnostics and wooden-ladder support for managed power poles. | [Source](plugins/RogueRustGridPower.cs) |
 | **[RogueRustHackableCrateTracker](docs/RogueRustHackableCrateTracker.md)** | `2.2.4` | Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock. | [Source](plugins/RogueRustHackableCrateTracker.cs) |
 | **[RogueRustHeliCrash](docs/RogueRustHeliCrash.md)** | `1.0.7` | A malfunctioning patrol helicopter flies in and crashes; the site is marked, guarded and reported until looted. | [Source](plugins/RogueRustHeliCrash.cs) |
 | **[RogueRustHeliLeashControl](docs/RogueRustHeliLeashControl.md)** | `2.1.7` | Keeps damaged Patrol Helicopters near the last valid attacker. | [Source](plugins/RogueRustHeliLeashControl.cs) |
@@ -31,7 +31,7 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 | **[RogueRustServerInfo](docs/RogueRustServerInfo.md)** | `1.1.6` | In-game server information and command reference panel that lists the commands each player can use. | [Source](plugins/RogueRustServerInfo.cs) |
 | **[RogueRustServerRestarter](docs/RogueRustServerRestarter.md)** | `2.1.5` | Safe scheduled restarts with chat/game-tip/GUI warnings. | [Source](plugins/RogueRustServerRestarter.cs) |
 | **[RogueRustSkins](docs/RogueRustSkins.md)** | `2.3.6` | Performance-first native Rust skin browser. | [Source](plugins/RogueRustSkins.cs) |
-| **[RogueRustTurretLimitOverride](docs/RogueRustTurretLimitOverride.md)** | `2.1.7` | Configures Rust turret interference ConVars. | [Source](plugins/RogueRustTurretLimitOverride.cs) |
+| **[RogueRustTurretLimitOverride](docs/RogueRustTurretLimitOverride.md)** | `2.1.8` | Configures Rust turret interference ConVars. | [Source](plugins/RogueRustTurretLimitOverride.cs) |
 
 ## Documentation
 

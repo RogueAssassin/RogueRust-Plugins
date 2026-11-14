@@ -126,7 +126,11 @@ Missing current Rust items are added automatically using live blueprint defaults
     "Craft items with random skins if not already skinned": false
   },
   "Advanced Crafting Options": {},
-  "Version (DO NOT CHANGE)": "2.1.6"
+  "Version (DO NOT CHANGE)": {
+    "Major": 2,
+    "Minor": 1,
+    "Patch": 6
+  }
 }
 ```
 

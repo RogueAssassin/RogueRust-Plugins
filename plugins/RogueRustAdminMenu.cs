@@ -1,4 +1,4 @@
-// RogueRustAdminMenu v2.5.9 RRAM release build: RRADMIN-259
+// RogueRustAdminMenu v2.5.10 RRAM release build: RRADMIN-2510
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
 // Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted release build
 #nullable enable annotations
@@ -23,12 +23,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.9")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.10")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.9";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 9);
+    private const string PluginVersion = "2.5.10";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 10);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -113,7 +113,6 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     private readonly Dictionary<ulong, Session> _sessions = new();
     private readonly Dictionary<string, RecentPlayer> _recentPlayers = new(StringComparer.Ordinal);
-    private readonly Dictionary<ItemCategory, List<ItemDefinition>> _items = new();
     private readonly List<ItemDefinition> _allItems = new();
     private readonly List<KeyValuePair<string, bool>> _permissionTree = new();
     private readonly Dictionary<string, SavedLocation> _savedLocations = new(StringComparer.OrdinalIgnoreCase);
@@ -133,6 +132,10 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private bool _pluginInfoCacheDirty = true;
     private readonly List<ConsoleSystem.Command> _serverConvarCache = new();
     private readonly Dictionary<int, string> _itemSearchKeys = new();
+    // Item, convar and permission lists are built the first time a screen needs them, not at boot.
+    private bool _itemCacheReady;
+    private bool _convarCacheReady;
+    private bool _permissionTreeReady;
     private readonly Dictionary<int, string> _itemImageCache = new();
     private readonly Dictionary<int, float> _itemImageMissUntil = new();
     private readonly Dictionary<string, string> _vehicleImageCache = new(StringComparer.OrdinalIgnoreCase);
@@ -313,9 +316,6 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         LoadRecentPlayers();
         LoadSavedLocations();
         LoadWorkflowData();
-        BuildItemCache();
-        BuildConvarCache();
-        UpdatePermissionList();
         Adapters.Refresh();
 
         foreach (BasePlayer player in BasePlayer.activePlayerList)
@@ -340,13 +340,11 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         DestroyUi(player, CursorRoot);
     }
 
-    // Every plugin registers several permissions while the server boots or a plugin reloads; rebuilding
-    // the sorted permission tree once per registration repeated the same work hundreds of times.
-    // Coalesce into a single rebuild on the next tick.
+    // Every plugin registers several permissions while the server boots or a plugin reloads. The sorted
+    // tree is only marked stale here and rebuilt once, the next time the permissions screen is drawn.
     private void OnPermissionRegistered(string name, Plugin owner) => QueuePermissionListUpdate();
 
-    private void QueuePermissionListUpdate() =>
-        CoalesceNextTick("adminmenu-permission-tree", UpdatePermissionList);
+    private void QueuePermissionListUpdate() => _permissionTreeReady = false;
 
     private void OnPluginLoaded(Plugin plugin)
     {
@@ -387,6 +385,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         _pluginInfoCache.Clear();
         _serverConvarCache.Clear();
         _itemSearchKeys.Clear();
+        _itemCacheReady = _convarCacheReady = _permissionTreeReady = false;
         _itemImageCache.Clear();
         _itemImageMissUntil.Clear();
         _vehicleImageCache.Clear();
@@ -617,12 +616,9 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             // RogueRust config standard: replace pre-initialized collections instead of appending loaded values.
             Config.Settings.ObjectCreationHandling = ObjectCreationHandling.Replace;
         bool migratedLegacy = false;
-        string loadedVersion = "unknown";
         try
         {
             JObject raw = Config.ReadObject<JObject>() ?? new JObject();
-            JToken legacyVersion = raw["Config Version"];
-            loadedVersion = DescribeVersion(legacyVersion ?? raw["Version (DO NOT CHANGE)"]);
 
             _config = raw.ToObject<ConfigData>() ?? ConfigData.CreateDefault();
             migratedLegacy = raw["General Settings"] == null;
@@ -641,7 +637,6 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         bool changed = EnsureConfigDefaults();
         if (_config.Version != CurrentVersion)
         {
-            LogInformation("Configuration", $"Migrating RogueRustAdminMenu.json from {loadedVersion} to {CurrentVersion}.");
             _config.Version = CurrentVersion;
             changed = true;
         }
@@ -649,14 +644,6 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         NormalizeConfig();
         // Rewrite only when a migration or normalisation changed the file; a version change keeps the old file as a .bak.
         SaveConfigIfChanged(_config, JsonConvert.SerializeObject(_config, Config.Settings), CurrentVersion);
-    }
-
-    // The version is saved as a VersionNumber object ({"Major":2,"Minor":5,"Patch":5}); older configs stored a string.
-    private static string DescribeVersion(JToken? token)
-    {
-        if (token is JObject version && version["Major"] != null)
-            return version.Value<int>("Major") + "." + version.Value<int>("Minor") + "." + version.Value<int>("Patch");
-        return token?.ToString() ?? "legacy";
     }
 
     protected override void SaveConfig() => Config.WriteObject(_config, true);
@@ -1096,23 +1083,17 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     private void BuildItemCache()
     {
-        _items.Clear();
         _allItems.Clear();
         _itemSearchKeys.Clear();
         foreach (ItemDefinition definition in ItemManager.itemList)
         {
             if (definition == null || definition.hidden || _ignoredItems.Contains(definition.shortname)) continue;
-            if (!_items.TryGetValue(definition.category, out List<ItemDefinition>? list))
-                _items[definition.category] = list = new List<ItemDefinition>();
-            list.Add(definition);
             _allItems.Add(definition);
 
             // Avoid rebuilding "display name + shortname" strings on every Give redraw/search.
             string displayName = definition.displayName?.english ?? string.Empty;
             _itemSearchKeys[definition.itemid] = (displayName + " " + definition.shortname).ToLowerInvariant();
         }
-        foreach (List<ItemDefinition> list in _items.Values)
-            list.Sort((a, b) => string.Compare(a.displayName.english, b.displayName.english, StringComparison.OrdinalIgnoreCase));
         _allItems.Sort((a, b) => string.Compare(a.displayName.english, b.displayName.english, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -2463,6 +2444,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         string back = UiActionCallback(s.Player, "perm.back", () => { if (group) s.SelectedGroup = string.Empty; else s.SelectedPlayerId = s.SelectedPlayerName = string.Empty; s.Page = 0; Draw(s); });
         ui.Button("rram.perm.back", "rram.body", Rect(0.052f, 0.825f, 0.145f, 0.862f), "‹ CHANGE", back, _config.UI.Theme.SurfaceAlt, 9);
 
+        if (!_permissionTreeReady) { UpdatePermissionList(); _permissionTreeReady = true; }
         List<KeyValuePair<string, bool>> filtered = Filter(_permissionTree, s, x => x.Key).ToList();
         const int pageSize = 32;
         DrawCharacterFilter(ui, s, filtered, x => x.Key);
@@ -2772,6 +2754,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     {
         // Console descriptors are static for the running Rust build; cache the list once.
         // Values are still read live from each command object while drawing.
+        if (!_convarCacheReady) { BuildConvarCache(); _convarCacheReady = true; }
         List<ConsoleSystem.Command> vars = Filter(_serverConvarCache, s, x => x.FullName + " " + x.Description).ToList();
         if (s.SubMenu == 1) vars = vars.Where(x => s.FavouriteConvars.Contains(x.FullName)).ToList();
         string allVars = UiActionCallback(s.Player, "convar.filter.all", () => { s.SubMenu = 0; s.Page = 0; Draw(s); });
@@ -3342,6 +3325,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             ui.Tab("rram.give.cat." + i, "rram.body", Rect(left, bottom, left + 0.061f, top), ShortCategory(cat), cb, !s.GiveRecentOnly && !s.GiveFavouritesOnly && s.GiveCategory == (int)cat);
         }
 
+        if (!_itemCacheReady) { BuildItemCache(); _itemCacheReady = true; }
         IEnumerable<ItemDefinition> source = _allItems;
         if (s.GiveFavouritesOnly)
             source = source.Where(x => s.FavouriteGiveItems.Contains(x.shortname));

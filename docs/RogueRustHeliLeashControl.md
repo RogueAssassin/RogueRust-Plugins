@@ -76,7 +76,11 @@ Configuration file: `config/RogueRustHeliLeashControl.json`
   "Developer Settings": {
     "Enable Debug Messages in Console": false
   },
-  "Version (DO NOT CHANGE)": "2.1.7"
+  "Version (DO NOT CHANGE)": {
+    "Major": 2,
+    "Minor": 1,
+    "Patch": 7
+  }
 }
 ```
 
