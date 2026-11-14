@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("RogueRustDeathNotes", "RogueAssassin", "2.5.8")]
+	[Info("RogueRustDeathNotes", "RogueAssassin", "2.5.9")]
 	[Description("RogueRustDeathNotes - RogueRust death notification engine, based on the original Death Notes concept, with integrated native GUI output and per-player controls.")]
 	public sealed class RogueRustDeathNotes : RogueRustPlugin
 	{
@@ -41,9 +41,9 @@ namespace Oxide.Plugins
         [RoguePermission]
         private const string TeamOnlyPermission = "roguerustdeathnotes.seeteamonly";
 
-		private const string PluginVersion = "2.5.8";
+		private const string PluginVersion = "2.5.9";
 
-		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 8);
+		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 9);
 
 		private static RogueRustDeathNotes _instance;
 
@@ -387,15 +387,19 @@ namespace Oxide.Plugins
                 if (attacker != null)
                     currentAttack.Attacker = attacker;
 
-                currentAttack.HitInfo = hitInfo;
+                // HitInfo is pooled by the game and reused after the damage hook, so keep a copy of our own.
+                if (currentAttack.HitInfo == null) currentAttack.HitInfo = new HitInfo();
+                currentAttack.HitInfo.CopyFrom(hitInfo);
                 currentAttack.DamageType = victimEntity.lastDamage;
                 _previousAttack[userId] = currentAttack;
             }
             else
             {
+                HitInfo copy = new HitInfo();
+                copy.CopyFrom(hitInfo);
                 _previousAttack[userId] = new AttackInfo
                 {
-                    HitInfo = hitInfo,
+                    HitInfo = copy,
                     Attacker = victimEntity.lastAttacker ?? hitInfo?.Initiator,
                     DamageType = victimEntity.lastDamage
                 };

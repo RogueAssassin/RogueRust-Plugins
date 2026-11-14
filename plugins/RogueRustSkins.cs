@@ -17,12 +17,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustSkins", "RogueAssassin", "2.3.8")]
+    [Info("RogueRustSkins", "RogueAssassin", "2.3.9")]
     [Description("Performance-first Skinner-style native Rust skin browser powered by RogueRust services.")]
     public sealed class RogueRustSkins : RogueRustPlugin
     {
-        private const string PluginVersion = "2.3.8";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 8);
+        private const string PluginVersion = "2.3.9";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 9);
         [RoguePermission]
         private const string PermissionUse = "roguerustskins.use";
         [RoguePermission]
@@ -395,6 +395,10 @@ namespace Oxide.Plugins
             public BrowserView View = BrowserView.MainSkins;
             public int MainPage;
             public List<ulong> Catalogue = new List<ulong>();
+            // Items this browser created. Only these may enter the box or be clicked: an item's text can be set
+            // by players (note.update), so the text prefix alone must never be trusted.
+            public readonly HashSet<ItemId> PreviewUids = new HashSet<ItemId>();
+            public float LastRetarget;
         }
 
         private void Init()
@@ -1179,6 +1183,11 @@ namespace Oxide.Plugins
 
             Item target = player.GetActiveItem();
             if (target?.info == null) { SendReply(player, "Hold the item you want to skin, then use /skin."); return; }
+            OpenItemBrowser(player, target);
+        }
+
+        private void OpenItemBrowser(BasePlayer player, Item target)
+        {
             ItemDefinition canonical = target.info.isRedirectOf ?? target.info;
             SkinBucket bucket;
             if (!_skinsByItem.TryGetValue(canonical.itemid, out bucket) || bucket.Skins.Count <= 1)
@@ -1205,6 +1214,9 @@ namespace Oxide.Plugins
         {
             ItemContainer container = new ItemContainer { entityOwner = _limitedEntity, allowedContents = ItemContainer.ContentsType.Generic };
             container.maxStackSize = 0;
+            // Only the browser's own preview items may enter. Everything in the box is deleted on a page change
+            // or close, so a real item dragged in would be lost; instead the browser switches to skinning it.
+            container.canAcceptItem = (mover, item, slot) => AcceptBrowserItem(state, item);
             container.ServerInitialize(null, PageSize);
             container.GiveUID();
             if (container.uid == default(ItemContainerId)) { container.Kill(); return false; }
@@ -1216,6 +1228,7 @@ namespace Oxide.Plugins
         {
             if (state.Container == null) return;
             ClearPreviewItems(state.Container);
+            state.PreviewUids.Clear();
             RogueSkinSession session;
             if (!_rogue.SkinSessions.TryGet(state.Player.userID, out session)) return;
             IReadOnlyList<ulong> page = session.GetPage();
@@ -1230,7 +1243,8 @@ namespace Oxide.Plugins
                 if (preview == null) continue;
                 preview.name = GetSkinName(skinId);
                 preview.text = "RogueRustSkinsPreview:" + skinId.ToString(CultureInfo.InvariantCulture);
-                if (!preview.MoveToContainer(state.Container, i, false)) preview.Remove();
+                state.PreviewUids.Add(preview.uid);
+                if (!preview.MoveToContainer(state.Container, i, false)) { state.PreviewUids.Remove(preview.uid); preview.Remove(); }
             }
             state.Container.MarkDirty();
             DrawPager(state.Player, session);
@@ -1557,6 +1571,7 @@ namespace Oxide.Plugins
             }
 
             ClearPreviewItems(state.Container);
+            state.PreviewUids.Clear();
             int slot = 0;
             foreach (SkinRequestData request in pending)
             {
@@ -1577,7 +1592,8 @@ namespace Oxide.Plugins
                 if (preview == null) continue;
                 preview.name = "REQUEST " + request.SkinId.ToString(CultureInfo.InvariantCulture);
                 preview.text = "RogueRustSkinRequest:" + request.SkinId.ToString(CultureInfo.InvariantCulture);
-                if (!preview.MoveToContainer(state.Container, slot++, false)) preview.Remove();
+                state.PreviewUids.Add(preview.uid);
+                if (!preview.MoveToContainer(state.Container, slot++, false)) { state.PreviewUids.Remove(preview.uid); preview.Remove(); }
                 if (slot >= PageSize) break;
             }
             state.Container.MarkDirty();
@@ -1648,9 +1664,11 @@ namespace Oxide.Plugins
             BasePlayer player = inventory?.baseEntity;
             BrowserState state;
             if (player == null || !_browsers.TryGetValue(player.userID, out state) || item.parent != state.Container) return null;
+            if (!state.PreviewUids.Contains(item.uid)) return false;
 
             if (item.text.StartsWith("RogueRustSkinRequest:", StringComparison.Ordinal))
             {
+                if (!permission.UserHasPermission(player.UserIDString, PermissionAdmin)) return false;
                 ulong requestId;
                 if (!ulong.TryParse(item.text.Substring("RogueRustSkinRequest:".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out requestId)) return false;
                 NextTick(() =>
@@ -1685,7 +1703,10 @@ namespace Oxide.Plugins
             return false;
         }
 
-        private bool TryApplyItemSkin(BasePlayer targetPlayer, Item item, int canonicalItemId, ulong skinId, BasePlayer skinOwner, out Item resultingItem)
+        // interactive: a skin picked in the browser. The item is re-seated so the client redraws it at once.
+        // Bulk paths (inventory, containers, auto and craft skins) only re-seat a held item and leave the
+        // single player update to the end of the batch.
+        private bool TryApplyItemSkin(BasePlayer targetPlayer, Item item, int canonicalItemId, ulong skinId, BasePlayer skinOwner, out Item resultingItem, bool interactive = false)
         {
             resultingItem = item;
             if (item?.info == null || item.parent == null) return false;
@@ -1714,7 +1735,7 @@ namespace Oxide.Plugins
                     skinId);
                 if (replacement == null) return false;
                 resultingItem = replacement;
-                ForceItemSkinNetworkUpdate(targetPlayer, replacement);
+                ForceItemSkinNetworkUpdate(targetPlayer, replacement, interactive);
                 return true;
             }
 
@@ -1723,14 +1744,16 @@ namespace Oxide.Plugins
             {
                 item.skin = 0UL;
                 if (_config.General.ApplySkinNames) item.name = null;
-                ForceItemSkinNetworkUpdate(targetPlayer, item);
+                if (interactive || IsActiveItem(targetPlayer, item)) ReseatItem(targetPlayer, item);
+                ForceItemSkinNetworkUpdate(targetPlayer, item, interactive);
                 return true;
             }
 
             RogueSkinApplyResult result = _rogue.Skinning.Apply(item, skinId);
             if (!result.Success) return false;
             if (_config.General.ApplySkinNames) item.name = GetSkinName(skinId);
-            ForceItemSkinNetworkUpdate(targetPlayer, item);
+            if (interactive || IsActiveItem(targetPlayer, item)) ReseatItem(targetPlayer, item);
+            ForceItemSkinNetworkUpdate(targetPlayer, item, interactive);
             return true;
         }
 
@@ -1750,7 +1773,7 @@ namespace Oxide.Plugins
             }
 
             Item resultingItem;
-            if (!TryApplyItemSkin(state.Player, target, state.ItemId, skinId, state.Player, out resultingItem))
+            if (!TryApplyItemSkin(state.Player, target, state.ItemId, skinId, state.Player, out resultingItem, true))
             {
                 if (target.skin == skinId && target.info.itemid == state.ItemId)
                     return;
@@ -1763,7 +1786,78 @@ namespace Oxide.Plugins
             SendReply(state.Player, "Applied " + GetSkinName(skinId) + ".");
         }
 
-        private void ForceItemSkinNetworkUpdate(BasePlayer player, Item item)
+        private bool _reseating;
+
+        // The client keeps showing an item's old icon and held model after its skin changes in place. Taking the
+        // item out of its slot and putting it straight back makes the client rebuild it; a held item is equipped
+        // again. Only items in the player's own inventory are touched, and an item that cannot go back into its
+        // slot is given to the player rather than lost.
+        private void ReseatItem(BasePlayer player, Item item)
+        {
+            ItemContainer parent = item?.parent;
+            if (player == null || parent == null || parent.playerOwner != player) return;
+            int position = item.position;
+            bool wasActive = player.svActiveItemID == item.uid;
+            _reseating = true;
+            try
+            {
+                item.RemoveFromContainer();
+                if (!item.MoveToContainer(parent, position, false) && !item.MoveToContainer(parent, -1, false))
+                    player.GiveItem(item);
+                if (wasActive && item.parent != null && item.GetOwnerPlayer() == player)
+                    player.UpdateActiveItem(item.uid);
+            }
+            finally { _reseating = false; }
+        }
+
+        private bool AcceptBrowserItem(BrowserState state, Item item)
+        {
+            if (item == null) return false;
+            if (state != null && state.PreviewUids.Contains(item.uid)) return true;
+            if (state != null && !state.Closing && state.Player != null && item.GetOwnerPlayer() == state.Player)
+            {
+                BasePlayer player = state.Player;
+                NextTick(() => RetargetBrowser(player, item));
+            }
+            return false;
+        }
+
+        // Points an open item browser at another item: the same item type keeps the page, a different type
+        // reloads the browser with that item's skins. Either way the next skin picked goes to the new item.
+        private void RetargetBrowser(BasePlayer player, Item item)
+        {
+            BrowserState state;
+            if (player == null || !_browsers.TryGetValue(player.userID, out state) || state.Closing) return;
+            if (item?.info == null || item.parent == null || item.GetOwnerPlayer() != player || item == state.Target) return;
+            // Scrolling the hotbar passes through several items quickly; settle on one before rebuilding the box.
+            float now = Time.realtimeSinceStartup;
+            if (now - state.LastRetarget < 0.4f)
+            {
+                player.Invoke(() => RetargetBrowser(player, player.GetActiveItem() ?? item), 0.45f);
+                return;
+            }
+            state.LastRetarget = now;
+            ItemDefinition canonical = item.info.isRedirectOf ?? item.info;
+            string itemName = item.info.displayName?.english ?? item.info.shortname;
+            if (state.TargetEntity == null && canonical.itemid == state.ItemId)
+            {
+                state.Target = item;
+                DrawBrowserHeader(state);
+                SendReply(player, "Now skinning the " + itemName + " you selected.");
+                return;
+            }
+            SkinBucket bucket;
+            if (!_skinsByItem.TryGetValue(canonical.itemid, out bucket) || bucket.Skins.Count <= 1)
+                return; // not skinnable: keep the current browser open
+            CloseBrowser(player.userID, true);
+            OpenItemBrowser(player, item);
+        }
+
+        private static bool IsActiveItem(BasePlayer player, Item item) =>
+            player != null && item != null && player.svActiveItemID == item.uid;
+
+        // flushPlayer: send the player's snapshot now. Bulk paths pass false and send one update when done.
+        private void ForceItemSkinNetworkUpdate(BasePlayer player, Item item, bool flushPlayer = true)
         {
             if (item == null) return;
 
@@ -1772,7 +1866,8 @@ namespace Oxide.Plugins
             if (held != null)
             {
                 held.skinID = item.skin;
-                held.SendNetworkUpdateImmediate();
+                if (flushPlayer) held.SendNetworkUpdateImmediate();
+                else held.SendNetworkUpdate();
 
                 if (player != null && player.svActiveItemID == item.uid)
                 {
@@ -1787,7 +1882,7 @@ namespace Oxide.Plugins
             }
 
             item.parent?.MarkDirty();
-            player?.SendNetworkUpdateImmediate();
+            if (flushPlayer) player?.SendNetworkUpdateImmediate();
         }
 
         private bool CanPlayerUseSkin(BasePlayer player, SkinEntry skin)
@@ -2723,6 +2818,7 @@ namespace Oxide.Plugins
 
         private void OnItemAddedToContainer(ItemContainer container, Item item)
         {
+            if (_reseating) return;
             BasePlayer player = container?.playerOwner;
             if (player == null || item?.info == null || !_config.Automation.EnableAutoSkinning) return;
             PlayerSkinData data;
@@ -2737,7 +2833,13 @@ namespace Oxide.Plugins
 
         private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
         {
-            if (player == null || !_config.Automation.EnableSprayCanOverride) return;
+            if (player == null) return;
+            // Switching to another item while an item browser is open points the browser at that item.
+            BrowserState state;
+            if (!_reseating && newItem != null && _browsers.TryGetValue(player.userID, out state) &&
+                state.Target != null && newItem != state.Target)
+                NextTick(() => RetargetBrowser(player, newItem));
+            if (!_config.Automation.EnableSprayCanOverride) return;
             if (newItem?.info?.itemid == SprayCanItemId) _sprayHeld.Add(player.userID);
             else _sprayHeld.Remove(player.userID);
             UpdateSprayInputSubscription();

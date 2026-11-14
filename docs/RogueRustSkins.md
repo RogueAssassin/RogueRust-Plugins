@@ -2,7 +2,7 @@
 
 > Performance-first Skinner-style native Rust skin browser powered by RogueRust services.
 
-**Version:** `2.3.8`  
+**Version:** `2.3.9`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.3.9:** **Security fix:** the skin browser box only accepts and acts on the preview items it created itself. Previously a player could set an item's text with the game's note command, drop it in the box and receive a free item; request previews now also require `roguerustskins.admin`. **Browser:** dragging another of your items onto the box, or switching to it on your hotbar, points the browser at that item (same page for the same item type, that item's skins otherwise) instead of re-skinning the original. A real item can no longer be dropped into the box, where it would have been deleted on the next page change. After you pick a skin, the item is put back into its slot (and re-equipped if held) so the new skin shows at once. Bulk skinning (`/skininv`, containers, auto and craft skins) sends one player update per batch instead of one per item.
 - **2.3.8:** The server-wide `OnItemAddedToContainer` hook is only subscribed while auto skinning is enabled and an online player has Auto Skins on. Until then, items added to loot, furnaces and other containers cost the plugin nothing.
 - **2.3.7:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. The plugin author now shows as RogueAssassin, like every other RogueRust plugin.
 - **2.3.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustSkins.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.

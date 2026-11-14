@@ -2,7 +2,7 @@
 
 > Optimized RogueRust furnace splitting with automatic fuel management, configurable stack distribution, ETA display and responsive UI.
 
-**Version:** `2.1.8`  
+**Version:** `2.1.9`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.1.9:** `CanMoveItem`, which the server calls for every item move, is only subscribed while someone is looting a supported oven, and splitting is limited to supported ovens.
 - **2.1.8:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. Lists in the file now always replace the built-in defaults when the config loads, so an entry you removed stays removed.
 - **2.1.7:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustFurnaceSplitter.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.1.6:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).

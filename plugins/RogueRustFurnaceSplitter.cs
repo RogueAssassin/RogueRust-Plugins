@@ -14,12 +14,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.8")]
+    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.9")]
     [Description("Optimized RogueRust furnace splitting with automatic fuel management, configurable stack distribution, ETA display, and responsive UI.")]
     public sealed class RogueRustFurnaceSplitter : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.8";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
+        private const string PluginVersion = "2.1.9";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 9);
 
         [PluginReference]
         private Plugin UIScaleManager;
@@ -80,6 +80,9 @@ namespace Oxide.Plugins
 
         private void Init()
         {
+            // CanMoveItem fires for every item move on the server. It is only needed while someone with access is
+            // looting a supported oven, so it is subscribed while the looter list is not empty.
+            Unsubscribe(nameof(CanMoveItem));
             LoadLanguageFiles();
             LogInformation("Lifecycle",
             $"{Name} {PluginVersion} initialized. " +
@@ -311,6 +314,17 @@ namespace Oxide.Plugins
             return looters.TryGetValue(oven, out players) ? players : null;
         }
 
+        private bool _moveHookSubscribed;
+
+        private void UpdateMoveHookSubscription()
+        {
+            bool wanted = looters.Count > 0;
+            if (wanted == _moveHookSubscribed) return;
+            _moveHookSubscribed = wanted;
+            if (wanted) Subscribe(nameof(CanMoveItem));
+            else Unsubscribe(nameof(CanMoveItem));
+        }
+
         private void AddLooter(BaseOven oven, BasePlayer player)
         {
             List<BasePlayer> list;
@@ -321,6 +335,7 @@ namespace Oxide.Plugins
             }
             if (!list.Contains(player))
                 list.Add(player);
+            UpdateMoveHookSubscription();
         }
 
         private void RemoveLooter(BaseOven oven, BasePlayer player)
@@ -332,6 +347,7 @@ namespace Oxide.Plugins
             list.Remove(player);
             if (list.Count == 0)
                 looters.Remove(oven);
+            UpdateMoveHookSubscription();
         }
 
         private object CanMoveItem(Item item, PlayerInventory inventory, ItemContainerId targetContainerId, int targetSlotIndex, int splitAmount)
@@ -344,7 +360,7 @@ namespace Oxide.Plugins
                 return null;
 
             BaseOven oven = inventory.loot.entitySource as BaseOven;
-            if (oven == null)
+            if (oven == null || !IsOvenCompatible(oven))
                 return null;
 
             ItemContainer targetContainer = inventory.FindContainer(targetContainerId);
@@ -988,6 +1004,7 @@ namespace Oxide.Plugins
 
             looters.Remove(oven);
             queuedUiUpdateSet.Remove(oven);
+            UpdateMoveHookSubscription();
         }
 
         private PluginConfig.OvenConfig GetOvenConfig(string ovenShortname)
