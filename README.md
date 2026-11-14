@@ -4,7 +4,7 @@ A maintained collection of **Rust server plugins** from **RogueRust, created by 
 
 **Website:** [plugins.roguegaming.com.au](https://plugins.roguegaming.com.au) — the catalogue, documentation and downloads in one place.
 
-**Current plugins require RogueRust 4.4.75 or newer (4.4.77 recommended).** They declare a default level for each permission, which older DLLs do not understand, so they will not compile against them. HeliLeashControl has no permissions and still runs on 4.4.69 or newer.
+**Current plugins require RogueRust 4.4.75 or newer (4.4.78 recommended).** They declare a default level for each permission, which older DLLs do not understand, so they will not compile against them. HeliLeashControl has no permissions and still runs on 4.4.69 or newer.
 
 **Default permissions:** the first time a plugin loads, RogueRust grants its player permissions to Oxide's `default` group, which every player is in, and its admin permissions to the `admin` group. Each permission is granted once. Revoke one and it stays revoked, and a permission you had already granted to a group is left as you set it. Permissions that change what someone sees or get round normal rules (such as `roguerustbuildingmanager.nocost`, `roguerustskins.bypassauth`, `roguerustremovaltool.override` and the DeathNotes opt-outs) are never granted automatically. To turn automatic grants off, set `Auto Grant Default Permissions` to `false` in `oxide/data/RogueRust/permission_defaults.json`. Each plugin's documentation lists the default for every permission.
 
@@ -49,7 +49,7 @@ These plugins are built around the RogueRust extension and shared services. Down
 
 ## Installation
 
-1. Run a supported Rust server with **Oxide** or **Carbon**.
+1. Run a supported Rust server with **Oxide** or **Carbon**, on **Windows or Linux**. The plugins and the RogueRust DLL are the same files on both systems.
 2. Download and install the latest RogueRust DLL from **[Oxide.Ext.RogueRust releases](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases)**.
 3. Download the desired `.cs` from [`plugins/`](plugins/).
 4. Place it in the framework plugin directory (`oxide/plugins` or `carbon/plugins`).
