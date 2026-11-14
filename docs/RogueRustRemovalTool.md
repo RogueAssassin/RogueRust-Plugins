@@ -2,7 +2,7 @@
 
 > RogueRust-native building and deployable removal tool with normal/admin/bulk modes, authorization rules, costs, refunds and integrations.
 
-**Version:** `2.0.6`  
+**Version:** `2.0.7`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.0.7:** Bulk removal removes from the top down, so upper floors go first and nothing collapses in a cascade. A bulk job now logs one summary line instead of one audit line per entity. Single removals are still logged as before.
 - **2.0.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustRemovalTool.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **2.0.5:** The startup log line and the config file now show the plugin's real version (2.0.4 still reported 2.0.3).
 - **2.0.4:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.

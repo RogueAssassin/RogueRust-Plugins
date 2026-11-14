@@ -2,7 +2,7 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
 
-**Version:** `2.5.12`  
+**Version:** `2.5.13`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,6 +12,7 @@
 
 ## Recent Changes
 
+- **2.5.13:** Vanish now uses Rust's own admin invisibility, the same one `debug.invis` uses. Your held item is hidden too, your voice is muted, other players pass through you, and fall effects are silenced. Turrets, traps and NPC scans can't find you, and auto turrets are also blocked from targeting you. Vanish now lasts through reconnects, plugin reloads and server restarts, and your sleeper stays hidden while you're offline. A new **VANISH ON/OFF** button on the dashboard toggles it. Vanished admins with `roguerustadminmenu.vanish.unlock` can open locks. Anti-hack violations are ignored while you're vanished. Rust's own invisible icon is shown next to the RogueRust HUD. In the item browser, toggling a favourite star now updates only that star instead of redrawing all 60 items.
 - **2.5.12:** Fixes the config file growing on every load. Each load added another copy of every entry in Player Info Custom Commands and Admin Commands (a long-running server could have dozens). Existing duplicates are removed automatically on the first load, and the cleanup is logged.
 - **2.5.11:** Unloading (plugin reload or server shutdown) writes only data that is still pending, instead of rewriting every data file. Saved locations and moderation notes are already written when they change. Unload took about 185 ms before.
 - **2.5.10:** The item, convar and permission lists are built the first time an admin opens those screens, not during server start (removes most of the 145 ms `OnServerInitialized` warning). Permission changes from other plugins now only mark the list for a rebuild. The config upgrade is logged once, by RogueRust.
@@ -68,6 +69,7 @@ Designed for Rust servers running **Oxide** or **Carbon** with the RogueRust ext
 - `roguerustadminmenu.audit` — audit history.
 - `roguerustadminmenu.diagnostics` — diagnostics page.
 - `roguerustadminmenu.vanish` — AdminVanishUncharted.
+- `roguerustadminmenu.vanish.unlock` — open locked doors and boxes while vanished.
 - `roguerustadminmenu.vehicles` — vehicle administration/spawning.
 
 Config-defined custom AdminMenu permissions are registered dynamically. Rust server admins can automatically receive access, and the Oxide `admin` group can optionally be granted all AdminMenu permissions.
@@ -81,7 +83,7 @@ Opens the administration workspace. Player-only. Access is controlled by `roguer
 
 ### `/vanish`
 
-Toggles the built-in AdminVanishUncharted module. Requires `roguerustadminmenu.vanish` and the vanish module to be enabled.
+Toggles the built-in AdminVanishUncharted module. Requires `roguerustadminmenu.vanish` and the vanish module to be enabled. The dashboard's **VANISH ON/OFF** button does the same.
 
 ## Configuration
 
@@ -120,8 +122,12 @@ Configuration file: `config/RogueRustAdminMenu.json`
 | Include God Mode While Vanished | `true` |
 | Include Flying / Noclip While Vanished | `true` |
 | Hide Vanished Admins From Normal Player Networking | `true` |
+| Show Rust's Own Invisible Icon While Vanished | `true` |
+| Stay Vanished Through Reconnects, Plugin Reloads And Restarts | `true` |
+| Let Vanished Admins Open Locks (needs roguerustadminmenu.vanish.unlock) | `true` |
+| Ignore Anti-Hack Violations While Vanished | `true` |
 
-Vanish targeting hooks are subscribed only while at least one administrator is vanished. The module blocks normal NPC/Bradley/helicopter targeting and suppresses hostile/metabolism effects while active.
+Hiding uses Rust's native admin invisibility (the same as `debug.invis`). Only spectators can see a vanished admin or their held item, their voice is muted, and their collider stays off. They are removed from AI memory and the server's player grid, so turrets, traps and NPC scans skip them. Each of these is set once when you vanish; nothing runs per frame. Targeting hooks are subscribed only while at least one administrator is vanished. They block NPC, Bradley, helicopter and auto-turret targeting, plus hostility and metabolism effects. Vanished admins are saved to `data/RogueRust/RogueRustAdminMenu/vanished_admins.json`.
 
 ### UI
 

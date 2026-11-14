@@ -12,11 +12,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.6")]
+    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.7")]
     [Description("RogueRust-native building and deployable removal tool.")]
     public sealed class RogueRustRemovalTool : RogueRustPlugin
     {
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 6);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 7);
         private const string UiName = "RogueRustRemovalTool.Hud";
         private const string UiRoot = "RogueRustRemovalTool.UI.Root";
         private const string UiSession = "RogueRustRemovalTool.UI.Session";
@@ -836,7 +836,8 @@ namespace Oxide.Plugins
             if (!_config.Refunds.GiveBeforeDestroy)
                 GiveRefund(player, refund);
 
-            if (_config.Normal.LogSuccessfulRemovals)
+            // Bulk jobs log one summary line instead of one line per entity.
+            if (_config.Normal.LogSuccessfulRemovals && !bulkAuthorised)
                 LogInformation("RemovalAudit",
                     player.UserIDString + " removed " +
                     (entity.ShortPrefabName ?? entity.PrefabName ?? "unknown") +
@@ -1234,6 +1235,8 @@ namespace Oxide.Plugins
             }
 
             List<BaseEntity> entities = CollectBulkEntities(origin, mode);
+            // Top-down: upper floors go first so nothing above loses support and collapses in a cascade.
+            entities.Sort((a, b) => b.transform.position.y.CompareTo(a.transform.position.y));
             if (_config.Bulk.MaximumEntitiesPerOperation > 0 &&
                 entities.Count > _config.Bulk.MaximumEntitiesPerOperation)
                 entities = entities.Take(_config.Bulk.MaximumEntitiesPerOperation).ToList();

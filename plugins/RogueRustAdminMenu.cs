@@ -1,4 +1,4 @@
-// RogueRustAdminMenu v2.5.12 RRAM release build: RRADMIN-2512
+// RogueRustAdminMenu v2.5.13 RRAM release build: RRADMIN-2513
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
 // Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted release build
 #nullable enable annotations
@@ -23,12 +23,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.12")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.13")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.12";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 12);
+    private const string PluginVersion = "2.5.13";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 13);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -41,6 +41,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private const string SavedLocationsDataKey = DataRoot + "/saved_locations";
     private const string ModerationNotesDataKey = DataRoot + "/moderation_notes";
     private const string AuditHistoryDataKey = DataRoot + "/audit_history";
+    private const string VanishedAdminsDataKey = DataRoot + "/vanished_admins";
     private const string LanguageFolder = "RogueRustAdminMenu";
     private const string LanguageFile = "messages.json";
 
@@ -80,6 +81,8 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     [RoguePermission]
     private const string VanishPermission = "roguerustadminmenu.vanish";
     [RoguePermission]
+    private const string VanishUnlockPermission = "roguerustadminmenu.vanish.unlock";
+    [RoguePermission]
     private const string VehiclePermission = "roguerustadminmenu.vehicles";
     [RoguePermission]
     private const string CommandsPermission = "roguerustadminmenu.commands";
@@ -101,14 +104,15 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         UsePermission, PermissionPermission, GroupPermission, ConvarPermission, PluginPermission,
         GivePermission, GiveSelfPermission, PlayerPermission, KickBanPermission, MutePermission,
         BlueprintPermission, HurtPermission, HealPermission, KillPermission, StripPermission,
-        TeleportPermission, VanishPermission, VehiclePermission, CommandsPermission, InventoryPermission, SpectatePermission, NotesPermission, AuditPermission, DiagnosticsPermission, BulkPermission
+        TeleportPermission, VanishPermission, VanishUnlockPermission, VehiclePermission, CommandsPermission, InventoryPermission, SpectatePermission, NotesPermission, AuditPermission, DiagnosticsPermission, BulkPermission
     };
 
     private static readonly string[] VanishHooks =
     {
         nameof(CanBeTargeted), nameof(CanBradleyApcTarget), nameof(CanHelicopterTarget),
         nameof(CanHelicopterStrafeTarget), nameof(OnNpcTarget), nameof(OnNpcAttack),
-        nameof(CanEntityBeHostile), nameof(OnEntityMarkHostile), nameof(OnRunPlayerMetabolism)
+        nameof(CanEntityBeHostile), nameof(OnEntityMarkHostile), nameof(OnRunPlayerMetabolism),
+        nameof(OnTurretTarget), nameof(OnPlayerViolation), nameof(OnPlayerSpectateEnd), nameof(CanUseLockedEntity)
     };
 
     private readonly Dictionary<ulong, Session> _sessions = new();
@@ -125,6 +129,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private readonly HashSet<ulong> _vanishedAdmins = new();
     private readonly HashSet<ulong> _vanishGodMode = new();
     private readonly HashSet<ulong> _vanishFlight = new();
+    private readonly HashSet<ulong> _persistedVanish = new();
     // Read-mostly caches. These are refreshed on lifecycle events or lazily on demand;
     // no background polling is used.
     private readonly List<PluginInfo> _pluginInfoCache = new();
@@ -320,20 +325,34 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
         foreach (BasePlayer player in BasePlayer.activePlayerList)
             RememberPlayer(player, true);
+        RestoreVanishedAdmins();
 
         LogInformation("Lifecycle",
             $"{Name} {PluginVersion} initialized. " +
             $"Config={Name}.json; Data=RogueRust/RogueRustAdminMenu/; Lang=<language>/RogueRust/RogueRustAdminMenu/messages.json");
     }
 
-    private void OnPlayerConnected(BasePlayer player) => RememberPlayer(player, true);
+    private void OnPlayerConnected(BasePlayer player)
+    {
+        RememberPlayer(player, true);
+        if (_persistedVanish.Contains(player.userID) && _config.Vanish.Enabled && _config.Vanish.Persist)
+        {
+            // Rust re-sends its own invisible icon while the player loads in; apply ours after it.
+            NextTick(() => RestoreVanish(player));
+        }
+    }
 
     private void OnPlayerDisconnected(BasePlayer player, string reason)
     {
         RememberPlayer(player, false);
         _sessions.Remove(player.userID);
         _teleportProtectionUntil.Remove(player.userID);
-        if (_vanishedAdmins.Contains(player.userID)) DisableVanish(player, false);
+        if (_vanishedAdmins.Contains(player.userID))
+        {
+            // Persisted vanish keeps the sleeper hidden and protected until the admin returns.
+            if (_config.Vanish.Persist) _vanishFlight.Remove(player.userID);
+            else DisableVanish(player, false);
+        }
         DestroyUi(player, Root);
         DestroyUi(player, Popup);
         DestroyUi(player, Overlay);
@@ -380,7 +399,14 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             DestroyUi(player, Overlay);
             DestroyUi(player, CursorRoot);
             DestroyUi(player, VanishHud);
-            if (_vanishedAdmins.Contains(player.userID)) DisableVanish(player, false);
+            // With persistence on, the admin stays hidden through a reload and is picked up again on load.
+            if (_vanishedAdmins.Contains(player.userID) && !_config.Vanish.Persist) DisableVanish(player, false);
+        }
+        if (_config.Vanish.Persist) SaveData(VanishedAdminsDataKey, _persistedVanish);
+        else
+        {
+            foreach (BasePlayer sleeper in BasePlayer.sleepingPlayerList)
+                if (sleeper != null && _vanishedAdmins.Contains(sleeper.userID)) DisableVanish(sleeper, false);
         }
         _sessions.Clear();
         _teleportProtectionUntil.Clear();
@@ -434,39 +460,49 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         if (player == null)
             return RogueCommandResult.Fail(GetLang("Error.PlayerOnly"));
 
+        return ToggleVanish(player);
+    }
+
+    private RogueCommandResult ToggleVanish(BasePlayer player)
+    {
         if (!_config.Vanish.Enabled)
             return RogueCommandResult.Fail("AdminVanishUncharted is disabled in RogueRustAdminMenu.json.");
-
         if (!HasAdminPermission(player, VanishPermission))
             return RogueCommandResult.Fail(GetLang("Error.NoPermission", player));
 
         if (_vanishedAdmins.Contains(player.userID)) DisableVanish(player, true);
-        else EnableVanish(player);
+        else EnableVanish(player, true);
         return RogueCommandResult.Ok();
     }
 
-    private void EnableVanish(BasePlayer player)
+    // Vanish follows the same steps as Rust's own debug.invis command: isInvisible makes the
+    // server send the player (and their held item) only to spectators, mutes their voice, keeps
+    // their collider off and skips fall effects. The player is also taken out of AI memory and
+    // the server's player grid so turrets, traps and NPC scans never find them. Everything here
+    // runs once per toggle; no timers, per-frame work or CanNetworkTo hook are involved.
+    private void EnableVanish(BasePlayer player, bool notify)
     {
-        if (player == null || !player.IsConnected || !_vanishedAdmins.Add(player.userID)) return;
+        if (player == null || !player.IsConnected || _vanishedAdmins.Contains(player.userID)) return;
+        if (_config.Vanish.Invisible && !player.isInvisible && Interface.CallHook("OnPlayerVanish", player) != null) return;
+        _vanishedAdmins.Add(player.userID);
         _vanish?.SetVanished(player.userID, true, "RogueRustAdminMenu");
         UpdateVanishHookSubscriptions();
+        RememberVanished(player.userID, true);
 
         if (_config.Vanish.GodMode) _vanishGodMode.Add(player.userID);
         RefreshVanishMetabolism(player);
         if (_config.Vanish.Fly)
         {
+            // Tracked even when already flying (e.g. restored after a reload) so leaving vanish lands them.
             _vanishFlight.Add(player.userID);
-            player.SendConsoleCommand("noclip");
+            if (!player.IsFlying) player.SendConsoleCommand("noclip");
         }
 
-        // limitNetworking is the native Rust fast-path used to stop normal player replication.
-        // Reflection keeps this plugin resilient if Facepunch changes field visibility between builds.
-        if (_config.Vanish.Invisible)
-            TrySetPlayerMember(player, "limitNetworking", true);
-        player.SendNetworkUpdateImmediate();
+        if (_config.Vanish.Invisible) ApplyNativeInvisibility(player);
+        SendInvisibleIcon(player);
         DrawVanishHud(player);
         Audit(player, "Enabled AdminVanishUncharted");
-        player.ChatMessage("<color=#C4FF00>Vanish enabled</color> • invisible" + (_config.Vanish.GodMode ? " • god" : string.Empty) + (_config.Vanish.Fly ? " • fly" : string.Empty));
+        if (notify) player.ChatMessage("<color=#C4FF00>Vanish enabled</color>" + (_config.Vanish.Invisible ? " • invisible" : string.Empty) + (_config.Vanish.GodMode ? " • god" : string.Empty) + (_config.Vanish.Fly ? " • fly" : string.Empty));
     }
 
     private void DisableVanish(BasePlayer player, bool notify)
@@ -474,19 +510,129 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         if (player == null || !_vanishedAdmins.Remove(player.userID)) return;
         _vanish?.SetVanished(player.userID, false, "RogueRustAdminMenu");
         UpdateVanishHookSubscriptions();
-        TrySetPlayerMember(player, "limitNetworking", false);
+        RememberVanished(player.userID, false);
 
-        if (_vanishFlight.Remove(player.userID) && player.IsConnected) player.SendConsoleCommand("noclip");
+        if (player.isInvisible) RemoveNativeInvisibility(player);
+        if (_vanishFlight.Remove(player.userID) && player.IsConnected && player.IsFlying) player.SendConsoleCommand("noclip");
         _vanishGodMode.Remove(player.userID);
         RefreshVanishMetabolism(player);
-        if (player.IsConnected) player.SendNetworkUpdateImmediate();
+        if (player.IsConnected)
+        {
+            player.Command("debug.setinvis_ui", false);
+            player.SendNetworkUpdateImmediate();
+        }
         DestroyUi(player, VanishHud);
         Audit(player, "Disabled AdminVanishUncharted");
         if (notify && player.IsConnected) player.ChatMessage("<color=#C4FF00>Vanish disabled</color> • normal visibility restored");
     }
 
+    private static void ApplyNativeInvisibility(BasePlayer player)
+    {
+        if (!player.isInvisible && player.net?.group != null)
+        {
+            // Remove the player from every client that can currently see them. Spectators keep them.
+            List<Network.Connection> hideFrom = Pool.Get<List<Network.Connection>>();
+            foreach (Network.Connection subscriber in player.net.group.subscribers)
+            {
+                if (subscriber == player.net.connection) continue;
+                BasePlayer viewer = subscriber.player as BasePlayer;
+                if (viewer != null && player.ShouldNetworkTo(viewer) && !viewer.IsSpectating()) hideFrom.Add(subscriber);
+            }
+            foreach (Network.Connection connection in hideFrom) player.DestroyOnClient(connection);
+            Pool.FreeUnmanaged(ref hideFrom);
+            if (ServerOcclusion.OcclusionEnabled) player.OcclusionMakeSubscribersForget();
+        }
+
+        player.isInvisible = true;
+        if (player.IsConnected && !BasePlayer.invisPlayers.Contains(player)) BasePlayer.invisPlayers.Add(player);
+        player.DisablePlayerCollider();
+        Rust.Ai.SimpleAIMemory.AddIgnorePlayer(player);
+        BaseEntity.Query.Server.RemovePlayer(player);
+        if (player.IsConnected) player.SendVoiceMutedByInvisibility();
+        Interface.CallHook("OnPlayerVanished", player);
+    }
+
+    private static void RemoveNativeInvisibility(BasePlayer player)
+    {
+        player.isInvisible = false;
+        BasePlayer.invisPlayers.Remove(player);
+        player.EnablePlayerCollider();
+        if (!ServerOcclusion.OcclusionEnabled && player.net?.group != null)
+        {
+            foreach (Network.Connection subscriber in player.net.group.subscribers)
+            {
+                BasePlayer viewer = subscriber.player as BasePlayer;
+                if (viewer != null && viewer != player && player.ShouldNetworkTo(viewer)) player.SendAsSnapshotWithChildren(viewer);
+            }
+        }
+        Rust.Ai.SimpleAIMemory.RemoveIgnorePlayer(player);
+        BaseEntity.Query.Server.RemovePlayer(player);
+        BaseEntity.Query.Server.AddPlayer(player);
+        if (player.IsConnected) player.SendVoiceMutedByInvisibility();
+        Interface.CallHook("OnPlayerUnvanished", player);
+    }
+
+    private void SendInvisibleIcon(BasePlayer player)
+    {
+        if (player != null && player.IsConnected)
+            player.Command("debug.setinvis_ui", _config.Vanish.NativeIcon && player.isInvisible);
+    }
+
+    // The vanished set is saved so an administrator who disconnects, or is online for a plugin
+    // reload or server restart, comes back vanished and their sleeper never shows in between.
+    private void RememberVanished(ulong userId, bool vanished)
+    {
+        if (!_config.Vanish.Persist) return;
+        bool changed = vanished ? _persistedVanish.Add(userId) : _persistedVanish.Remove(userId);
+        if (changed) SaveDataInBackground(VanishedAdminsDataKey, _persistedVanish);
+    }
+
+    private void RestoreVanishedAdmins()
+    {
+        _persistedVanish.Clear();
+        foreach (ulong id in LoadData(VanishedAdminsDataKey, () => new List<ulong>())) _persistedVanish.Add(id);
+        if (!_config.Vanish.Enabled || !_config.Vanish.Persist)
+        {
+            if (_persistedVanish.Count != 0) { _persistedVanish.Clear(); SaveData(VanishedAdminsDataKey, _persistedVanish); }
+            return;
+        }
+
+        foreach (BasePlayer player in BasePlayer.activePlayerList.ToArray()) RestoreVanish(player);
+        foreach (BasePlayer sleeper in BasePlayer.sleepingPlayerList)
+        {
+            if (sleeper == null || !_persistedVanish.Contains(sleeper.userID) || !_vanishedAdmins.Add(sleeper.userID)) continue;
+            // Offline administrators stay hidden and untargetable until they reconnect.
+            if (_config.Vanish.GodMode) _vanishGodMode.Add(sleeper.userID);
+            if (_config.Vanish.Invisible) ApplyNativeInvisibility(sleeper);
+        }
+        UpdateVanishHookSubscriptions();
+    }
+
+    private void RestoreVanish(BasePlayer player)
+    {
+        if (player == null || !player.IsConnected || !_persistedVanish.Contains(player.userID)) return;
+        if (!HasAdminPermission(player, VanishPermission))
+        {
+            // Permission was removed while they were away: bring them back into view.
+            if (_vanishedAdmins.Contains(player.userID)) DisableVanish(player, true);
+            else
+            {
+                RememberVanished(player.userID, false);
+                if (player.isInvisible) RemoveNativeInvisibility(player);
+            }
+            return;
+        }
+
+        // A hidden sleeper is handed over to an online vanish (HUD, icon, fly and god mode).
+        _vanishedAdmins.Remove(player.userID);
+        _vanishGodMode.Remove(player.userID);
+        EnableVanish(player, false);
+        if (_vanishedAdmins.Contains(player.userID)) player.ChatMessage("<color=#C4FF00>Vanish restored</color> • you are still hidden");
+    }
+
     private void DrawVanishHud(BasePlayer player)
     {
+        if (player == null || !player.IsConnected) return;
         DestroyUi(player, VanishHud);
         CuiElementContainer ui = new();
         string panel = ui.Add(new CuiPanel
@@ -496,12 +642,11 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         }, "Overlay", VanishHud);
         ui.Add(new CuiLabel
         {
-            Text = { Text = "VANISH" + (_config.Vanish.GodMode ? "  •  GOD" : string.Empty) + (_config.Vanish.Fly ? "  •  FLY" : string.Empty) + "  •  HIDDEN", FontSize = 11, Align = TextAnchor.MiddleCenter, Color = "0.768627 1 0 1" },
+            Text = { Text = "VANISH" + (_config.Vanish.GodMode ? "  •  GOD" : string.Empty) + (_config.Vanish.Fly ? "  •  FLY" : string.Empty) + (_config.Vanish.Invisible ? "  •  HIDDEN" : string.Empty), FontSize = 11, Align = TextAnchor.MiddleCenter, Color = "0.768627 1 0 1" },
             RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" }
         }, panel);
         CuiHelper.AddUi(player, ui);
     }
-
 
     private static void RefreshVanishMetabolism(BasePlayer player)
     {
@@ -593,18 +738,31 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         return player != null && _vanishedAdmins.Contains(player.userID) ? true : null;
     }
 
-    private static void TrySetPlayerMember(BasePlayer player, string name, bool value)
+    private object? OnTurretTarget(AutoTurret turret, BaseCombatEntity target)
     {
-        try
-        {
-            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
-            var field = typeof(BasePlayer).GetField(name, flags);
-            if (field != null && field.FieldType == typeof(bool)) { field.SetValue(player, value); return; }
-            var property = typeof(BasePlayer).GetProperty(name, flags);
-            if (property != null && property.CanWrite && property.PropertyType == typeof(bool)) property.SetValue(player, value, null);
-        }
-        catch { }
+        BasePlayer player = target as BasePlayer;
+        return player != null && _vanishedAdmins.Contains(player.userID) ? true : null;
     }
+
+    // Flying through walls while vanished would otherwise collect noclip/flyhack violations.
+    private object? OnPlayerViolation(BasePlayer player, AntiHackType type, float amount)
+        => player != null && _config.Vanish.IgnoreAntiHack && _vanishedAdmins.Contains(player.userID) ? true : null;
+
+    // Rust re-adds a player to the target grid when they stop spectating, so take them out again.
+    private void OnPlayerSpectateEnd(BasePlayer player, string filter)
+    {
+        if (player == null || !_config.Vanish.Invisible || !_vanishedAdmins.Contains(player.userID)) return;
+        NextTick(() =>
+        {
+            if (player == null || player.IsDestroyed || !player.isInvisible) return;
+            BaseEntity.Query.Server.RemovePlayer(player);
+            player.DisablePlayerCollider();
+        });
+    }
+
+    // Locks use the hook's bool directly: true opens, null keeps the normal lock rules.
+    private object? CanUseLockedEntity(BasePlayer player, BaseLock baseLock)
+        => player != null && _config.Vanish.UnlockWhileVanished && _vanishedAdmins.Contains(player.userID) && HasAdminPermission(player, VanishUnlockPermission) ? true : null;
 
     #region Configuration
 
@@ -824,6 +982,14 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         public bool Fly { get; set; } = true;
         [JsonProperty("Hide Vanished Admins From Normal Player Networking")]
         public bool Invisible { get; set; } = true;
+        [JsonProperty("Show Rust's Own Invisible Icon While Vanished")]
+        public bool NativeIcon { get; set; } = true;
+        [JsonProperty("Stay Vanished Through Reconnects, Plugin Reloads And Restarts")]
+        public bool Persist { get; set; } = true;
+        [JsonProperty("Let Vanished Admins Open Locks (needs roguerustadminmenu.vanish.unlock)")]
+        public bool UnlockWhileVanished { get; set; } = true;
+        [JsonProperty("Ignore Anti-Hack Violations While Vanished")]
+        public bool IgnoreAntiHack { get; set; } = true;
     }
 
     public sealed class UiSettings
@@ -1492,6 +1658,19 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             string kernelState = Rogue.Lifecycle.State.ToString();
             string healthColor = Rogue.Dependencies.UnsatisfiedRequiredCount == 0 ? _config.UI.Theme.Success : _config.UI.Theme.Warning;
             ui.Badge("rram.dashboard.kernel", "rram.body", Rect(0.250f, 0.172f, 0.455f, 0.218f), "KERNEL " + kernelState, healthColor);
+        }
+
+        if (_config.Vanish.Enabled && HasAdminPermission(s.Player, VanishPermission))
+        {
+            bool vanished = _vanishedAdmins.Contains(s.Player.userID);
+            string vanishCb = UiActionCallback(s.Player, "dashboard.vanish", () =>
+            {
+                RogueCommandResult result = ToggleVanish(s.Player);
+                if (!result.Success) Toast(s.Player, "Vanish", result.Message, _config.UI.Theme.Warning);
+                Draw(s);
+            });
+            ui.Button("rram.dashboard.vanish", "rram.body", Rect(0.760f, 0.165f, 0.940f, 0.225f), vanished ? "VANISH  ON" : "VANISH  OFF", vanishCb,
+                vanished ? _config.UI.Theme.Success : _config.UI.Theme.SurfaceAlt, 10);
         }
     }
 
@@ -2402,7 +2581,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     }
 
     // Intentionally no CanNetworkTo hook here. Rust calls it on the networking hot path and it
-    // caused visible flight stutter. limitNetworking is toggled once on vanish transitions instead.
+    // caused visible flight stutter. Rust's native isInvisible is set once on vanish transitions instead.
 
     private object? OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
     {
@@ -3379,7 +3558,8 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             string give1000Cb = UiActionCallback(s.Player, $"give.1000.{s.Page}.{i}", () => GiveItemAmount(s, item, 1000));
             string giveStackCb = UiActionCallback(s.Player, $"give.stack.{s.Page}.{i}", () => GiveItemAmount(s, item, Math.Max(1, item.stackable)));
             string bpCb = UiActionCallback(s.Player, $"give.bp.{s.Page}.{i}", () => DrawGiveOverlay(s, item, true));
-            string favCb = UiActionCallback(s.Player, $"give.fav.{s.Page}.{i}", () => { if (!s.FavouriteGiveItems.Add(item.shortname)) s.FavouriteGiveItems.Remove(item.shortname); Draw(s); });
+            string favCb = string.Empty;
+            favCb = UiActionCallback(s.Player, $"give.fav.{s.Page}.{i}", () => ToggleGiveFavourite(s, item, card, favCb));
             ui.Panel(card, "rram.body", Rect(left, top - 0.116f, left + 0.069f, top), _config.UI.Theme.SurfaceAlt);
             // Keep Give visually consistent with RogueRustSkinBox: prefer the cached
             // ImageLibrary PNG when available, then fall back to Rust's native ItemId icon.
@@ -3417,6 +3597,25 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         DrawGivePager(ui, s, items.Count);
         if (_config.UI.UseItemImages || _config.UI.UseNativeItemIcons)
             ui.Label("rram.give.imagehint", "rram.body", Rect(0.66f, 0.018f, 0.94f, 0.052f), "Native Rust icons • ImageLibrary fallback", 8, _config.UI.Theme.MutedText, "MiddleRight");
+    }
+
+    // A favourite toggle only changes one star, so only that star is sent (a few hundred bytes)
+    // instead of redrawing all 60 cards. The FAVS filter still needs the full page, since the list changes.
+    private void ToggleGiveFavourite(Session s, ItemDefinition item, string card, string favCb)
+    {
+        if (!s.FavouriteGiveItems.Add(item.shortname)) s.FavouriteGiveItems.Remove(item.shortname);
+        if (s.GiveFavouritesOnly || s.Menu != MenuType.Give) { Draw(s); return; }
+
+        string name = card + ".fav";
+        DestroyUi(s.Player, name);
+        CuiElementContainer star = new();
+        star.Add(new CuiButton
+        {
+            Button = { Command = favCb, Color = "0 0 0 0" },
+            RectTransform = { AnchorMin = "0.83 0.8", AnchorMax = "0.985 0.965" },
+            Text = { Text = s.FavouriteGiveItems.Contains(item.shortname) ? "★" : "☆", FontSize = 9, Align = TextAnchor.MiddleCenter, Color = _config.UI.Theme.Text }
+        }, card, name);
+        CuiHelper.AddUi(s.Player, star);
     }
 
     private void ShowNativeGiveIcons(Session s)

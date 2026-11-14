@@ -10,13 +10,13 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustGridPower", "RogueAssassin", "2.0.8")]
+    [Info("RogueRustGridPower", "RogueAssassin", "2.0.9")]
     [Description("RogueRust GridPower: automatic world streetlights plus output control for Rust's native power-grid access points.")]
     public sealed class RogueRustGridPower : RogueRustPlugin
     {
         #region Constants
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 8);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 9);
         private static readonly VersionNumber MinimumBackend = new VersionNumber(4, 4, 56);
 
         [RoguePermission]
@@ -409,6 +409,8 @@ namespace Oxide.Plugins
         private bool _serverReady;
         private bool _gameTipVisible;
         private bool _nativeGridApplied;
+        // Players currently holding a wooden ladder. OnPlayerInput is subscribed only while this is non-empty.
+        private readonly HashSet<ulong> _ladderHolders = new HashSet<ulong>();
 
         #endregion
 
@@ -416,8 +418,11 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            // Only pay for OnPlayerInput (every input tick, every player) when ladders are enabled.
+            // OnPlayerInput runs every input tick for every player, so it is only subscribed while
+            // someone is actually holding a ladder (tracked through OnActiveItemChanged).
             Unsubscribe(nameof(OnPlayerInput));
+            if (_config == null || !_config.Ladders.Enabled)
+                Unsubscribe(nameof(OnActiveItemChanged));
 
             LogInformation("Lifecycle", Name + " v" + CurrentVersion + " initialized using RogueRust services.");
 
@@ -463,7 +468,11 @@ namespace Oxide.Plugins
             });
 
             if (_config.Ladders.Enabled)
-                Subscribe(nameof(OnPlayerInput));
+            {
+                Subscribe(nameof(OnActiveItemChanged));
+                foreach (BasePlayer player in BasePlayer.activePlayerList)
+                    TrackLadderHolder(player, player.GetActiveItem());
+            }
 
             // Keep OnServerInitialized light; streetlights and native grid policy start next slice.
             _startupTimer?.Destroy();
@@ -872,15 +881,48 @@ namespace Oxide.Plugins
 
         #region Hooks
 
-        // Subscribed only while ladders are enabled (see Init / OnServerInitialized).
+        private void OnActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
+        {
+            if (player != null && _config.Ladders.Enabled)
+                TrackLadderHolder(player, newItem);
+        }
+
+        private void OnPlayerDisconnected(BasePlayer player, string reason)
+        {
+            if (player != null && _ladderHolders.Remove(player.userID))
+                UpdateLadderInputSubscription();
+        }
+
+        private void TrackLadderHolder(BasePlayer player, Item item)
+        {
+            bool holding = IsLadderItem(item);
+            bool changed = holding ? _ladderHolders.Add(player.userID) : _ladderHolders.Remove(player.userID);
+            if (changed)
+                UpdateLadderInputSubscription();
+        }
+
+        private void UpdateLadderInputSubscription()
+        {
+            if (_ladderHolders.Count > 0) Subscribe(nameof(OnPlayerInput));
+            else Unsubscribe(nameof(OnPlayerInput));
+        }
+
+        private static bool IsLadderItem(Item item)
+            => item != null && item.info != null && string.Equals(item.info.shortname, "ladder.wooden.wall", StringComparison.OrdinalIgnoreCase);
+
+        // Subscribed only while a player is holding a ladder (see TrackLadderHolder).
         private void OnPlayerInput(BasePlayer player, InputState input)
         {
             if (!_serverReady || player == null || input == null || !input.WasJustPressed(BUTTON.FIRE_PRIMARY))
                 return;
 
             Item item = player.GetActiveItem();
-            if (item == null || item.info == null || !string.Equals(item.info.shortname, "ladder.wooden.wall", StringComparison.OrdinalIgnoreCase))
+            if (!IsLadderItem(item))
+            {
+                // The last ladder was used up or moved without an active-item change; stop listening.
+                TrackLadderHolder(player, item);
                 return;
+            }
 
             if (!(player.GetHeldEntity() is Planner) || _gridPower == null || !_config.Ladders.Enabled)
                 return;
@@ -1266,6 +1308,7 @@ namespace Oxide.Plugins
 
         private void Unload()
         {
+            _ladderHolders.Clear();
             DiagnosticLog("Lifecycle",
                 "Unloading. ServerReady=" + _serverReady + ", LastDesiredState=" +
                 (_lastDesiredState.HasValue ? (_lastDesiredState.Value ? "ON" : "OFF") : "Unknown") + ".");
