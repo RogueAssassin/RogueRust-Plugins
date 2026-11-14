@@ -11,7 +11,7 @@ using Oxide.Ext.RogueRust.SDK;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustCustomPlayerMessages", "RogueAssassin", "3.1.8")]
+    [Info("RogueRustCustomPlayerMessages", "RogueAssassin", "3.1.9")]
     [Description("Custom connect/disconnect messages and public player-list commands powered by RogueRust.")]
     public sealed class RogueRustCustomPlayerMessages : RogueRustPlugin
     {
@@ -27,9 +27,9 @@ namespace Oxide.Plugins
         private const string DefaultLanguage = "en";
         private const string DefaultCountryLookupUrl = "http://ip-api.com/json/{0}?fields=status,message,country,countryCode";
 
-        private const string PluginVersion = "3.1.8";
+        private const string PluginVersion = "3.1.9";
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 8);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 9);
 
         private Configuration _config;
         private CountryCacheStore _cacheStore;
@@ -230,12 +230,15 @@ namespace Oxide.Plugins
         }
 
         // Mono compiles each method the first time it runs, so the first join after a load paid for compiling
-        // the address parsing, hashing, permission and message code (about 20 ms on one call). Running that
-        // code once here, with no broadcast, moves the cost to load time.
+        // the join code (about 20 ms on one call). Most of that is Oxide's chat formatter, which
+        // Server.Broadcast runs on every message and which builds its lexer and translation tables on first
+        // use. Running the same code once here, with nothing sent, moves the cost to load time.
         private void WarmJoinPath()
         {
             ExecuteProtected(delegate
             {
+                Oxide.Core.Libraries.Covalence.Formatter.ToUnity("<color=#ffffff>[b]warm[/b]</color>");
+                lang.GetLanguage("0");
                 Rogue.Permissions.Has("0", HiddenPermission);
                 IPAddress address;
                 if (TryGetAddress("127.0.0.1:0", out address))

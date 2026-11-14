@@ -4,7 +4,7 @@ A maintained collection of **Rust server plugins** from **RogueRust, created by 
 
 **Website:** [plugins.roguegaming.com.au](https://plugins.roguegaming.com.au) — the catalogue, documentation and downloads in one place.
 
-**Current plugins require RogueRust 4.4.75 or newer (4.4.76 recommended).** They declare a default level for each permission, which older DLLs do not understand, so they will not compile against them. HeliLeashControl has no permissions and still runs on 4.4.69 or newer.
+**Current plugins require RogueRust 4.4.75 or newer (4.4.77 recommended).** They declare a default level for each permission, which older DLLs do not understand, so they will not compile against them. HeliLeashControl has no permissions and still runs on 4.4.69 or newer.
 
 **Default permissions:** the first time a plugin loads, RogueRust grants its player permissions to Oxide's `default` group, which every player is in, and its admin permissions to the `admin` group. Each permission is granted once. Revoke one and it stays revoked, and a permission you had already granted to a group is left as you set it. Permissions that change what someone sees or get round normal rules (such as `roguerustbuildingmanager.nocost`, `roguerustskins.bypassauth`, `roguerustremovaltool.override` and the DeathNotes opt-outs) are never granted automatically. To turn automatic grants off, set `Auto Grant Default Permissions` to `false` in `oxide/data/RogueRust/permission_defaults.json`. Each plugin's documentation lists the default for every permission.
 
@@ -18,7 +18,7 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 | **[RogueRustBlueprintManager](docs/RogueRustBlueprintManager.md)** | `2.1.9` | Blueprint management with legacy permission/config compatibility. | [Source](plugins/RogueRustBlueprintManager.cs) |
 | **[RogueRustBuildingManager](docs/RogueRustBuildingManager.md)** | `1.2.4` | Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them. | [Source](plugins/RogueRustBuildingManager.cs) |
 | **[RogueRustCraftingController](docs/RogueRustCraftingController.md)** | `2.1.7` | Crafting control with RogueRust integration. | [Source](plugins/RogueRustCraftingController.cs) |
-| **[RogueRustCustomPlayerMessages](docs/RogueRustCustomPlayerMessages.md)** | `3.1.8` | Custom connect/disconnect messages and player-list commands. | [Source](plugins/RogueRustCustomPlayerMessages.cs) |
+| **[RogueRustCustomPlayerMessages](docs/RogueRustCustomPlayerMessages.md)** | `3.1.9` | Custom connect/disconnect messages and player-list commands. | [Source](plugins/RogueRustCustomPlayerMessages.cs) |
 | **[RogueRustDayNightScheduler](docs/RogueRustDayNightScheduler.md)** | `3.1.8` | Day/night duration scheduling and protected time controls. | [Source](plugins/RogueRustDayNightScheduler.cs) |
 | **[RogueRustDeathNotes](docs/RogueRustDeathNotes.md)** | `2.5.10` | Death notification engine with native GUI output and player controls. | [Source](plugins/RogueRustDeathNotes.cs) |
 | **[RogueRustEventDirector](docs/RogueRustEventDirector.md)** | `1.4.6` | Managed Rust world-event scheduling with vanilla-spawn suppression (including Bradley), dry-land airdrop and crate placement, Bradley and airdrop map markers, startup staggering, randomized GameTips and CH47 crate direction. | [Source](plugins/RogueRustEventDirector.cs) |
