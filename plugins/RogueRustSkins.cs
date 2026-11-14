@@ -17,12 +17,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustSkins", "RogueAssassin", "2.3.7")]
+    [Info("RogueRustSkins", "RogueAssassin", "2.3.8")]
     [Description("Performance-first Skinner-style native Rust skin browser powered by RogueRust services.")]
     public sealed class RogueRustSkins : RogueRustPlugin
     {
-        private const string PluginVersion = "2.3.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 7);
+        private const string PluginVersion = "2.3.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 8);
         [RoguePermission]
         private const string PermissionUse = "roguerustskins.use";
         [RoguePermission]
@@ -402,6 +402,9 @@ namespace Oxide.Plugins
             // OnPlayerInput runs for every connected player every server tick. It is only needed while
             // someone is actually holding a spray can, so it is subscribed on demand (see OnActiveItemChanged).
             Unsubscribe(nameof(OnPlayerInput));
+            // OnItemAddedToContainer fires for every item added to any container on the server. It is only
+            // needed while an online player has auto skins on (see UpdateAutoSkinSubscription).
+            Unsubscribe(nameof(OnItemAddedToContainer));
             LogInformation("Lifecycle",
             $"{Name} {PluginVersion} initialized. " +
             $"Config={Name}.json; Data=RogueRust/RogueRustSkins/; Lang=None");
@@ -1602,7 +1605,7 @@ namespace Oxide.Plugins
             if (player == null || !_browsers.TryGetValue(player.userID, out state) || arg.Args == null || arg.Args.Length == 0) return;
             PlayerSkinData data = GetPlayerData(player);
             string option = arg.Args[0].ToString().ToLowerInvariant();
-            if (option == "auto" && permission.UserHasPermission(player.UserIDString, PermissionAuto)) data.AutoSkin = !data.AutoSkin;
+            if (option == "auto" && permission.UserHasPermission(player.UserIDString, PermissionAuto)) { data.AutoSkin = !data.AutoSkin; UpdateAutoSkinSubscription(0UL); }
             else if (option == "craft" && permission.UserHasPermission(player.UserIDString, PermissionCraft)) data.CraftSkin = !data.CraftSkin;
             else if (option == "team" && permission.UserHasPermission(player.UserIDString, PermissionTeam)) data.BlockTeamSkins = !data.BlockTeamSkins;
             MarkPlayerDataDirty();
@@ -2023,6 +2026,7 @@ namespace Oxide.Plugins
                 if (loaded != null) foreach (KeyValuePair<ulong, PlayerSkinData> pair in loaded) _playerData[pair.Key] = pair.Value;
             }
             catch (Exception ex) { PrintWarning("Could not load player skin sets: " + ex.Message); }
+            UpdateAutoSkinSubscription(0UL);
         }
 
         private void CleanupInactivePlayerData()
@@ -2109,6 +2113,7 @@ namespace Oxide.Plugins
                     data.SelectedSet = requestedSet;
             }
             data.AutoSkin = !data.AutoSkin;
+            UpdateAutoSkinSubscription(0UL);
             MarkPlayerDataDirty();
             SendReply(player, "Auto skin " + (data.AutoSkin ? "enabled." : "disabled."));
         }
@@ -2739,6 +2744,36 @@ namespace Oxide.Plugins
         }
 
         private bool _sprayInputSubscribed;
+        private bool _autoSkinSubscribed;
+
+        // Subscribes OnItemAddedToContainer only while auto skinning is enabled and an online player uses it.
+        // Runs on connect, disconnect, toggles and data load, so the per-item hook costs nothing otherwise.
+        private void UpdateAutoSkinSubscription(ulong leavingPlayerId)
+        {
+            bool wanted = false;
+            if (_config != null && _config.Automation.EnableAutoSkinning)
+            {
+                foreach (BasePlayer online in BasePlayer.activePlayerList)
+                {
+                    PlayerSkinData data;
+                    if (online != null && online.userID != leavingPlayerId &&
+                        _playerData.TryGetValue(online.userID, out data) && data != null && data.AutoSkin)
+                    {
+                        wanted = true;
+                        break;
+                    }
+                }
+            }
+            if (wanted == _autoSkinSubscribed) return;
+            _autoSkinSubscribed = wanted;
+            if (wanted) Subscribe(nameof(OnItemAddedToContainer));
+            else Unsubscribe(nameof(OnItemAddedToContainer));
+        }
+
+        private void OnPlayerConnected(BasePlayer player)
+        {
+            if (player != null) UpdateAutoSkinSubscription(0UL);
+        }
 
         private void UpdateSprayInputSubscription()
         {
@@ -2793,6 +2828,7 @@ namespace Oxide.Plugins
             _sprayHeld.Remove(player.userID);
             _sprayInputTimes.Remove(player.userID);
             UpdateSprayInputSubscription();
+            UpdateAutoSkinSubscription(player.userID);
             CloseBrowser(player.userID, false);
         }
 

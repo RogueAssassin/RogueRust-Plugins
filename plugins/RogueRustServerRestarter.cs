@@ -9,14 +9,14 @@ using Oxide.Game.Rust.Cui;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.6")]
+    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.7")]
     [Description("Schedules safe server restarts with RogueRust runtime protection, chat, game-tip, and GUI warnings.")]
     public sealed class RogueRustServerRestarter : RogueRustPlugin
     {
         private const string UiName = "ServerRestarter.UI";
         private const ulong ChatIconSteamId = 76561198641042212UL;
-        private const string PluginVersion = "2.1.6";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
+        private const string PluginVersion = "2.1.7";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
         private Configuration _config;
 
         [RoguePermission]
@@ -28,6 +28,7 @@ namespace Oxide.Plugins
         private readonly HashSet<ulong> _testCountdowns = new HashSet<ulong>();
         private int _scheduleGeneration;
         private bool _countdownRunning;
+        private IRogueScheduledJob _liveCountdownJob;
         private DateTime _restartTime;
         private bool _hasScheduledRestart;
         private bool _isRestarting;
@@ -400,6 +401,7 @@ namespace Oxide.Plugins
         {
             _scheduleGeneration++;
             _countdownRunning = false;
+            StopLiveCountdownJob();
             DestroyUiForAll();
         }
 
@@ -488,11 +490,24 @@ namespace Oxide.Plugins
 
             _countdownRunning = true;
             UpdateLiveCountdown(generation);
-            Repeat(TimeSpan.FromSeconds(1), delegate
+            StopLiveCountdownJob();
+            _liveCountdownJob = Repeat(TimeSpan.FromSeconds(1), delegate
             {
-                if (!_countdownRunning || generation != _scheduleGeneration) return;
+                if (!_countdownRunning || generation != _scheduleGeneration)
+                {
+                    StopLiveCountdownJob();
+                    return;
+                }
                 ExecuteProtected(delegate { UpdateLiveCountdown(generation); }, "LiveCountdown");
             }, "serverrestart-live-countdown");
+        }
+
+        // The 1-second countdown job is cancelled when the countdown ends, so it does not keep firing.
+        private void StopLiveCountdownJob()
+        {
+            if (_liveCountdownJob == null) return;
+            _liveCountdownJob.Cancel();
+            _liveCountdownJob = null;
         }
 
         private void UpdateLiveCountdown(int generation)
@@ -501,6 +516,7 @@ namespace Oxide.Plugins
             if (remaining.TotalSeconds <= 0)
             {
                 _countdownRunning = false;
+                StopLiveCountdownJob();
                 DestroyUiForAll();
                 return;
             }
@@ -648,13 +664,19 @@ namespace Oxide.Plugins
             string testMessage = "Server restart test: " + remaining + " seconds.";
             SendRestartChat(player, testMessage);
             ShowUi(player, "Test countdown: " + remaining + " seconds", "M_DEFAULT");
-            Repeat(TimeSpan.FromSeconds(1), delegate
+            IRogueScheduledJob testJob = null;
+            testJob = Repeat(TimeSpan.FromSeconds(1), delegate
             {
-                if (!_testCountdowns.Contains(playerId)) return;
+                if (!_testCountdowns.Contains(playerId))
+                {
+                    if (testJob != null) testJob.Cancel();
+                    return;
+                }
                 if (player == null || !player.IsConnected || --remaining <= 0)
                 {
                     if (player != null) CuiHelper.DestroyUi(player, UiName);
                     _testCountdowns.Remove(playerId);
+                    if (testJob != null) testJob.Cancel();
                     return;
                 }
                 ShowUi(player, "Test countdown: " + remaining + " seconds", "M_DEFAULT");

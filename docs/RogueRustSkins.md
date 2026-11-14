@@ -2,7 +2,7 @@
 
 > Performance-first Skinner-style native Rust skin browser powered by RogueRust services.
 
-**Version:** `2.3.7`  
+**Version:** `2.3.8`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.3.8:** The server-wide `OnItemAddedToContainer` hook is only subscribed while auto skinning is enabled and an online player has Auto Skins on. Until then, items added to loot, furnaces and other containers cost the plugin nothing.
 - **2.3.7:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. The plugin author now shows as RogueAssassin, like every other RogueRust plugin.
 - **2.3.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustSkins.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
 - **2.3.5:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).

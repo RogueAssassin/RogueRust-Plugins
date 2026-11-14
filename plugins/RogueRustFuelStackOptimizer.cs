@@ -11,14 +11,14 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.6")]
+    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.7")]
     [Description("Optimises dedicated Rust fuel containers through cached discovery using native Oxide/Carbon hooks.")]
     public sealed class RogueRustFuelStackOptimizer : RogueRustPlugin
     {
         [RoguePermission]
         private const string AdminPermission = "roguerustfuelstackoptimizer.admin";
-        private const string PluginVersion = "2.1.6";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
+        private const string PluginVersion = "2.1.7";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
 
         private static readonly string[] DefaultFuelItems =
         {
@@ -51,6 +51,11 @@ namespace Oxide.Plugins
         private List<string> _blacklistPlayers = new List<string>();
 
         private bool _scanScheduled;
+        // False until the first full scan starts. Entities that spawn while the save loads are all picked up
+        // by that scan, so the spawn hook ignores them instead of queuing ~90k deferred checks.
+        private bool _initialScanStarted;
+        // Per prefab: whether entities of that prefab can hold a fuel container worth reading.
+        private readonly Dictionary<uint, bool> _inspectByPrefab = new Dictionary<uint, bool>();
         private bool _applyScheduled;
         private bool _logScanCompletion;
         private bool _unloading;
@@ -327,10 +332,10 @@ namespace Oxide.Plugins
         private void OnEntitySpawned(BaseNetworkable networkable)
         {
             BaseEntity entity = networkable as BaseEntity;
-            if (entity == null || _unloading) return;
-            // Every entity spawn on the server reaches this hook. The per-type plan is cached, so reject
-            // types that can never hold an ItemContainer before scheduling any deferred work.
-            if (!GetDiscoveryPlan(entity.GetType()).HasAnyContainer) return;
+            if (entity == null || _unloading || !_initialScanStarted) return;
+            // Every entity spawn on the server reaches this hook. The per-prefab answer is cached, so storage
+            // boxes, barrels and other non-fuel entities are rejected before any deferred work is scheduled.
+            if (!ShouldInspect(entity)) return;
             NextTick(delegate { ExecuteProtected(delegate { DiscoverEntity(entity, true); }, "EntitySpawn"); });
         }
 
@@ -353,11 +358,15 @@ namespace Oxide.Plugins
             _identitiesByNetId.Clear();
             _skippedEntityTypes = 0;
             _logScanCompletion = logCompletion;
+            _initialScanStarted = true;
 
+            // Only entities that can hold a fuel container are queued, so the queue stays small on large maps.
             foreach (BaseNetworkable networkable in BaseNetworkable.serverEntities)
             {
                 BaseEntity entity = networkable as BaseEntity;
-                if (entity != null) _scanQueue.Enqueue(entity);
+                if (entity == null) continue;
+                if (ShouldInspect(entity)) _scanQueue.Enqueue(entity);
+                else _skippedEntityTypes++;
             }
 
             _scanScheduled = true;
@@ -405,26 +414,18 @@ namespace Oxide.Plugins
         {
             if (entity == null || entity.IsDestroyed) return;
 
-            Type type = entity.GetType();
-            DiscoveryPlan plan = GetDiscoveryPlan(type);
-            if (!plan.HasAnyContainer)
+            if (!ShouldInspect(entity))
             {
                 _skippedEntityTypes++;
                 return;
             }
 
+            Type type = entity.GetType();
+            DiscoveryPlan plan = GetDiscoveryPlan(type);
             string typeName = type.Name ?? string.Empty;
             string prefab = entity.PrefabName ?? string.Empty;
             string shortName = entity.ShortPrefabName ?? string.Empty;
             bool entityHint = ContainsHint(typeName) || ContainsHint(prefab) || ContainsHint(shortName);
-
-            // Once a type has no dedicated fuel member, entity-name hints decide whether its containers need reading.
-            // This avoids repeatedly reflecting ordinary entities while preserving generic fuel-storage prefabs.
-            if (!plan.HasDedicatedMember && !entityHint)
-            {
-                _skippedEntityTypes++;
-                return;
-            }
 
             Dictionary<ItemContainer, TrackedContainer> discovered =
                 new Dictionary<ItemContainer, TrackedContainer>(ReferenceComparer<ItemContainer>.Instance);
@@ -479,6 +480,21 @@ namespace Oxide.Plugins
 
             if (publishImmediately && _config.Performance.EnableBatchProcessing)
                 StartApplyProcessing();
+        }
+
+        // An entity is read only when its type has a container member and either that member is a fuel member
+        // or the entity's names hint at fuel storage. Both depend only on the prefab, so the answer is cached.
+        private bool ShouldInspect(BaseEntity entity)
+        {
+            bool inspect;
+            if (_inspectByPrefab.TryGetValue(entity.prefabID, out inspect)) return inspect;
+
+            Type type = entity.GetType();
+            DiscoveryPlan plan = GetDiscoveryPlan(type);
+            inspect = plan.HasAnyContainer && (plan.HasDedicatedMember ||
+                ContainsHint(type.Name) || ContainsHint(entity.PrefabName) || ContainsHint(entity.ShortPrefabName));
+            _inspectByPrefab[entity.prefabID] = inspect;
+            return inspect;
         }
 
         private DiscoveryPlan GetDiscoveryPlan(Type type)

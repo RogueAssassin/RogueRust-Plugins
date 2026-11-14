@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("RogueRustDeathNotes", "RogueAssassin", "2.5.7")]
+	[Info("RogueRustDeathNotes", "RogueAssassin", "2.5.8")]
 	[Description("RogueRustDeathNotes - RogueRust death notification engine, based on the original Death Notes concept, with integrated native GUI output and per-player controls.")]
 	public sealed class RogueRustDeathNotes : RogueRustPlugin
 	{
@@ -41,9 +41,9 @@ namespace Oxide.Plugins
         [RoguePermission]
         private const string TeamOnlyPermission = "roguerustdeathnotes.seeteamonly";
 
-		private const string PluginVersion = "2.5.7";
+		private const string PluginVersion = "2.5.8";
 
-		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 7);
+		private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 8);
 
 		private static RogueRustDeathNotes _instance;
 
@@ -114,6 +114,7 @@ namespace Oxide.Plugins
             _entityNames = GetSharedDictionary("DeathNotesEntities");
             _weaponNames = GetSharedDictionary("DeathNotesWeapons");
             _combatTypes.Clear();
+            _combatTypeCache.Clear();
             foreach (KeyValuePair<string, string> pair in GetSharedDictionary("DeathNotesCombatTypes"))
                 if (Enum.TryParse(pair.Value, true, out CombatEntityType type))
                     _combatTypes[pair.Key] = type;
@@ -970,12 +971,34 @@ namespace Oxide.Plugins
             return !string.IsNullOrEmpty(key) && _combatTypes.TryGetValue(key, out type);
         }
 
+		// The classification depends only on the entity's runtime type and prefab, so it is cached per
+		// (type, prefab). OnEntityDeath runs for every building block and deployable that dies, and this
+		// avoids re-reading the type name and prefix checks on each one. Cleared when the tables reload.
+		private readonly Dictionary<Type, Dictionary<uint, CombatEntityType>> _combatTypeCache =
+			new Dictionary<Type, Dictionary<uint, CombatEntityType>>();
+
 		private CombatEntityType GetCombatEntityType(BaseEntity entity)
 		{
-			
 			if (entity == null)
 				return CombatEntityType.None;
-			
+
+			Type runtimeType = entity.GetType();
+			Dictionary<uint, CombatEntityType> byPrefab;
+			if (!_combatTypeCache.TryGetValue(runtimeType, out byPrefab))
+			{
+				byPrefab = new Dictionary<uint, CombatEntityType>();
+				_combatTypeCache[runtimeType] = byPrefab;
+			}
+			CombatEntityType cached;
+			if (byPrefab.TryGetValue(entity.prefabID, out cached))
+				return cached;
+			cached = ClassifyCombatEntity(entity);
+			byPrefab[entity.prefabID] = cached;
+			return cached;
+		}
+
+		private CombatEntityType ClassifyCombatEntity(BaseEntity entity)
+		{
 			string entityTypeName = entity.GetType().Name;
 			if (entityTypeName != "ScientistNPC" && TryGetSharedCombatType(entityTypeName, out var entityType))
 				return entityType;
@@ -984,7 +1007,7 @@ namespace Oxide.Plugins
 				return type;
 
 			//For those plugins that do not correctly type ZombieNPCs as Zombies.
-			if (entityTypeName.StartsWith("Zombie"))
+			if (entityTypeName.StartsWith("Zombie", StringComparison.Ordinal))
 				return CombatEntityType.ZombieNPC;
 			
             //For plugins that define CustomPet, CourierNPC or RoamingNPC entities, we redefine them as a CustomNPC.
