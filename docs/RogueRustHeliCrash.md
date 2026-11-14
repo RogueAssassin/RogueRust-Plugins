@@ -2,7 +2,7 @@
 
 > A malfunctioning patrol helicopter flies in and crashes. The crash site is marked on the map, guarded, and reported until it is looted or expires.
 
-**Version:** `1.0.7`  
+**Version:** `1.0.8`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **1.0.8:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets `roguerusthelicrash.admin`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **1.0.7:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustHeliCrash.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **1.0.6:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **1.0.5:** With Oxide.Ext.RogueRust 4.4.67 the alert icon loads again. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
@@ -35,7 +36,7 @@
 
 ## Permissions
 
-- `roguerusthelicrash.admin` — start, place, stop and reschedule the event. Auth level 2 and the server console are also allowed.
+- `roguerusthelicrash.admin` — start, place, stop and reschedule the event. Auth level 2 and the server console are also allowed. Default: admins (admin group).
 
 ## Commands
 

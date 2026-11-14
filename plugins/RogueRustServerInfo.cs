@@ -9,14 +9,14 @@ using Oxide.Ext.RogueRust.SDK;
 using Oxide.Game.Rust.Cui;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.7")]
+    [Info("RogueRustServerInfo", "RogueAssassin", "1.1.8")]
     [Description("In-game server information and command reference panel. Players see player commands; admins also see the admin list.")]
     public sealed class RogueRustServerInfo : RogueRustPlugin
     {
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string AdminPermission = "roguerustserverinfo.admin";
-        private const string PluginVersion = "1.1.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 7);
+        private const string PluginVersion = "1.1.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 1, 8);
 
         // The panel is three documents so that only the part that changed is resent:
         // the shell is drawn once when the panel opens, the navigation on a tab change,

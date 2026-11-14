@@ -9,11 +9,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustDayNightScheduler", "RogueAssassin", "3.1.7")]
+    [Info("RogueRustDayNightScheduler", "RogueAssassin", "3.1.8")]
     [Description("RogueRust-powered day/night duration scheduling, cycle skipping, and protected time controls.")]
     public sealed class RogueRustDayNightScheduler : RogueRustPlugin
     {
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string UsePermission = "roguerustdaynightscheduler.use";
         private const string LangPluginDirectory = "RogueRustDayNightScheduler";
         private const string LegacyLangPluginDirectory = "DayNightScheduler";
@@ -21,9 +21,9 @@ namespace Oxide.Plugins
         private const string DefaultLanguage = "en";
         private const string InitRetryWorkload = "tod-initialize";
 
-        private const string PluginVersion = "3.1.7";
+        private const string PluginVersion = "3.1.8";
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 7);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 8);
 
         private ConfigData _config;
         private TOD_Sky _sky;

@@ -2,7 +2,7 @@
 
 > Schedules safe server restarts with RogueRust runtime protection, chat, game-tip and GUI warnings.
 
-**Version:** `2.1.7`  
+**Version:** `2.1.8`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.1.8:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets `roguerustserverrestarter.use`, `roguerustserverrestarter.admin`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it. Its own grant code and the `Automatically Grant Use/Admin Permissions to Built-In Admin Group` setting are removed; RogueRust grants `use` and `admin` to the admin group once instead. `use` is admin-only by default.
 - **2.1.7:** The 1-second live countdown and `/serverrestart.test` jobs stop when their countdown ends, instead of firing every second for the rest of the session.
 - **2.1.6:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. The config is read with the same settings as every other RogueRust plugin, so lists in your file are never merged with the defaults. Your restart times and warning minutes are kept in the order you wrote them; blank, invalid and repeated entries are skipped when the schedule is built instead of being removed from the file. An old flat config keeps its game tip delay as it was.
 - **2.1.5:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustServerRestarter.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
@@ -31,8 +32,8 @@
 
 ## Permissions
 
-- `roguerustserverrestarter.use`
-- `roguerustserverrestarter.admin`
+- `roguerustserverrestarter.use` — Default: admins (admin group).
+- `roguerustserverrestarter.admin` — Default: admins (admin group).
 
 When enabled, both are automatically granted to the Oxide `admin` group.
 
@@ -72,9 +73,9 @@ Warning minutes: `60, 30, 15, 5, 1` with matching default messages. Chat is enab
 
 Reason colours default to `M_DEFAULT`, `M_1` and `M_2` entries.
 
-### Permission Settings
+### Permissions
 
-`Automatically Grant Use/Admin Permissions to Built-In Admin Group`: `true`
+There is no permission setting any more. RogueRust 4.4.75 grants `roguerustserverrestarter.use` and `roguerustserverrestarter.admin` to the Oxide `admin` group the first time the plugin loads. Revoke either and it stays revoked.
 
 ### Representative default configuration
 
@@ -95,9 +96,6 @@ Reason colours default to `M_DEFAULT`, `M_1` and `M_2` entries.
     "Non-Live Warning Duration in Seconds": 30.0,
     "Start Live One-Second Countdown This Many Minutes Before Restart": 5,
     "Font Size": 20
-  },
-  "Permission Settings": {
-    "Automatically Grant Use/Admin Permissions to Built-In Admin Group": true
   },
   "Version (DO NOT CHANGE)": {
     "Major": 2,

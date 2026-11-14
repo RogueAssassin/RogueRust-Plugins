@@ -2,7 +2,7 @@
 
 > RogueRust death notification engine based on the Death Notes concept, with native GUI output, per-player controls and optional notification integrations.
 
-**Version:** `2.5.9`  
+**Version:** `2.5.10`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.5.10:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: players get `roguerustdeathnotes.cansee`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **2.5.9:** Bleed-out attribution keeps its own copy of the last hit. The game recycles hit data after the damage hook, so a stored reference could later read another hit's weapon or attacker.
 - **2.5.8:** The victim type is worked out once per entity type and prefab and then cached, so building blocks, deployables and barrels that die during raids or decay are filtered out with a single lookup.
 - **2.5.7:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustDeathNotes.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
@@ -47,10 +48,10 @@ Neither is required when using native GUI/chat/console output.
 
 ## Permissions
 
-- `roguerustdeathnotes.cansee` — viewing permission when permission-gated output is enabled.
-- `roguerustdeathnotes.cantsee` — prevents the player from receiving notices.
-- `roguerustdeathnotes.suppress` — suppresses messages involving the player.
-- `roguerustdeathnotes.seeteamonly` — restricts notices to team-related events.
+- `roguerustdeathnotes.cansee` — viewing permission when permission-gated output is enabled. Default: players (default group).
+- `roguerustdeathnotes.cantsee` — prevents the player from receiving notices. Default: nobody (grant it yourself).
+- `roguerustdeathnotes.suppress` — suppresses messages involving the player. Default: nobody (grant it yourself).
+- `roguerustdeathnotes.seeteamonly` — restricts notices to team-related events. Default: nobody (grant it yourself).
 
 > **Do not grant every permission to a group.** `cantsee`, `suppress` and `seeteamonly` switch notices *off*. A group that holds all four permissions (for example an `admin` group granted everything) sees no death notes at all, and deaths involving its members are hidden from everyone.
 

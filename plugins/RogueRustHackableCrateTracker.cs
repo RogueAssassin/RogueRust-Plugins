@@ -10,16 +10,16 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHackableCrateTracker", "RogueAssassin", "2.2.4")]
+    [Info("RogueRustHackableCrateTracker", "RogueAssassin", "2.2.5")]
     [Description("Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock.")]
     public sealed class RogueRustHackableCrateTracker : RogueRustPlugin
     {
-        private const string PluginVersion = "2.2.4";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 4);
-        [RoguePermission]
+        private const string PluginVersion = "2.2.5";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 2, 5);
+        [RoguePermission(Default = RoguePermissionLevel.Player)]
         private const string PermissionUse = "roguerusthackablecratetracker.use";
 
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string PermissionAdmin = "roguerusthackablecratetracker.admin";
         private const ulong ChatIconSteamId = 76561198641214711UL;
 

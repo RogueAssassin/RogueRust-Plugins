@@ -11,19 +11,19 @@ using Oxide.Game.Rust.Cui;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBuildingManager", "RogueAssassin", "1.2.3")]
+    [Info("RogueRustBuildingManager", "RogueAssassin", "1.2.4")]
     [Description("Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them.")]
     public sealed class RogueRustBuildingManager : RogueRustPlugin
     {
-        [RoguePermission] private const string UsePermission = "roguerustbuildingmanager.use";
-        [RoguePermission] private const string BulkPermission = "roguerustbuildingmanager.bulk";
-        [RoguePermission] private const string SkinsPermission = "roguerustbuildingmanager.skins";
-        [RoguePermission] private const string WallpaperPermission = "roguerustbuildingmanager.wallpaper";
+        [RoguePermission(Default = RoguePermissionLevel.Player)] private const string UsePermission = "roguerustbuildingmanager.use";
+        [RoguePermission(Default = RoguePermissionLevel.Admin)] private const string BulkPermission = "roguerustbuildingmanager.bulk";
+        [RoguePermission(Default = RoguePermissionLevel.Player)] private const string SkinsPermission = "roguerustbuildingmanager.skins";
+        [RoguePermission(Default = RoguePermissionLevel.Player)] private const string WallpaperPermission = "roguerustbuildingmanager.wallpaper";
         [RoguePermission] private const string NoCostPermission = "roguerustbuildingmanager.nocost";
-        [RoguePermission] private const string AdminPermission = "roguerustbuildingmanager.admin";
+        [RoguePermission(Default = RoguePermissionLevel.Admin)] private const string AdminPermission = "roguerustbuildingmanager.admin";
 
-        private const string PluginVersion = "1.2.3";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 2, 3);
+        private const string PluginVersion = "1.2.4";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 2, 4);
         private static readonly VersionNumber MinimumExtension = new VersionNumber(4, 4, 63);
 
         private const string DataKey = "RogueRustBuildingManager/players";

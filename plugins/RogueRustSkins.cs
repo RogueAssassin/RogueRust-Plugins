@@ -17,39 +17,39 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustSkins", "RogueAssassin", "2.3.9")]
+    [Info("RogueRustSkins", "RogueAssassin", "2.3.10")]
     [Description("Performance-first Skinner-style native Rust skin browser powered by RogueRust services.")]
     public sealed class RogueRustSkins : RogueRustPlugin
     {
-        private const string PluginVersion = "2.3.9";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 9);
-        [RoguePermission]
+        private const string PluginVersion = "2.3.10";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 3, 10);
+        [RoguePermission(Default = RoguePermissionLevel.Player)]
         private const string PermissionUse = "roguerustskins.use";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Player)]
         private const string PermissionItems = "roguerustskins.items";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Player)]
         private const string PermissionCraft = "roguerustskins.craft";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Player)]
         private const string PermissionInventory = "roguerustskins.inventory";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Player)]
         private const string PermissionContainer = "roguerustskins.container";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string PermissionBase = "roguerustskins.base";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string PermissionAll = "roguerustskins.all";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string PermissionAuto = "roguerustskins.auto";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string PermissionTeam = "roguerustskins.team";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string PermissionRequest = "roguerustskins.request";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string PermissionImport = "roguerustskins.import";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string PermissionAdmin = "roguerustskins.admin";
         [RoguePermission]
         private const string PermissionBypassAuth = "roguerustskins.bypassauth";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string PermissionCollection = "roguerustskins.collection";
         private const string CacheConnection = "roguerustskins-cache";
         private const string CacheOwner = "RogueRustSkins";

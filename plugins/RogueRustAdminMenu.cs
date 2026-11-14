@@ -1,4 +1,4 @@
-// RogueRustAdminMenu v2.5.13 RRAM release build: RRADMIN-2513
+// RogueRustAdminMenu v2.5.14 RRAM release build: RRADMIN-2514
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
 // Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted release build
 #nullable enable annotations
@@ -23,12 +23,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.13")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.14")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.13";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 13);
+    private const string PluginVersion = "2.5.14";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 14);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -42,70 +42,64 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private const string ModerationNotesDataKey = DataRoot + "/moderation_notes";
     private const string AuditHistoryDataKey = DataRoot + "/audit_history";
     private const string VanishedAdminsDataKey = DataRoot + "/vanished_admins";
+    private const string GrantedCustomPermissionsDataKey = DataRoot + "/granted_custom_permissions";
     private const string LanguageFolder = "RogueRustAdminMenu";
     private const string LanguageFile = "messages.json";
 
     // Kept intentionally compatible with ChaosCode AdminMenu permission deployments.
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string UsePermission = "roguerustadminmenu.use";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string PermissionPermission = "roguerustadminmenu.permissions";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string GroupPermission = "roguerustadminmenu.groups";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string ConvarPermission = "roguerustadminmenu.convars";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string PluginPermission = "roguerustadminmenu.plugins";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string GivePermission = "roguerustadminmenu.give";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string GiveSelfPermission = "roguerustadminmenu.give.selfonly";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string PlayerPermission = "roguerustadminmenu.players";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string KickBanPermission = "roguerustadminmenu.players.kickban";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string MutePermission = "roguerustadminmenu.players.mute";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string BlueprintPermission = "roguerustadminmenu.players.blueprints";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string HurtPermission = "roguerustadminmenu.players.hurt";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string HealPermission = "roguerustadminmenu.players.heal";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string KillPermission = "roguerustadminmenu.players.kill";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string StripPermission = "roguerustadminmenu.players.strip";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string TeleportPermission = "roguerustadminmenu.players.teleport";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string VanishPermission = "roguerustadminmenu.vanish";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string VanishUnlockPermission = "roguerustadminmenu.vanish.unlock";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string VehiclePermission = "roguerustadminmenu.vehicles";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string CommandsPermission = "roguerustadminmenu.commands";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string InventoryPermission = "roguerustadminmenu.players.inventory";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string SpectatePermission = "roguerustadminmenu.players.spectate";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string NotesPermission = "roguerustadminmenu.players.notes";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string AuditPermission = "roguerustadminmenu.audit";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string DiagnosticsPermission = "roguerustadminmenu.diagnostics";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string BulkPermission = "roguerustadminmenu.players.bulk";
     private const string VanishHud = "RogueRustAdminMenu.VanishHud";
-    private static readonly string[] CorePermissions =
-    {
-        UsePermission, PermissionPermission, GroupPermission, ConvarPermission, PluginPermission,
-        GivePermission, GiveSelfPermission, PlayerPermission, KickBanPermission, MutePermission,
-        BlueprintPermission, HurtPermission, HealPermission, KillPermission, StripPermission,
-        TeleportPermission, VanishPermission, VanishUnlockPermission, VehiclePermission, CommandsPermission, InventoryPermission, SpectatePermission, NotesPermission, AuditPermission, DiagnosticsPermission, BulkPermission
-    };
 
     private static readonly string[] VanishHooks =
     {
@@ -4003,13 +3997,12 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             return;
         }
 
+        // Built-in AdminMenu permissions are granted to the admin group once by RogueRust 4.4.75
+        // ([RoguePermission] Default = Admin). Only config-defined command permissions are granted here,
+        // and each of those once as well, so a permission the owner revokes stays revoked.
         int granted = 0;
-        foreach (string perm in CorePermissions)
-        {
-            if (permission.GroupHasPermission(adminGroup, perm)) continue;
-            permission.GrantGroupPermission(adminGroup, perm, this);
-            granted++;
-        }
+        HashSet<string> handled = new HashSet<string>(LoadData(GrantedCustomPermissionsDataKey, () => new List<string>()), StringComparer.OrdinalIgnoreCase);
+        bool handledChanged = false;
 
         // Also grant custom AdminMenu permissions owned by this plugin.
         if (_config.Commands.PlayerInfoCommands != null)
@@ -4024,17 +4017,20 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
                     string perm = CanonicalAdminPermission(commands[commandIndex]?.RequiredPermission);
                     if (string.IsNullOrWhiteSpace(perm) ||
                         !perm.StartsWith("roguerustadminmenu.", StringComparison.OrdinalIgnoreCase) ||
-                        permission.GroupHasPermission(adminGroup, perm))
+                        !handled.Add(perm))
                         continue;
 
+                    handledChanged = true;
+                    if (permission.GroupHasPermission(adminGroup, perm)) continue;
                     permission.GrantGroupPermission(adminGroup, perm, this);
                     granted++;
                 }
             }
         }
 
+        if (handledChanged) SaveDataInBackground(GrantedCustomPermissionsDataKey, handled);
         if (granted > 0)
-            LogInformation("Permissions", $"Granted {granted} AdminMenu permission(s) to the Oxide admin group.");
+            LogInformation("Permissions", $"Granted {granted} custom AdminMenu command permission(s) to the Oxide admin group (once each).");
     }
 
     private IEnumerable<T> Filter<T>(IEnumerable<T> source, Session s, Func<T, string> selector)

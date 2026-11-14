@@ -9,19 +9,19 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustEventDirector", "RogueAssassin", "1.4.5")]
+[Info("RogueRustEventDirector", "RogueAssassin", "1.4.6")]
 [Description("Performance-focused world event scheduling and CH47 crate direction powered by RogueRust.")]
 public sealed class RogueRustEventDirector : RogueRustPlugin
 {
     private const string ConfigKey = "RogueRustEventDirector";
     private const string DataKey = "RogueRustEventDirector/schedule";
     private const string LegacyDataKey = "RogueRust/RogueRustEventDirector/schedule";
-    [RoguePermission]
+    [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string AdminPermission = "roguerusteventdirector.admin";
 
-    private const string PluginVersion = "1.4.5";
+    private const string PluginVersion = "1.4.6";
 
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 5);
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 6);
 
     private const string CargoPlanePrefab = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
     private const string PatrolHelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";

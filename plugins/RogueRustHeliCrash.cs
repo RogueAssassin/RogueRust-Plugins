@@ -10,14 +10,14 @@ using UnityEngine;
 using UnityEngine.AI;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.7")]
+    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.8")]
     [Description("A malfunctioning patrol helicopter flies in and crashes. The crash site is marked on the map, guarded, and reported until it is looted or expires.")]
     public sealed class RogueRustHeliCrash : RogueRustPlugin
     {
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string AdminPermission = "roguerusthelicrash.admin";
-        private const string PluginVersion = "1.0.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 7);
+        private const string PluginVersion = "1.0.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 8);
 
         private const string HelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
         private const string HackableCratePrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";

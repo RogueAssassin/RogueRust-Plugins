@@ -10,19 +10,19 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.7")]
+    [Info("RogueRustRandoSpawns", "RogueAssassin", "2.1.8")]
     [Description("RogueRust-powered random respawn system with biome weighting, topology/zone protection, cached spawn generation and compatibility hooks.")]
     public sealed class RogueRustRandoSpawns : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
+        private const string PluginVersion = "2.1.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
         [PluginReference]
         private Plugin ZoneManager;
 
         private const string DataKey = "RogueRustRandoSpawns/spawn-cache";
         private const string LegacyDataKey = "RogueRust/RogueRustRandoSpawns/spawn-cache";
         private const string LanguageRoot = "RogueRust/RogueRustRandoSpawns";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string AdminPermission = "roguerustrandospawns.admin";
         private const int GroundMask = 1 << 4 | 1 << 8 | 1 << 10 | 1 << 15 | 1 << 16 | 1 << 21 | 1 << 23 | 1 << 27 | 1 << 28 | 1 << 29;
 

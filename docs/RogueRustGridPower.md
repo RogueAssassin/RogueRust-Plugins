@@ -2,7 +2,7 @@
 
 > RogueRust-native GridPower controller for automatic world streetlights, deterministic density, diagnostics and player-facing grid events.
 
-**Version:** `2.0.9`  
+**Version:** `2.0.10`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.0.10:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets `roguerustgridpower.admin`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **2.0.9:** The ladder input hook now runs only while someone is holding a wooden ladder, instead of on every input tick for every player whenever ladders are enabled. With RogueRust 4.4.74 or later, the streetlight cache is tied to the map seed (or the custom map), so a wipe to a new seed at the same map size rebuilds it instead of reusing the old map's light positions.
 - **2.0.8:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. Lists in the file now always replace the built-in defaults when the config loads, so an entry you removed stays removed.
 - **RogueRust 4.4.70:** No plugin change. With RogueRust 4.4.70 or later, reloading GridPower no longer rescans the map for power-grid access points twice; unload took about 350 ms before.
@@ -34,7 +35,7 @@
 
 ## Permissions
 
-- `roguerustgridpower.admin` — administrative GridPower commands and diagnostics.
+- `roguerustgridpower.admin` — administrative GridPower commands and diagnostics. Default: admins (admin group).
 
 ## Commands
 

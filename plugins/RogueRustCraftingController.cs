@@ -11,13 +11,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.6")]
+    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.7")]
     [Description("RogueRust-powered crafting control with legacy configuration and permission compatibility.")]
 
     public sealed class RogueRustCraftingController : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.6";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 6);
+        private const string PluginVersion = "2.1.7";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
         private const string PluginDataPath = "RogueRustCraftingController";
         private const string LanguageFileName = "messages.json";
         #region Config
@@ -233,17 +233,17 @@ namespace Oxide.Plugins
         #endregion Config
 
         #region Init
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string perminstantbulkcraft = "roguerustcraftingcontroller.instantbulkcraft";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string permblockitems = "roguerustcraftingcontroller.blockitems";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string permitemrate = "roguerustcraftingcontroller.itemrate";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string permcraftingrate = "roguerustcraftingcontroller.craftingrate";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string permsetbenchlvl = "roguerustcraftingcontroller.setbenchlvl";
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string permsetskins = "roguerustcraftingcontroller.setskins";
 
         private string[] bonusPermNames = Array.Empty<string>();

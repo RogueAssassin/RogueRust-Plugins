@@ -2,7 +2,7 @@
 
 > Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them.
 
-**Version:** `1.2.3`  
+**Version:** `1.2.4`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **1.2.4:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: players get `roguerustbuildingmanager.use`, `roguerustbuildingmanager.skins`, `roguerustbuildingmanager.wallpaper`; the admin group gets `roguerustbuildingmanager.bulk`, `roguerustbuildingmanager.admin`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **1.2.3:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustBuildingManager.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **1.2.2:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
 - **1.2.1:** No code changes were needed. Checked against the 10 November 2026 Rust build and Oxide.Rust 2.0.7900.
@@ -32,12 +33,12 @@
 
 ## Permissions
 
-- `roguerustbuildingmanager.use` — the menu, auto grade and hammer grading.
-- `roguerustbuildingmanager.bulk` — whole-base upgrade and downgrade.
-- `roguerustbuildingmanager.skins` — choose and apply building skins.
-- `roguerustbuildingmanager.wallpaper` — choose, apply and remove wallpaper.
-- `roguerustbuildingmanager.nocost` — upgrades are free.
-- `roguerustbuildingmanager.admin` — all of the above except free upgrades, on any building, without tool cupboard authorisation.
+- `roguerustbuildingmanager.use` — the menu, auto grade and hammer grading. Default: players (default group).
+- `roguerustbuildingmanager.bulk` — whole-base upgrade and downgrade. Default: admins (admin group).
+- `roguerustbuildingmanager.skins` — choose and apply building skins. Default: players (default group).
+- `roguerustbuildingmanager.wallpaper` — choose, apply and remove wallpaper. Default: players (default group).
+- `roguerustbuildingmanager.nocost` — upgrades are free. Default: nobody (grant it yourself).
+- `roguerustbuildingmanager.admin` — all of the above except free upgrades, on any building, without tool cupboard authorisation. Default: admins (admin group).
 
 ## Commands
 

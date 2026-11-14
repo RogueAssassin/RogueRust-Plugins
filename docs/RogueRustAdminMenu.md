@@ -2,7 +2,7 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
 
-**Version:** `2.5.13`  
+**Version:** `2.5.14`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,6 +12,7 @@
 
 ## Recent Changes
 
+- **2.5.14:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets all 26 admin permissions. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it. The built-in permissions are no longer re-granted to the admin group on every load, so a permission you revoke stays revoked. Custom command permissions from the config are still granted to the admin group, once each.
 - **2.5.13:** Vanish now uses Rust's own admin invisibility, the same one `debug.invis` uses. Your held item is hidden too, your voice is muted, other players pass through you, and fall effects are silenced. Turrets, traps and NPC scans can't find you, and auto turrets are also blocked from targeting you. Vanish now lasts through reconnects, plugin reloads and server restarts, and your sleeper stays hidden while you're offline. A new **VANISH ON/OFF** button on the dashboard toggles it. Vanished admins with `roguerustadminmenu.vanish.unlock` can open locks. Anti-hack violations are ignored while you're vanished. Rust's own invisible icon is shown next to the RogueRust HUD. In the item browser, toggling a favourite star now updates only that star instead of redrawing all 60 items.
 - **2.5.12:** Fixes the config file growing on every load. Each load added another copy of every entry in Player Info Custom Commands and Admin Commands (a long-running server could have dozens). Existing duplicates are removed automatically on the first load, and the cleanup is logged.
 - **2.5.11:** Unloading (plugin reload or server shutdown) writes only data that is still pending, instead of rewriting every data file. Saved locations and moderation notes are already written when they change. Unload took about 185 ms before.
@@ -45,32 +46,32 @@ Designed for Rust servers running **Oxide** or **Carbon** with the RogueRust ext
 
 ## Permissions
 
-- `roguerustadminmenu.use` — open the admin menu.
-- `roguerustadminmenu.permissions` — permission administration.
-- `roguerustadminmenu.groups` — group administration.
-- `roguerustadminmenu.convars` — server ConVar administration.
-- `roguerustadminmenu.plugins` — plugin administration.
-- `roguerustadminmenu.give` — item giving.
-- `roguerustadminmenu.give.selfonly` — restrict giving to self.
-- `roguerustadminmenu.players` — player administration.
-- `roguerustadminmenu.players.kickban` — kick/ban actions.
-- `roguerustadminmenu.players.mute` — mute actions.
-- `roguerustadminmenu.players.blueprints` — blueprint actions.
-- `roguerustadminmenu.players.hurt` — hurt actions.
-- `roguerustadminmenu.players.heal` — heal actions.
-- `roguerustadminmenu.players.kill` — kill actions.
-- `roguerustadminmenu.players.strip` — strip inventory actions.
-- `roguerustadminmenu.players.teleport` — teleport actions.
-- `roguerustadminmenu.players.inventory` — view and manage player inventories.
-- `roguerustadminmenu.players.spectate` — spectate players.
-- `roguerustadminmenu.players.notes` — moderation notes.
-- `roguerustadminmenu.players.bulk` — bulk player actions.
-- `roguerustadminmenu.commands` — the admin command page.
-- `roguerustadminmenu.audit` — audit history.
-- `roguerustadminmenu.diagnostics` — diagnostics page.
-- `roguerustadminmenu.vanish` — AdminVanishUncharted.
-- `roguerustadminmenu.vanish.unlock` — open locked doors and boxes while vanished.
-- `roguerustadminmenu.vehicles` — vehicle administration/spawning.
+- `roguerustadminmenu.use` — open the admin menu. Default: admins (admin group).
+- `roguerustadminmenu.permissions` — permission administration. Default: admins (admin group).
+- `roguerustadminmenu.groups` — group administration. Default: admins (admin group).
+- `roguerustadminmenu.convars` — server ConVar administration. Default: admins (admin group).
+- `roguerustadminmenu.plugins` — plugin administration. Default: admins (admin group).
+- `roguerustadminmenu.give` — item giving. Default: admins (admin group).
+- `roguerustadminmenu.give.selfonly` — restrict giving to self. Default: admins (admin group).
+- `roguerustadminmenu.players` — player administration. Default: admins (admin group).
+- `roguerustadminmenu.players.kickban` — kick/ban actions. Default: admins (admin group).
+- `roguerustadminmenu.players.mute` — mute actions. Default: admins (admin group).
+- `roguerustadminmenu.players.blueprints` — blueprint actions. Default: admins (admin group).
+- `roguerustadminmenu.players.hurt` — hurt actions. Default: admins (admin group).
+- `roguerustadminmenu.players.heal` — heal actions. Default: admins (admin group).
+- `roguerustadminmenu.players.kill` — kill actions. Default: admins (admin group).
+- `roguerustadminmenu.players.strip` — strip inventory actions. Default: admins (admin group).
+- `roguerustadminmenu.players.teleport` — teleport actions. Default: admins (admin group).
+- `roguerustadminmenu.players.inventory` — view and manage player inventories. Default: admins (admin group).
+- `roguerustadminmenu.players.spectate` — spectate players. Default: admins (admin group).
+- `roguerustadminmenu.players.notes` — moderation notes. Default: admins (admin group).
+- `roguerustadminmenu.players.bulk` — bulk player actions. Default: admins (admin group).
+- `roguerustadminmenu.commands` — the admin command page. Default: admins (admin group).
+- `roguerustadminmenu.audit` — audit history. Default: admins (admin group).
+- `roguerustadminmenu.diagnostics` — diagnostics page. Default: admins (admin group).
+- `roguerustadminmenu.vanish` — AdminVanishUncharted. Default: admins (admin group).
+- `roguerustadminmenu.vanish.unlock` — open locked doors and boxes while vanished. Default: admins (admin group).
+- `roguerustadminmenu.vehicles` — vehicle administration/spawning. Default: admins (admin group).
 
 Config-defined custom AdminMenu permissions are registered dynamically. Rust server admins can automatically receive access, and the Oxide `admin` group can optionally be granted all AdminMenu permissions.
 
@@ -102,6 +103,8 @@ Configuration file: `config/RogueRustAdminMenu.json`
 | Use Different Permissions For Each Player Administration Section | `false` |
 | Automatically Allow Rust Server Admins All AdminMenu Permissions | `true` |
 | Automatically Grant All AdminMenu Permissions To The Oxide Admin Group | `true` |
+
+From 2.5.14, RogueRust 4.4.75 grants the built-in AdminMenu permissions to the Oxide `admin` group, once each. The last setting now covers only the custom command permissions in your config: each is granted to the admin group once, and recorded in `data/RogueRust/RogueRustAdminMenu/granted_custom_permissions.json`. A permission you revoke is never granted again.
 
 ### Commands
 

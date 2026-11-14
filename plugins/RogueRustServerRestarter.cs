@@ -9,20 +9,20 @@ using Oxide.Game.Rust.Cui;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.7")]
+    [Info("RogueRustServerRestarter", "RogueAssassin", "2.1.8")]
     [Description("Schedules safe server restarts with RogueRust runtime protection, chat, game-tip, and GUI warnings.")]
     public sealed class RogueRustServerRestarter : RogueRustPlugin
     {
         private const string UiName = "ServerRestarter.UI";
         private const ulong ChatIconSteamId = 76561198641042212UL;
-        private const string PluginVersion = "2.1.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
+        private const string PluginVersion = "2.1.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
         private Configuration _config;
 
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string UsePermission = "roguerustserverrestarter.use";
 
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string AdminPermission = "roguerustserverrestarter.admin";
         private readonly List<TimeSpan> _restartTimes = new List<TimeSpan>();
         private readonly HashSet<ulong> _testCountdowns = new HashSet<ulong>();
@@ -44,9 +44,6 @@ namespace Oxide.Plugins
             [JsonProperty("UI Settings", Order = 30)]
             public UiSettings UI = new UiSettings();
 
-            [JsonProperty("Permission Settings", Order = 40)]
-            public PermissionSettings Permissions = new PermissionSettings();
-
             [JsonProperty("Version (DO NOT CHANGE)", Order = int.MaxValue)]
             public VersionNumber Version = CurrentVersion;
 
@@ -66,7 +63,6 @@ namespace Oxide.Plugins
             [JsonIgnore] public Vector2 GUIAnchorMax { get { return UI.AnchorMax; } set { UI.AnchorMax = value; } }
             [JsonIgnore] public int FontSize { get { return UI.FontSize; } set { UI.FontSize = value; } }
             [JsonIgnore] public Dictionary<string, string> RestartColors { get { return UI.RestartColors; } set { UI.RestartColors = value; } }
-            [JsonIgnore] public bool GrantPermissions { get { return Permissions.GrantPermissions; } set { Permissions.GrantPermissions = value; } }
         }
 
         private class ScheduleSettings
@@ -136,12 +132,6 @@ namespace Oxide.Plugins
                 ["M_1"] = "0.8 0.4 0 0.7",
                 ["M_2"] = "0.8 0 0 0.7"
             };
-        }
-
-        private class PermissionSettings
-        {
-            [JsonProperty("Automatically Grant Use/Admin Permissions to Built-In Admin Group")]
-            public bool GrantPermissions = true;
         }
 
         private class LegacyConfiguration
@@ -218,10 +208,6 @@ namespace Oxide.Plugins
                             AnchorMax = old.GUIAnchorMax,
                             FontSize = old.FontSize,
                             RestartColors = old.RestartColors ?? new Dictionary<string, string>()
-                        },
-                        Permissions = new PermissionSettings
-                        {
-                            GrantPermissions = old.GrantPermissions
                         }
                     };
                     LogInformation("Configuration", "Migrated ServerRestarter configuration to RogueRust grouped settings.");
@@ -244,7 +230,6 @@ namespace Oxide.Plugins
             if (_config.Schedule == null) _config.Schedule = new ScheduleSettings();
             if (_config.Warnings == null) _config.Warnings = new WarningSettings();
             if (_config.UI == null) _config.UI = new UiSettings();
-            if (_config.Permissions == null) _config.Permissions = new PermissionSettings();
 
             _config.Version = CurrentVersion;
             if (_config.RestartTimes == null) _config.RestartTimes = new List<string>();
@@ -275,7 +260,6 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            RegisterPermissions();
             LogInformation("Lifecycle",
             $"{Name} {PluginVersion} initialized. " +
             $"Config={Name}.json; Data=None; Lang=None");
@@ -297,14 +281,8 @@ namespace Oxide.Plugins
             DestroyUiForAll();
         }
 
-        private void RegisterPermissions()
-        {
-            if (!_config.GrantPermissions) return;
-            if (!permission.GroupHasPermission("admin", UsePermission))
-                permission.GrantGroupPermission("admin", UsePermission, this);
-            if (!permission.GroupHasPermission("admin", AdminPermission))
-                permission.GrantGroupPermission("admin", AdminPermission, this);
-        }
+        // use and admin are granted to the admin group once by RogueRust 4.4.75 ([RoguePermission] Default = Admin);
+        // a grant the owner revokes stays revoked.
 
         private void ParseRestartTimes()
         {
@@ -689,7 +667,6 @@ namespace Oxide.Plugins
         private void ReloadConfiguration()
         {
             LoadConfig();
-            RegisterPermissions();
             ParseRestartTimes();
             ScheduleNextRestart();
         }

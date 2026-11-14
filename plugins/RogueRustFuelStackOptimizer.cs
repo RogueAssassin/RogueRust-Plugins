@@ -11,14 +11,14 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.7")]
+    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.8")]
     [Description("Optimises dedicated Rust fuel containers through cached discovery using native Oxide/Carbon hooks.")]
     public sealed class RogueRustFuelStackOptimizer : RogueRustPlugin
     {
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string AdminPermission = "roguerustfuelstackoptimizer.admin";
-        private const string PluginVersion = "2.1.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
+        private const string PluginVersion = "2.1.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
 
         private static readonly string[] DefaultFuelItems =
         {

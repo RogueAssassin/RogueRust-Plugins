@@ -10,13 +10,13 @@ using Oxide.Ext.RogueRust.Plugins;
 using Oxide.Ext.RogueRust.SDK;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.8")]
+    [Info("RogueRustBlueprintManager", "RogueAssassin", "2.1.9")]
     [Description("RogueRust-powered blueprint management with legacy permission and command compatibility.")]
 
     public sealed class RogueRustBlueprintManager : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.8";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
+        private const string PluginVersion = "2.1.9";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 9);
         private const string LanguageFolder = "RogueRustBlueprintManager";
         private const string LanguageFile = "messages.json";
 
@@ -249,10 +249,10 @@ namespace Oxide.Plugins
 
         #region Init
 
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string permunlockall = "roguerustblueprintmanager.all";
 
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string permadmin = "roguerustblueprintmanager.admin";
 
         private DateTime _lastWipe;

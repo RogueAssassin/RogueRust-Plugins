@@ -12,11 +12,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.7")]
+    [Info("RogueRustRemovalTool", "RogueAssassin", "2.0.8")]
     [Description("RogueRust-native building and deployable removal tool.")]
     public sealed class RogueRustRemovalTool : RogueRustPlugin
     {
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 7);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 0, 8);
         private const string UiName = "RogueRustRemovalTool.Hud";
         private const string UiRoot = "RogueRustRemovalTool.UI.Root";
         private const string UiSession = "RogueRustRemovalTool.UI.Session";
@@ -25,12 +25,12 @@ namespace Oxide.Plugins
         private const string UiStatus = "RogueRustRemovalTool.UI.Status";
         private const int TargetLayerMask = ~(1 << 2 | 1 << 3 | 1 << 4 | 1 << 10 | 1 << 18 | 1 << 28 | 1 << 29);
 
-        [RoguePermission] private const string PermNormal = "roguerustremovaltool.normal";
-        [RoguePermission] private const string PermAdmin = "roguerustremovaltool.admin";
-        [RoguePermission] private const string PermAll = "roguerustremovaltool.all";
-        [RoguePermission] private const string PermExternal = "roguerustremovaltool.external";
-        [RoguePermission] private const string PermStructure = "roguerustremovaltool.structure";
-        [RoguePermission] private const string PermTarget = "roguerustremovaltool.target";
+        [RoguePermission(Default = RoguePermissionLevel.Player)] private const string PermNormal = "roguerustremovaltool.normal";
+        [RoguePermission(Default = RoguePermissionLevel.Admin)] private const string PermAdmin = "roguerustremovaltool.admin";
+        [RoguePermission(Default = RoguePermissionLevel.Admin)] private const string PermAll = "roguerustremovaltool.all";
+        [RoguePermission(Default = RoguePermissionLevel.Admin)] private const string PermExternal = "roguerustremovaltool.external";
+        [RoguePermission(Default = RoguePermissionLevel.Admin)] private const string PermStructure = "roguerustremovaltool.structure";
+        [RoguePermission(Default = RoguePermissionLevel.Admin)] private const string PermTarget = "roguerustremovaltool.target";
         [RoguePermission] private const string PermOverride = "roguerustremovaltool.override";
 
         [PluginReference] private Plugin Friends;

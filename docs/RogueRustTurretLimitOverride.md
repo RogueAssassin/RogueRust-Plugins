@@ -2,7 +2,7 @@
 
 > Configures Rust's turret interference ConVars through a small RogueRust administration plugin.
 
-**Version:** `2.1.9`  
+**Version:** `2.1.10`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.1.10:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets `roguerustturretlimitoverride.admin`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **2.1.9:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added.
 - **2.1.8:** A version upgrade no longer logs a warning. A warning is logged only when the turret limits in the config were out of range and had to be corrected.
 - **2.1.7:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustTurretLimitOverride.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
@@ -30,7 +31,7 @@
 
 ## Permissions
 
-- `roguerustturretlimitoverride.admin` — change/view turret limit settings as a player.
+- `roguerustturretlimitoverride.admin` — change/view turret limit settings as a player. Default: admins (admin group).
 
 Rust server admins are also accepted. Server-console execution is permitted by the command implementation.
 

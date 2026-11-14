@@ -14,12 +14,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.9")]
+    [Info("RogueRustFurnaceSplitter", "RogueAssassin", "2.1.10")]
     [Description("Optimized RogueRust furnace splitting with automatic fuel management, configurable stack distribution, ETA display, and responsive UI.")]
     public sealed class RogueRustFurnaceSplitter : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.9";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 9);
+        private const string PluginVersion = "2.1.10";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 10);
 
         [PluginReference]
         private Plugin UIScaleManager;
@@ -68,7 +68,7 @@ namespace Oxide.Plugins
         private Dictionary<string, int> initialStackOptions = new Dictionary<string, int>();
         private PluginConfig config;
 
-        [RoguePermission]
+        [RoguePermission(Default = RoguePermissionLevel.Player)]
         private const string permUse = "roguerustfurnacesplitter.use";
         private const string legacyPermUse = "furnacesplitter.use";
         private const string PlayerDataKey = "RogueRustFurnaceSplitter/player-options";

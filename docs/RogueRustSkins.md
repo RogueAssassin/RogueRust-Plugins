@@ -2,7 +2,7 @@
 
 > Performance-first Skinner-style native Rust skin browser powered by RogueRust services.
 
-**Version:** `2.3.9`  
+**Version:** `2.3.10`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.3.10:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: players get `roguerustskins.use`, `roguerustskins.items`, `roguerustskins.craft`, `roguerustskins.inventory`, `roguerustskins.container`; the admin group gets all 8 admin permissions. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **2.3.9:** **Security fix:** the skin browser box only accepts and acts on the preview items it created itself. Previously a player could set an item's text with the game's note command, drop it in the box and receive a free item; request previews now also require `roguerustskins.admin`. **Browser:** dragging another of your items onto the box, or switching to it on your hotbar, points the browser at that item (same page for the same item type, that item's skins otherwise) instead of re-skinning the original. A real item can no longer be dropped into the box, where it would have been deleted on the next page change. After you pick a skin, the item is put back into its slot (and re-equipped if held) so the new skin shows at once. Bulk skinning (`/skininv`, containers, auto and craft skins) sends one player update per batch instead of one per item.
 - **2.3.8:** The server-wide `OnItemAddedToContainer` hook is only subscribed while auto skinning is enabled and an online player has Auto Skins on. Until then, items added to loot, furnaces and other containers cost the plugin nothing.
 - **2.3.7:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. The plugin author now shows as RogueAssassin, like every other RogueRust plugin.
@@ -40,20 +41,20 @@
 
 ## Permissions
 
-- `roguerustskins.use` — base `/skin` access.
-- `roguerustskins.items` — deployable/item targeting.
-- `roguerustskins.craft` — craft-skin controls.
-- `roguerustskins.inventory` — inventory skinning.
-- `roguerustskins.container` — container skinning.
-- `roguerustskins.base` — base-wide operations.
-- `roguerustskins.all` — broad/bulk skin operations.
-- `roguerustskins.auto` — automatic skinning.
-- `roguerustskins.team` — team skin features.
-- `roguerustskins.request` — workshop requests.
-- `roguerustskins.import` — direct Workshop import.
-- `roguerustskins.admin` — administrative operations.
-- `roguerustskins.bypassauth` — bypass building-authorization requirement.
-- `roguerustskins.collection` — Workshop collection import.
+- `roguerustskins.use` — base `/skin` access. Default: players (default group).
+- `roguerustskins.items` — deployable/item targeting. Default: players (default group).
+- `roguerustskins.craft` — craft-skin controls. Default: players (default group).
+- `roguerustskins.inventory` — inventory skinning. Default: players (default group).
+- `roguerustskins.container` — container skinning. Default: players (default group).
+- `roguerustskins.base` — base-wide operations. Default: admins (admin group).
+- `roguerustskins.all` — broad/bulk skin operations. Default: admins (admin group).
+- `roguerustskins.auto` — automatic skinning. Default: admins (admin group).
+- `roguerustskins.team` — team skin features. Default: admins (admin group).
+- `roguerustskins.request` — workshop requests. Default: admins (admin group).
+- `roguerustskins.import` — direct Workshop import. Default: admins (admin group).
+- `roguerustskins.admin` — administrative operations. Default: admins (admin group).
+- `roguerustskins.bypassauth` — bypass building-authorization requirement. Default: nobody (grant it yourself).
+- `roguerustskins.collection` — Workshop collection import. Default: admins (admin group).
 
 ## Commands
 

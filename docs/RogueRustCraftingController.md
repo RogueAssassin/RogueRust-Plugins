@@ -2,7 +2,7 @@
 
 > RogueRust-powered crafting control with legacy configuration and permission compatibility.
 
-**Version:** `2.1.6`  
+**Version:** `2.1.7`  
 **Author:** RogueAssassin  
 **Frameworks:** Oxide / Carbon  
 **Required extension:** [Oxide.Ext.RogueRust](https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases) 4.4.69 or newer
@@ -11,6 +11,7 @@
 
 ## Recent Changes
 
+- **2.1.7:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets `roguerustcraftingcontroller.instantbulkcraft`, `roguerustcraftingcontroller.blockitems`, `roguerustcraftingcontroller.itemrate`, `roguerustcraftingcontroller.craftingrate`, `roguerustcraftingcontroller.setbenchlvl`, `roguerustcraftingcontroller.setskins`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **2.1.6:** Uses the shared RogueRust config check: the file is rewritten only when it changes, and on a version change the previous file is kept as `RogueRustCraftingController.json.v<old version>.bak`. This also fixes a comparison that could treat decimal values such as 0.1 as changed and save on every boot. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **2.1.5:** The config file is rewritten, and "Configuration changes saved" logged, only when something actually changed: a migration, a corrected value, a new option or a new blueprint. Previously every boot saved it twice.
 - **2.1.4:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
@@ -32,12 +33,12 @@
 
 ## Permissions
 
-- `roguerustcraftingcontroller.instantbulkcraft`
-- `roguerustcraftingcontroller.blockitems`
-- `roguerustcraftingcontroller.itemrate`
-- `roguerustcraftingcontroller.craftingrate`
-- `roguerustcraftingcontroller.setbenchlvl`
-- `roguerustcraftingcontroller.setskins`
+- `roguerustcraftingcontroller.instantbulkcraft` — Default: admins (admin group).
+- `roguerustcraftingcontroller.blockitems` — Default: admins (admin group).
+- `roguerustcraftingcontroller.itemrate` — Default: admins (admin group).
+- `roguerustcraftingcontroller.craftingrate` — Default: admins (admin group).
+- `roguerustcraftingcontroller.setbenchlvl` — Default: admins (admin group).
+- `roguerustcraftingcontroller.setskins` — Default: admins (admin group).
 - Configured bonus tiers create `roguerustcraftingcontroller.<suffix>` permissions dynamically.
 
 ## Commands

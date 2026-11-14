@@ -2,7 +2,7 @@
 
 > RogueRust-powered blueprint management with legacy permission and command compatibility.
 
-**Version:** `2.1.8`  
+**Version:** `2.1.9`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,6 +12,7 @@
 
 ## Recent Changes
 
+- **2.1.9:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets `roguerustblueprintmanager.all`, `roguerustblueprintmanager.admin`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **2.1.8:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. Lists in the file now always replace the built-in defaults when the config loads, so an entry you removed stays removed.
 - **2.1.7:** The config upgrade is logged once, by RogueRust, instead of twice.
 - **2.1.6:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustBlueprintManager.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.
@@ -35,8 +36,8 @@
 
 ## Permissions
 
-- `roguerustblueprintmanager.admin` — administrative blueprint commands.
-- `roguerustblueprintmanager.all` — unlock all eligible blueprints.
+- `roguerustblueprintmanager.admin` — administrative blueprint commands. Default: admins (admin group).
+- `roguerustblueprintmanager.all` — unlock all eligible blueprints. Default: admins (admin group).
 - Runtime permissions are generated for `WorkbenchLvL*`, item categories, DLC and each configured custom permission set.
 
 Custom permission keys under `Assign Custom Blueprint Unlocks To Permissions` become `roguerustblueprintmanager.<suffix>`.

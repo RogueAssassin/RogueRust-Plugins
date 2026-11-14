@@ -1,6 +1,6 @@
 # RogueRust Day/Night Scheduler
 
-**Version:** `3.1.7`  
+**Version:** `3.1.8`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -10,6 +10,7 @@ RogueRust-powered day/night duration scheduling, cycle skipping, manual time con
 
 ## Recent Changes
 
+- **3.1.8:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets `roguerustdaynightscheduler.use`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **3.1.7:** The config file is rewritten only when something in it changes, instead of on every load. When the plugin version changes, the previous file is kept as `RogueRustDayNightScheduler.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later. From RogueRust 4.4.71 no `.bak` copy is made: the file is updated in place, your settings are kept, and only new settings are added.
 - **3.1.6:** The plugin's title is now RogueRustDayNightScheduler, matching its file name, so installers that check the name accept it. Config and language files are unchanged.
 - **3.1.5:** The plugin's internal version now matches its published version, so the config file records the right version (the previous release still wrote the version before it).
@@ -41,7 +42,7 @@ Designed for supported Rust servers running **Oxide** or **Carbon** with the Rog
 
 ## Permissions
 
-- `roguerustdaynightscheduler.use` — allows command use without meeting the configured player auth-level requirement.
+- `roguerustdaynightscheduler.use` — allows command use without meeting the configured player auth-level requirement. Default: admins (admin group).
 
 Server console commands are permitted. Player access is accepted when either the required auth level or RogueRust permission is satisfied.
 
