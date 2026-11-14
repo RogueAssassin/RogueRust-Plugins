@@ -1,6 +1,6 @@
-// RogueRustAdminMenu v2.5.14 RRAM release build: RRADMIN-2514
+// RogueRustAdminMenu v2.5.15 RRAM release build: RRADMIN-2515
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
-// Coordinated AdminMenu/UI/teleport/ImageLibrary/AdminVanishUncharted release build
+// Coordinated AdminMenu/UI/teleport/ImageLibrary/vanish release build
 #nullable enable annotations
 using System;
 using System.Collections.Generic;
@@ -23,12 +23,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.14")]
-[Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and AdminVanishUncharted.")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.15")]
+[Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and vanish.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.14";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 14);
+    private const string PluginVersion = "2.5.15";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 15);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -443,7 +443,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     [RogueCommand(
         "vanish",
-        Description = "Toggles RogueRust AdminVanishUncharted.",
+        Description = "Toggles vanish.",
         Usage = "vanish",
         Category = "Administration",
         AllowChat = true,
@@ -460,7 +460,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
     private RogueCommandResult ToggleVanish(BasePlayer player)
     {
         if (!_config.Vanish.Enabled)
-            return RogueCommandResult.Fail("AdminVanishUncharted is disabled in RogueRustAdminMenu.json.");
+            return RogueCommandResult.Fail("Vanish is disabled in RogueRustAdminMenu.json.");
         if (!HasAdminPermission(player, VanishPermission))
             return RogueCommandResult.Fail(GetLang("Error.NoPermission", player));
 
@@ -495,7 +495,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
         if (_config.Vanish.Invisible) ApplyNativeInvisibility(player);
         SendInvisibleIcon(player);
         DrawVanishHud(player);
-        Audit(player, "Enabled AdminVanishUncharted");
+        Audit(player, "Enabled vanish");
         if (notify) player.ChatMessage("<color=#C4FF00>Vanish enabled</color>" + (_config.Vanish.Invisible ? " • invisible" : string.Empty) + (_config.Vanish.GodMode ? " • god" : string.Empty) + (_config.Vanish.Fly ? " • fly" : string.Empty));
     }
 
@@ -516,7 +516,7 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             player.SendNetworkUpdateImmediate();
         }
         DestroyUi(player, VanishHud);
-        Audit(player, "Disabled AdminVanishUncharted");
+        Audit(player, "Disabled vanish");
         if (notify && player.IsConnected) player.ChatMessage("<color=#C4FF00>Vanish disabled</color> • normal visibility restored");
     }
 

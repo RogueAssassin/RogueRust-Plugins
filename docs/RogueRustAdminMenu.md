@@ -1,8 +1,8 @@
 # RogueRustAdminMenu
 
-> RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight AdminVanishUncharted.
+> RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight vanish.
 
-**Version:** `2.5.14`  
+**Version:** `2.5.15`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,6 +12,7 @@
 
 ## Recent Changes
 
+- **2.5.15:** The audit log, command help and plugin description say "vanish" instead of the old module name "AdminVanishUncharted". Old config keys that use that name are still read when migrating.
 - **2.5.14:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets all 26 admin permissions. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it. The built-in permissions are no longer re-granted to the admin group on every load, so a permission you revoke stays revoked. Custom command permissions from the config are still granted to the admin group, once each.
 - **2.5.13:** Vanish now uses Rust's own admin invisibility, the same one `debug.invis` uses. Your held item is hidden too, your voice is muted, other players pass through you, and fall effects are silenced. Turrets, traps and NPC scans can't find you, and auto turrets are also blocked from targeting you. Vanish now lasts through reconnects, plugin reloads and server restarts, and your sleeper stays hidden while you're offline. A new **VANISH ON/OFF** button on the dashboard toggles it. Vanished admins with `roguerustadminmenu.vanish.unlock` can open locks. Anti-hack violations are ignored while you're vanished. Rust's own invisible icon is shown next to the RogueRust HUD. In the item browser, toggling a favourite star now updates only that star instead of redrawing all 60 items.
 - **2.5.12:** Fixes the config file growing on every load. Each load added another copy of every entry in Player Info Custom Commands and Admin Commands (a long-running server could have dozens). Existing duplicates are removed automatically on the first load, and the cleanup is logged.
@@ -34,7 +35,7 @@
 - Give browser with categories, search, recent/favourites, native Rust icons and ImageLibrary fallback.
 - Shared RogueRust teleport and vehicle services.
 - Saved teleport locations and arrival protection.
-- Lightweight AdminVanishUncharted with invisibility, optional god mode and optional noclip/fly.
+- Lightweight vanish with invisibility, optional god mode and optional noclip/fly.
 - Permission/group management, server ConVar management and plugin controls.
 - Configurable custom player-info commands for third-party plugins.
 - Optional Discord webhook audit logging.
@@ -69,7 +70,7 @@ Designed for Rust servers running **Oxide** or **Carbon** with the RogueRust ext
 - `roguerustadminmenu.commands` — the admin command page. Default: admins (admin group).
 - `roguerustadminmenu.audit` — audit history. Default: admins (admin group).
 - `roguerustadminmenu.diagnostics` — diagnostics page. Default: admins (admin group).
-- `roguerustadminmenu.vanish` — AdminVanishUncharted. Default: admins (admin group).
+- `roguerustadminmenu.vanish` — vanish. Default: admins (admin group).
 - `roguerustadminmenu.vanish.unlock` — open locked doors and boxes while vanished. Default: admins (admin group).
 - `roguerustadminmenu.vehicles` — vehicle administration/spawning. Default: admins (admin group).
 
@@ -84,7 +85,7 @@ Opens the administration workspace. Player-only. Access is controlled by `roguer
 
 ### `/vanish`
 
-Toggles the built-in AdminVanishUncharted module. Requires `roguerustadminmenu.vanish` and the vanish module to be enabled. The dashboard's **VANISH ON/OFF** button does the same.
+Toggles the built-in vanish module. Requires `roguerustadminmenu.vanish` and the vanish module to be enabled. The dashboard's **VANISH ON/OFF** button does the same.
 
 ## Configuration
 

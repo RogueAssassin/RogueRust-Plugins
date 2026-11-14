@@ -11,7 +11,7 @@ using Oxide.Ext.RogueRust.SDK;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustCustomPlayerMessages", "RogueAssassin", "3.1.7")]
+    [Info("RogueRustCustomPlayerMessages", "RogueAssassin", "3.1.8")]
     [Description("Custom connect/disconnect messages and public player-list commands powered by RogueRust.")]
     public sealed class RogueRustCustomPlayerMessages : RogueRustPlugin
     {
@@ -27,9 +27,9 @@ namespace Oxide.Plugins
         private const string DefaultLanguage = "en";
         private const string DefaultCountryLookupUrl = "http://ip-api.com/json/{0}?fields=status,message,country,countryCode";
 
-        private const string PluginVersion = "3.1.7";
+        private const string PluginVersion = "3.1.8";
 
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 7);
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(3, 1, 8);
 
         private Configuration _config;
         private CountryCacheStore _cacheStore;
@@ -226,6 +226,26 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
             CleanupCountryCache(true);
+            WarmJoinPath();
+        }
+
+        // Mono compiles each method the first time it runs, so the first join after a load paid for compiling
+        // the address parsing, hashing, permission and message code (about 20 ms on one call). Running that
+        // code once here, with no broadcast, moves the cost to load time.
+        private void WarmJoinPath()
+        {
+            ExecuteProtected(delegate
+            {
+                Rogue.Permissions.Has("0", HiddenPermission);
+                IPAddress address;
+                if (TryGetAddress("127.0.0.1:0", out address))
+                    IsPublicAddress(address);
+                if (TryGetAddress("8.8.8.8", out address))
+                    IsPublicAddress(address);
+                HashAddress("127.0.0.1");
+                GetMessage("Join Country Message", null, string.Empty, string.Empty);
+                EscapeRichText("<warm>");
+            }, "WarmJoinPath");
         }
 
         private void Unload()
