@@ -11,14 +11,14 @@ using Oxide.Ext.RogueRust.SDK;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.8")]
+    [Info("RogueRustFuelStackOptimizer", "RogueAssassin", "2.1.9")]
     [Description("Optimises dedicated Rust fuel containers through cached discovery using native Oxide/Carbon hooks.")]
     public sealed class RogueRustFuelStackOptimizer : RogueRustPlugin
     {
         [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string AdminPermission = "roguerustfuelstackoptimizer.admin";
-        private const string PluginVersion = "2.1.8";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
+        private const string PluginVersion = "2.1.9";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 9);
 
         private static readonly string[] DefaultFuelItems =
         {
@@ -43,6 +43,9 @@ namespace Oxide.Plugins
         private readonly Dictionary<ulong, List<string>> _identitiesByNetId = new Dictionary<ulong, List<string>>();
         private readonly Dictionary<Type, DiscoveryPlan> _typePlans = new Dictionary<Type, DiscoveryPlan>();
         private readonly Queue<BaseEntity> _scanQueue = new Queue<BaseEntity>();
+        private const int ClassifySliceMilliseconds = 4;
+        private readonly List<BaseNetworkable> _classifySnapshot = new List<BaseNetworkable>();
+        private int _classifyIndex;
         private readonly Queue<TrackedContainer> _applyQueue = new Queue<TrackedContainer>();
         private HashSet<string> _recognisedFuelItems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private HashSet<string> _enabledKinds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -324,6 +327,8 @@ namespace Oxide.Plugins
             _applyScheduled = false;
             _scanQueue.Clear();
             _applyQueue.Clear();
+            _classifySnapshot.Clear();
+            _classifyIndex = 0;
             _containers.Clear();
             _identitiesByNetId.Clear();
             _typePlans.Clear();
@@ -360,17 +365,38 @@ namespace Oxide.Plugins
             _logScanCompletion = logCompletion;
             _initialScanStarted = true;
 
-            // Only entities that can hold a fuel container are queued, so the queue stays small on large maps.
+            // The entity list is only copied here (cheap). Deciding which entities can hold a fuel container is
+            // done in short slices on the following ticks, because the first pass over ~90,000 entities costs
+            // over 100 ms while the per-prefab answers are still uncached.
+            _classifySnapshot.Clear();
+            _classifyIndex = 0;
             foreach (BaseNetworkable networkable in BaseNetworkable.serverEntities)
-            {
-                BaseEntity entity = networkable as BaseEntity;
-                if (entity == null) continue;
-                if (ShouldInspect(entity)) _scanQueue.Enqueue(entity);
-                else _skippedEntityTypes++;
-            }
+                _classifySnapshot.Add(networkable);
 
             _scanScheduled = true;
             Delay(TimeSpan.FromMilliseconds(10), ProcessDiscoveryBatch, "fuelstack-discovery");
+        }
+
+        // Classifies the copied entity list for at most ClassifySliceMilliseconds, so the scan never holds the
+        // main thread for long. Only entities that can hold a fuel container are queued, which keeps the queue small.
+        private void ClassifySnapshotSlice()
+        {
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            long budget = System.Diagnostics.Stopwatch.Frequency * ClassifySliceMilliseconds / 1000;
+            while (_classifyIndex < _classifySnapshot.Count)
+            {
+                BaseEntity entity = _classifySnapshot[_classifyIndex++] as BaseEntity;
+                if (entity != null && !entity.IsDestroyed)
+                {
+                    if (ShouldInspect(entity)) _scanQueue.Enqueue(entity);
+                    else _skippedEntityTypes++;
+                }
+
+                if ((_classifyIndex & 255) == 0 && System.Diagnostics.Stopwatch.GetTimestamp() - start > budget) return;
+            }
+
+            _classifySnapshot.Clear();
+            _classifyIndex = 0;
         }
 
         private void ProcessDiscoveryBatch()
@@ -379,6 +405,13 @@ namespace Oxide.Plugins
 
             ExecuteProtected(() =>
             {
+                if (_classifyIndex < _classifySnapshot.Count)
+                {
+                    ClassifySnapshotSlice();
+                    Delay(TimeSpan.FromMilliseconds(1), ProcessDiscoveryBatch, "fuelstack-discovery");
+                    return;
+                }
+
                 int processed = 0;
                 while (_scanQueue.Count > 0 && processed < _config.Performance.DiscoveryBatchSize)
                 {

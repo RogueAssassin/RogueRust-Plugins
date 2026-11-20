@@ -1,6 +1,6 @@
 # RogueRust Fuel Stack Optimizer
 
-**Version:** `2.1.8`  
+**Version:** `2.1.9`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -10,6 +10,7 @@ Optimises dedicated Rust fuel containers through cached discovery using native O
 
 ## Recent Changes
 
+- **2.1.9:** The first scan of the map no longer holds the server for over 100 ms at startup. The entity list is copied once and sorted in short slices (at most 4 ms each) over the following ticks, the same way the container discovery already worked. Which containers are optimized is unchanged, and the periodic rescan uses the same slices.
 - **2.1.8:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets `roguerustfuelstackoptimizer.admin`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **2.1.7:** Faster startup on large maps: entities that cannot hold a fuel container are filtered out by prefab before any work is queued, and entities that spawn while the save loads are left to the first full scan instead of each queuing a deferred check. This removes most of the startup memory churn behind the `OnEntitySpawned` slow-hook warning. Behaviour is unchanged.
 - **2.1.6:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. With RogueRust 4.4.71 or later no `.bak` copy is made, and the log lists the settings that were added. The config is read with the same settings as every other RogueRust plugin, so lists in your file are never merged with the defaults. The container kinds, fuel item names and owner lists are kept as you wrote them; blank, unknown and repeated entries are skipped when they are read instead of being sorted and rewritten in the file.
