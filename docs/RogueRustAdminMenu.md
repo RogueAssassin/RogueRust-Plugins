@@ -2,7 +2,7 @@
 
 > RogueRust administration workspace with F1-style RogueUI, native Rust artwork, shared teleport/vehicle services, player administration and lightweight vanish.
 
-**Version:** `2.5.15`  
+**Version:** `2.5.16`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -12,6 +12,7 @@
 
 ## Recent Changes
 
+- **2.5.16:** Restoring vanish at server start no longer throws. When an administrator who was vanished when the server stopped was a sleeper, hiding them as the server finished loading could fail with a `NullReferenceException` because their network group had no subscriber list yet, and that stopped the rest of the restore. The missing list is now skipped, and a sleeper that still cannot be hidden is logged as a warning without stopping the others. They are hidden fully when they reconnect.
 - **2.5.15:** The audit log, command help and plugin description say "vanish" instead of the old module name "AdminVanishUncharted". Old config keys that use that name are still read when migrating.
 - **2.5.14:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets all 26 admin permissions. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it. The built-in permissions are no longer re-granted to the admin group on every load, so a permission you revoke stays revoked. Custom command permissions from the config are still granted to the admin group, once each.
 - **2.5.13:** Vanish now uses Rust's own admin invisibility, the same one `debug.invis` uses. Your held item is hidden too, your voice is muted, other players pass through you, and fall effects are silenced. Turrets, traps and NPC scans can't find you, and auto turrets are also blocked from targeting you. Vanish now lasts through reconnects, plugin reloads and server restarts, and your sleeper stays hidden while you're offline. A new **VANISH ON/OFF** button on the dashboard toggles it. Vanished admins with `roguerustadminmenu.vanish.unlock` can open locks. Anti-hack violations are ignored while you're vanished. Rust's own invisible icon is shown next to the RogueRust HUD. In the item browser, toggling a favourite star now updates only that star instead of redrawing all 60 items.

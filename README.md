@@ -14,7 +14,7 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 
 | Plugin | Version | Description | Source |
 |---|---:|---|---|
-| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.15` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
+| **[RogueRustAdminMenu](docs/RogueRustAdminMenu.md)** | `2.5.16` | RogueRust administration workspace with F1-style RogueUI and shared administration services. | [Source](plugins/RogueRustAdminMenu.cs) |
 | **[RogueRustBlueprintManager](docs/RogueRustBlueprintManager.md)** | `2.1.9` | Blueprint management with legacy permission/config compatibility. | [Source](plugins/RogueRustBlueprintManager.cs) |
 | **[RogueRustBuildingManager](docs/RogueRustBuildingManager.md)** | `1.2.4` | Upgrade, downgrade, skin and wallpaper a whole base, or grade blocks as you place or hammer them. | [Source](plugins/RogueRustBuildingManager.cs) |
 | **[RogueRustCraftingController](docs/RogueRustCraftingController.md)** | `2.1.7` | Crafting control with RogueRust integration. | [Source](plugins/RogueRustCraftingController.cs) |

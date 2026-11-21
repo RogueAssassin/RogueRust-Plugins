@@ -1,4 +1,4 @@
-// RogueRustAdminMenu v2.5.15 RRAM release build: RRADMIN-2515
+// RogueRustAdminMenu v2.5.16 RRAM release build: RRADMIN-2516
 // Requires Oxide.Ext.RogueRust.dll: https://github.com/RogueAssassin/Oxide.Ext.RogueRust/releases
 // Coordinated AdminMenu/UI/teleport/ImageLibrary/vanish release build
 #nullable enable annotations
@@ -23,12 +23,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.15")]
+[Info("RogueRustAdminMenu", "RogueAssassin", "2.5.16")]
 [Description("RogueRust Extension DLL advanced administration workspace with F1-style RogueUI, non-blocking workflows, DLL-backed diagnostics, bulk administration, advanced plugin/ConVar management, teleport return, inventory inspection, spectate, moderation notes, audit history and vanish.")]
 public sealed class RogueRustAdminMenu : RogueRustPlugin
 {
-    private const string PluginVersion = "2.5.15";
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 15);
+    private const string PluginVersion = "2.5.16";
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 5, 16);
     private const string Root = "RogueRustAdminMenu.Main";
     private const string Popup = "RogueRustAdminMenu.Popup";
     private const string Overlay = "RogueRustAdminMenu.Overlay";
@@ -522,7 +522,8 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
 
     private static void ApplyNativeInvisibility(BasePlayer player)
     {
-        if (!player.isInvisible && player.net?.group != null)
+        // A sleeper restored while the server is still starting can have a network group whose subscriber list is not built yet.
+        if (!player.isInvisible && player.net?.group?.subscribers != null)
         {
             // Remove the player from every client that can currently see them. Spectators keep them.
             List<Network.Connection> hideFrom = Pool.Get<List<Network.Connection>>();
@@ -597,7 +598,13 @@ public sealed class RogueRustAdminMenu : RogueRustPlugin
             if (sleeper == null || !_persistedVanish.Contains(sleeper.userID) || !_vanishedAdmins.Add(sleeper.userID)) continue;
             // Offline administrators stay hidden and untargetable until they reconnect.
             if (_config.Vanish.GodMode) _vanishGodMode.Add(sleeper.userID);
-            if (_config.Vanish.Invisible) ApplyNativeInvisibility(sleeper);
+            if (!_config.Vanish.Invisible) continue;
+            try { ApplyNativeInvisibility(sleeper); }
+            catch (Exception exception)
+            {
+                // One sleeper that cannot be hidden yet must not stop the rest of the restore or the hook subscriptions below.
+                PrintWarning($"Could not hide the sleeper {sleeper.userID} while restoring vanish: {exception.GetType().Name}: {exception.Message}");
+            }
         }
         UpdateVanishHookSubscriptions();
     }
