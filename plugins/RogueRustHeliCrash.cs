@@ -10,14 +10,14 @@ using UnityEngine;
 using UnityEngine.AI;
 namespace Oxide.Plugins
 {
-    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.8")]
+    [Info("RogueRustHeliCrash", "RogueAssassin", "1.0.9")]
     [Description("A malfunctioning patrol helicopter flies in and crashes. The crash site is marked on the map, guarded, and reported until it is looted or expires.")]
     public sealed class RogueRustHeliCrash : RogueRustPlugin
     {
         [RoguePermission(Default = RoguePermissionLevel.Admin)]
         private const string AdminPermission = "roguerusthelicrash.admin";
-        private const string PluginVersion = "1.0.8";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 8);
+        private const string PluginVersion = "1.0.9";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 0, 9);
 
         private const string HelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
         private const string HackableCratePrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
@@ -583,7 +583,10 @@ namespace Oxide.Plugins
             Vector3 origin = IsAlive(_helicopter) ? _helicopter.transform.position : _lastHelicopterPosition;
             if ((crate.transform.position - origin).sqrMagnitude > CrateClaimRadius * CrateClaimRadius) return;
 
-            crate.enableSaving = false;
+            // The crate is already spawned and in the game's save list, so the field cannot simply be cleared: the
+            // game only removes an entity from that list on destroy when saving is still on, and the crate would
+            // be left behind as a null entry that is reported on every save. EnableSaving takes it out properly.
+            crate.EnableSaving(false);
             _crates.Add(crate);
             _hadCrates = true;
         }

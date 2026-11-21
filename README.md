@@ -26,7 +26,7 @@ The repository is framework-neutral: documentation describes plugin behaviour an
 | **[RogueRustFurnaceSplitter](docs/RogueRustFurnaceSplitter.md)** | `2.1.10` | Furnace splitting, fuel management, ETA and responsive UI. | [Source](plugins/RogueRustFurnaceSplitter.cs) |
 | **[RogueRustGridPower](docs/RogueRustGridPower.md)** | `2.0.10` | Automatic streetlights, player-grid power, diagnostics and wooden-ladder support for managed power poles. | [Source](plugins/RogueRustGridPower.cs) |
 | **[RogueRustHackableCrateTracker](docs/RogueRustHackableCrateTracker.md)** | `2.2.5` | Reports who starts hacking a locked crate, who loots it, and crates left unopened after they unlock. | [Source](plugins/RogueRustHackableCrateTracker.cs) |
-| **[RogueRustHeliCrash](docs/RogueRustHeliCrash.md)** | `1.0.8` | A malfunctioning patrol helicopter flies in and crashes; the site is marked, guarded and reported until looted. | [Source](plugins/RogueRustHeliCrash.cs) |
+| **[RogueRustHeliCrash](docs/RogueRustHeliCrash.md)** | `1.0.9` | A malfunctioning patrol helicopter flies in and crashes; the site is marked, guarded and reported until looted. | [Source](plugins/RogueRustHeliCrash.cs) |
 | **[RogueRustHeliLeashControl](docs/RogueRustHeliLeashControl.md)** | `2.1.8` | Keeps damaged Patrol Helicopters near the last valid attacker. | [Source](plugins/RogueRustHeliLeashControl.cs) |
 | **[RogueRustRandoSpawns](docs/RogueRustRandoSpawns.md)** | `2.1.8` | Random respawns with biome weighting and topology/zone protection. | [Source](plugins/RogueRustRandoSpawns.cs) |
 | **[RogueRustRemovalTool](docs/RogueRustRemovalTool.md)** | `2.0.8` | RogueRust-native building and deployable removal tool. | [Source](plugins/RogueRustRemovalTool.cs) |
