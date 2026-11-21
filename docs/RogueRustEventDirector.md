@@ -1,6 +1,6 @@
 # RogueRust Event Director
 
-**Version:** `1.4.6`  
+**Version:** `1.4.7`  
 **Author:** RogueAssassin  
 **Game:** Rust  
 **Frameworks:** Oxide / Carbon  
@@ -26,6 +26,7 @@ Performance-focused world-event scheduling and CH47 crate direction powered by R
 
 ## Recent Changes
 
+- **1.4.7:** The Cargo Ship no longer spawns in a single tick. Building the ship and spawning it took 163 ms together on a test server (reported as critical by `roguerust.performance`); the two steps now run on consecutive ticks and are timed separately as `cargo-create` and `cargo-spawn`, so any remaining cost can be seen. If the plugin unloads between the two steps, the half-built ship is removed.
 - **1.4.6:** Requires RogueRust 4.4.75. Permissions are granted automatically the first time the plugin loads: the admin group gets `roguerusteventdirector.admin`. Each is granted once, so a permission you revoke stays revoked, and a permission you had already granted to a group is left as you set it.
 - **1.4.5:** The config file is updated in place: settings already in your file keep their values, and only settings new in this release are added. No `.bak` copy is made, and the upgrade is logged once.
 - **1.4.4:** The config file is rewritten only when something in it changes. When the plugin version changes, the previous file is kept as `RogueRustEventDirector.json.v<old version>.bak` before the update is saved. Requires RogueRust 4.4.69 or later.

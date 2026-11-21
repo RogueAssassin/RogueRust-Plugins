@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("RogueRustEventDirector", "RogueAssassin", "1.4.6")]
+[Info("RogueRustEventDirector", "RogueAssassin", "1.4.7")]
 [Description("Performance-focused world event scheduling and CH47 crate direction powered by RogueRust.")]
 public sealed class RogueRustEventDirector : RogueRustPlugin
 {
@@ -19,9 +19,9 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     [RoguePermission(Default = RoguePermissionLevel.Admin)]
     private const string AdminPermission = "roguerusteventdirector.admin";
 
-    private const string PluginVersion = "1.4.6";
+    private const string PluginVersion = "1.4.7";
 
-    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 6);
+    private static readonly VersionNumber CurrentVersion = new VersionNumber(1, 4, 7);
 
     private const string CargoPlanePrefab = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
     private const string PatrolHelicopterPrefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
@@ -34,6 +34,7 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
     private DateTime _lastManagedSpawnUtc = DateTime.MinValue;
     private readonly Dictionary<RogueWorldEventType, int> _lastGameTipIndexes = new();
 
+    private CargoShip? _pendingShip;
     private int _blockedVanillaEvents;
     private BradleySpawner? _heldSpawner;
     private static readonly System.Reflection.FieldInfo? PendingRespawnField = typeof(BradleySpawner).GetField(
@@ -100,6 +101,12 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
 
     private void Unload()
     {
+        // A ship that was built but not yet spawned would otherwise be left behind as an orphaned object.
+        CargoShip? pending = _pendingShip;
+        _pendingShip = null;
+        if (pending != null && !pending.IsDestroyed && !pending.isSpawned)
+            pending.Kill();
+
         ReleaseVanillaBradley();
         RemoveAllMarkers();
         SaveState();
@@ -493,16 +500,36 @@ public sealed class RogueRustEventDirector : RogueRustPlugin
         if (Rogue.Terrain.TryGetWaterHeight(position, out float waterHeight))
             position.y = waterHeight;
 
-        CargoShip? ship = GameManager.server.CreateEntity(CargoShipPrefab, position) as CargoShip;
-        if (ship == null)
-            return false;
+        // A Cargo Ship is the heaviest spawn on the server (a measured 60 to 160 ms in one tick), so the work is
+        // split over two ticks and each half is timed on its own: building the ship, then spawning it with its
+        // crates and crew. The next report shows which half costs the most.
+        CargoShip? ship;
+        using (Measure("events", "cargo-create"))
+        {
+            ship = GameManager.server.CreateEntity(CargoShipPrefab, position) as CargoShip;
+            if (ship == null)
+                return false;
 
-        // Rust's native Cargo Ship event performs triggered-event initialization before Spawn().
-        // This initializes event-specific behaviour, including the normal map/event presentation.
-        ship.TriggeredEventSpawn();
-        ship.Spawn();
-        ShowRandomGameTip(RogueWorldEventType.CargoShip, _config.GameTips.CargoShip);
+            // Rust's native Cargo Ship event performs triggered-event initialization before Spawn().
+            // This initializes event-specific behaviour, including the normal map/event presentation.
+            ship.TriggeredEventSpawn();
+        }
+
+        _pendingShip = ship;
+        Delay(TimeSpan.Zero, FinishCargoShipSpawn, "eventdirector-cargo-spawn");
         return true;
+    }
+
+    private void FinishCargoShipSpawn()
+    {
+        CargoShip? ship = _pendingShip;
+        _pendingShip = null;
+        if (ship == null || ship.IsDestroyed)
+            return;
+
+        using (Measure("events", "cargo-spawn"))
+            ship.Spawn();
+        ShowRandomGameTip(RogueWorldEventType.CargoShip, _config.GameTips.CargoShip);
     }
 
     private void ShowRandomGameTip(RogueWorldEventType type, GameTipSettings settings)
