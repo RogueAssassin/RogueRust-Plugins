@@ -11,13 +11,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.7")]
+    [Info("RogueRustCraftingController", "RogueAssassin", "2.1.8")]
     [Description("RogueRust-powered crafting control with legacy configuration and permission compatibility.")]
 
     public sealed class RogueRustCraftingController : RogueRustPlugin
     {
-        private const string PluginVersion = "2.1.7";
-        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 7);
+        private const string PluginVersion = "2.1.8";
+        private static readonly VersionNumber CurrentVersion = new VersionNumber(2, 1, 8);
         private const string PluginDataPath = "RogueRustCraftingController";
         private const string LanguageFileName = "messages.json";
         #region Config
@@ -936,7 +936,6 @@ namespace Oxide.Plugins
                 if (trimmed)
                     tocraft = task.amount * task.blueprint.amountToCreate;
                 InstantBulkCraft(player, task, target, tocraft, task.skinID, defaultskin);
-                task.cancelled = true;
                 return true;
             }
             return null;
@@ -1014,7 +1013,6 @@ namespace Oxide.Plugins
 
         private void ReturnCraft(ItemCraftTask task, BasePlayer crafter)
         {
-            task.cancelled = true;
             crafter.ChatMessage(GetLang("NoInvSpace", crafter));
             foreach (var item in task.takenItems)
             {
